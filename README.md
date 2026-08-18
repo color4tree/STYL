@@ -8,6 +8,9 @@ Product discovery and system design.
 
 The living design document is in [docs/project-design.md](docs/project-design.md).
 
+The Chinese business, trademark, tax, and import history summary is in
+[docs/business-trademark-summary.zh-CN.md](docs/business-trademark-summary.zh-CN.md).
+
 ## Working agreement
 
 1. Define the users, problem, and first-release workflows.
