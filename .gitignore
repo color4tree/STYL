@@ -1,0 +1,24 @@
+# Local environment files
+.env
+.env.local
+
+# Editor settings
+.vscode/
+
+# Python virtual environments
+**/.venv/
+**/__pycache__/
+*.pyc
+
+# Node / frontend build output
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
+backend/backend.log
+
+# OS files
+.DS_Store
+Thumbs.db

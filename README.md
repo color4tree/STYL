@@ -1,20 +1,52 @@
 # STYL
 
-STYL is a new full-stack web project. Product scope and technical architecture will be defined before application scaffolding begins.
+STYL is a premium fitness equipment brand website and lightweight commerce MVP.
+
+## Project structure
+
+- [docs/STYL Portal Design.md](docs/STYL%20Portal%20Design.md) — product strategy, UX goals, and technical proposal
+- [docs/business-trademark-summary.zh-CN.md](docs/business-trademark-summary.zh-CN.md) — business, trademark, and operating context
+- [frontend](frontend) — Next.js frontend for marketing site and product showcase
+- [backend](backend) — FastAPI backend for catalog and inquiry APIs
+
+## Stack
+
+- Frontend: Next.js + TypeScript + Tailwind CSS
+- Backend: FastAPI + Python
+- Database: PostgreSQL (planned for v1+ data model)
+- Deployment: Vercel + managed API + PostgreSQL service
+
+## Run locally
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open http://localhost:3000
+
+### Backend
+
+```bash
+cd backend
+python -m venv .venv
+. .venv/Scripts/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then open http://localhost:8000/docs
 
 ## Current phase
 
-Product discovery and system design.
+Initial project scaffolding and starter UI implementation.
 
-The living design document is in [docs/project-design.md](docs/project-design.md).
+## Design direction
 
-The Chinese business, trademark, tax, and import history summary is in
-[docs/business-trademark-summary.zh-CN.md](docs/business-trademark-summary.zh-CN.md).
-
-## Working agreement
-
-1. Define the users, problem, and first-release workflows.
-2. Record functional and non-functional requirements.
-3. Compare technology options against those requirements.
-4. Approve the architecture and delivery plan.
-5. Scaffold the frontend, backend, database, and development tooling.
+- Premium, minimal, modern product marketing
+- Mobile-friendly and responsive
+- Product-first layout with simple cart and inquiry flow
+- Frontend and backend fully decoupled through API boundaries
