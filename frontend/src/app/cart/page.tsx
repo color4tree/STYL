@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { clearCart, readCart, removeProductFromCart, updateCartQuantity, writeCart, type CartItem } from "@/lib/cart";
+import { clearCart, readCart, removeProductFromCart, updateCartQuantity, type CartItem } from "@/lib/cart";
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -10,10 +10,6 @@ export default function CartPage() {
   useEffect(() => {
     setItems(readCart());
   }, []);
-
-  useEffect(() => {
-    writeCart(items);
-  }, [items]);
 
   const total = useMemo(
     () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),

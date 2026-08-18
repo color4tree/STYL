@@ -9,6 +9,7 @@
 **/.venv/
 **/__pycache__/
 *.pyc
+backend/app/uploads/
 
 # Node / frontend build output
 frontend/node_modules/
@@ -17,7 +18,9 @@ frontend/out/
 
 # Logs
 *.log
+*.err
 backend/backend.log
+.styl-runtime/
 
 # OS files
 .DS_Store

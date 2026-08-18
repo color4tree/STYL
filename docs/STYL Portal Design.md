@@ -153,9 +153,10 @@ Professional owner / buyer persona:
 | FR-007 | Search and filter on products | Should | Basic category filter only |
 | FR-008 | SEO metadata for important pages | Must | Product and brand discoverability |
 | FR-009 | Contact information and company intro | Must | Trust-building |
-| FR-010 | Admin product content management | Should | Lightweight CMS or admin panel |
-| FR-011 | Cart persistence across sessions | Should | Browser local storage for guest cart |
-| FR-012 | Lightweight analytics | Should | Pageviews, clicks, conversion events |
+| FR-010 | Lightweight admin product content management | Must | Admin page for editing product category, images, name, description, price, and related details |
+| FR-011 | Admin changes reflected in the public portal on next refresh | Must | Product data is persisted and consumed by the storefront after reload |
+| FR-012 | Cart persistence across sessions | Should | Browser local storage for guest cart |
+| FR-013 | Lightweight analytics | Should | Pageviews, clicks, conversion events |
 
 ## 7. Non-functional requirements
 

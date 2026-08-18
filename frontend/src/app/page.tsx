@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { addProductToCart, formatCartSummary, getCartCount, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
+import { API_BASE, resolveProductImage } from "@/lib/api";
 
 type Product = {
   id: number;
@@ -14,10 +15,9 @@ type Product = {
   shortDescription: string;
   description?: string;
   featured?: boolean;
+  image?: string;
   features?: string[];
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const fallbackProducts: Product[] = [
   {
@@ -30,6 +30,7 @@ const fallbackProducts: Product[] = [
     shortDescription: "Commercial-grade training for focused, durable performance.",
     description: "A premium strength platform built for controlled, stable, and high-performance training.",
     featured: true,
+    image: "/images/pro-elite.svg",
     features: [
       "Precision-balanced frame",
       "Industrial-grade resistance system",
@@ -46,6 +47,7 @@ const fallbackProducts: Product[] = [
     shortDescription: "Minimal footprint, low noise, and premium daily use.",
     description: "A compact cardio machine designed for clean form and premium residential spaces.",
     featured: true,
+    image: "/images/studio-row.svg",
     features: [
       "Compact footprint",
       "Low-impact cardio training",
@@ -62,6 +64,7 @@ const fallbackProducts: Product[] = [
     shortDescription: "Precision-built frame for serious home training environments.",
     description: "A premium multi-use training rig built for athletes and serious home setups.",
     featured: false,
+    image: "/images/summit-core.svg",
     features: [
       "Heavy-duty stability frame",
       "Modular training configuration",
@@ -203,8 +206,8 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
-      <header className="border-b border-[var(--line)] bg-white/60 backdrop-blur-sm">
+    <main className="min-h-screen bg-[var(--bg)] pt-[81px] text-[var(--ink)]">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-[var(--line)] bg-white/90 shadow-[0_8px_30px_rgba(17,17,17,0.05)] backdrop-blur-xl">
         <div className="container flex items-center justify-between py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--ink)] text-sm font-bold text-white">
@@ -297,7 +300,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="experience" className="border-y border-[var(--line)] bg-white/40">
+      <section id="experience" className="scroll-mt-24 border-y border-[var(--line)] bg-white/40">
         <div className="container grid gap-6 py-10 md:grid-cols-3">
           {pillars.map((item) => (
             <div key={item} className="rounded-2xl border border-[var(--line)] bg-white/70 p-5 text-sm leading-7 text-[var(--muted)]">
@@ -307,7 +310,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="products" className="container py-20">
+      <section id="products" className="container scroll-mt-24 py-20">
         <div className="mb-10 flex items-end justify-between gap-6">
           <div>
             <div className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
@@ -328,7 +331,13 @@ export default function Home() {
           <div className="grid gap-7 md:grid-cols-3">
             {products.map((product) => (
               <article key={product.id} className="soft-panel rounded-[28px] p-5 shadow-[0_16px_40px_rgba(17,17,17,0.04)]">
-                <div className="h-64 rounded-[22px] bg-[linear-gradient(180deg,#efeae4,#d9d0c6)]" />
+                <div className="overflow-hidden rounded-[22px] bg-[#efeae4]">
+                  <img
+                    src={resolveProductImage(product.image)}
+                    alt={product.name}
+                    className="h-64 w-full object-cover"
+                  />
+                </div>
                 <div className="mt-5 flex items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                     {product.category}
@@ -362,7 +371,7 @@ export default function Home() {
         )}
       </section>
 
-      <section id="experience" className="container py-20">
+      <section id="gallery" className="container scroll-mt-24 py-20">
         <div className="mb-10 flex items-end justify-between gap-6">
           <div>
             <div className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
@@ -394,7 +403,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="about" className="bg-[#171717] py-20 text-white">
+      <section id="about" className="scroll-mt-24 bg-[#171717] py-20 text-white">
         <div className="container grid gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-white/60">
@@ -464,7 +473,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div id="contact" className="soft-panel rounded-[28px] p-6">
+        <div id="contact" className="soft-panel scroll-mt-24 rounded-[28px] p-6">
           <div className="mb-6 text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
             Request a quote
           </div>

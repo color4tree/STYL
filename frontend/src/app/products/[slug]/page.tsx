@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { addProductToCart, getCartCount, readCart } from "@/lib/cart";
+import { API_BASE, resolveProductImage } from "@/lib/api";
 
 type Product = {
   id: number;
@@ -14,10 +15,9 @@ type Product = {
   currency: string;
   shortDescription: string;
   description?: string;
+  image?: string;
   features?: string[];
 };
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const CART_KEY = "styl-cart";
 
 export default function ProductDetailPage() {
@@ -99,8 +99,12 @@ export default function ProductDetailPage() {
         </div>
 
         <section className="grid gap-10 rounded-[32px] border border-[var(--line)] bg-white/70 p-6 md:grid-cols-[1.1fr_0.9fr] md:p-8">
-          <div className="rounded-[28px] bg-[linear-gradient(180deg,#efeae4,#d9d0c6)] p-6">
-            <div className="h-[440px] rounded-[24px] bg-[radial-gradient(circle_at_30%_30%,rgba(201,176,142,0.8),rgba(24,24,24,0.65)_58%)]" />
+          <div className="overflow-hidden rounded-[28px] bg-[#efeae4]">
+            <img
+              src={resolveProductImage(product.image)}
+              alt={product.name}
+              className="h-[440px] w-full object-cover"
+            />
           </div>
 
           <div>

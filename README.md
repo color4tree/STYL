@@ -18,6 +18,16 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 
 ## Run locally
 
+### One-command Windows startup
+
+From the repository root, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-styl.ps1
+```
+
+The script stops stale servers, starts the backend and frontend, verifies both services, and opens the product management page. If port 8000 is still reserved by Windows, it automatically selects a free API port and configures the frontend to use it.
+
 ### Frontend
 
 ```bash
@@ -42,7 +52,11 @@ Then open http://localhost:8000/docs
 
 ## Current phase
 
-Initial project scaffolding and starter UI implementation.
+Initial storefront MVP plus a lightweight product management workflow for catalog editing.
+
+## Product management requirement
+
+The project includes a lightweight admin page for editing product catalog data, including category, photo/image, name, description, price, feature list, and product details. Admin users can upload JPG, PNG, WebP, or GIF product photos up to 8 MB, preview them, and replace them later. Any update saved from the management page is persisted in the backend and reflected in the public storefront after the next page refresh.
 
 ## Design direction
 

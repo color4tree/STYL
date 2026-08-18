@@ -1,0 +1,53 @@
+[
+  {
+    "id": 1,
+    "slug": "pro-elite-series",
+    "name": "Pro Elite Series",
+    "category": "Strength",
+    "price": 249.0,
+    "currency": "USD",
+    "shortDescription": "Premium commercial-grade strength training setup.",
+    "description": "A premium strength platform built for controlled, stable, and high-performance training in home and studio spaces.",
+    "featured": true,
+    "image": "/images/pro-elite.svg",
+    "features": [
+      "Precision-balanced frame",
+      "Industrial-grade resistance system",
+      "Low-noise operation"
+    ]
+  },
+  {
+    "id": 2,
+    "slug": "studio-row-compact",
+    "name": "Studio Row Compact",
+    "category": "Cardio",
+    "price": 1899,
+    "currency": "USD",
+    "shortDescription": "Compact, quiet, and engineered for modern home studios.",
+    "description": "A compact cardio machine designed for clean form, low interference, and daily usability in premium residential spaces.",
+    "featured": true,
+    "image": "/images/studio-row.svg",
+    "features": [
+      "Compact footprint",
+      "Low-impact cardio training",
+      "Smooth full-body motion"
+    ]
+  },
+  {
+    "id": 3,
+    "slug": "summit-core-rig",
+    "name": "Summit Core Rig",
+    "category": "Performance",
+    "price": 3299,
+    "currency": "USD",
+    "shortDescription": "High-stability architecture built for performance and durability.",
+    "description": "A premium multi-use training rig built for athletes, professionals, and serious home training environments.",
+    "featured": false,
+    "image": "/images/summit-core.svg",
+    "features": [
+      "Heavy-duty stability frame",
+      "Modular training configuration",
+      "Designed for long-term reliability"
+    ]
+  }
+]
