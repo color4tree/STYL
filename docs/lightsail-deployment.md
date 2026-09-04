@@ -28,9 +28,13 @@ Have these values ready and use them consistently in every command:
 
 ```text
 REPOSITORY_URL=https://github.com/color4tree/STYL.git
-LIGHTSAIL_STATIC_IP=203.0.113.10
+LIGHTSAIL_STATIC_IP=54.156.37.31
 YOUR_DOMAIN=example.com  (not required until the DNS phase)
 ```
+
+The commands in this guide retain placeholders where a value must be substituted.
+For the current STYL instance, replace every `LIGHTSAIL_STATIC_IP` with
+`54.156.37.31`.
 
 Also confirm:
 
@@ -114,7 +118,7 @@ The first deployment uses the Lightsail static IPv4 address and does not require
 a domain:
 
 ```text
-http://LIGHTSAIL_STATIC_IP
+http://54.156.37.31
 ```
 
 This phase is useful for installation and storefront testing, but it is HTTP and
@@ -206,23 +210,48 @@ GitHub's successful SSH test may say shell access is unavailable; that is normal
 
 ## 5. Create persistent data and secrets
 
-Replace `LIGHTSAIL_STATIC_IP` with the attached static IPv4 address. Record the
-generated admin token in a password manager; do not use it in the browser until
-HTTPS is enabled.
+The block below is safe to rerun: it does not overwrite an existing production
+catalog or environment file. Replace `LIGHTSAIL_STATIC_IP` with `54.156.37.31`.
+Record a newly generated admin token in a password manager; do not use it in the
+browser until HTTPS is enabled.
 
 ```bash
-sudo install -d -m 0750 -o styl -g styl /var/lib/styl /etc/styl
-sudo install -m 0640 -o styl -g styl \
-  /opt/styl/backend/app/data/products.json /var/lib/styl/products.json
+sudo install -d -m 0750 -o styl -g styl /var/lib/styl
+sudo install -d -m 0750 -o root -g styl /etc/styl
 sudo install -d -m 0750 -o styl -g styl /var/lib/styl/uploads
 
-ADMIN_TOKEN=$(openssl rand -hex 32)
-sudo install -m 0600 -o styl -g styl \
-  /opt/styl/deploy/styl.env.example /etc/styl/styl.env
-sudo sed -i "s/replace-with-a-long-random-token/$ADMIN_TOKEN/" /etc/styl/styl.env
-sudo sed -i "s#https://example.com#http://LIGHTSAIL_STATIC_IP#" /etc/styl/styl.env
-echo "Save this admin token: $ADMIN_TOKEN"
+if [ ! -f /var/lib/styl/products.json ]; then
+  sudo install -m 0640 -o styl -g styl \
+    /opt/styl/backend/app/data/products.json \
+    /var/lib/styl/products.json
+else
+  echo "/var/lib/styl/products.json already exists; it was not overwritten."
+fi
+
+if [ ! -f /etc/styl/styl.env ]; then
+  ADMIN_TOKEN=$(openssl rand -hex 32)
+
+  sudo install -m 0640 -o root -g styl \
+    /opt/styl/deploy/styl.env.example \
+    /etc/styl/styl.env
+
+  sudo sed -i \
+    "s/replace-with-a-long-random-token/$ADMIN_TOKEN/" \
+    /etc/styl/styl.env
+
+  sudo sed -i \
+    "s#https://example.com#http://54.156.37.31#" \
+    /etc/styl/styl.env
+
+  echo "SAVE THIS ADMIN TOKEN: $ADMIN_TOKEN"
+  unset ADMIN_TOKEN
+else
+  echo "/etc/styl/styl.env already exists; it was not overwritten."
+fi
 ```
+
+Do not rerun a plain copy of the repository's `products.json` after live edits;
+the guard above protects the production catalog from being reset accidentally.
 
 Existing local uploads are ignored by Git. Copy any required files separately
 from `backend/app/uploads/` into `/var/lib/styl/uploads/` before launch.
@@ -238,7 +267,7 @@ mkdir -p /tmp/styl-uploads
 Then run this example from local PowerShell:
 
 ```powershell
-scp -i C:\path\to\LightsailDefaultKey.pem -r .\backend\app\uploads\* ubuntu@LIGHTSAIL_STATIC_IP:/tmp/styl-uploads/
+scp -i C:\path\to\LightsailDefaultKey.pem -r .\backend\app\uploads\* ubuntu@54.156.37.31:/tmp/styl-uploads/
 ```
 
 Install the transferred files from the server's SSH terminal:
@@ -255,16 +284,25 @@ Confirm the production environment file has no placeholders:
 
 ```bash
 sudo grep -n 'replace-with\|example.com\|LIGHTSAIL_STATIC_IP' /etc/styl/styl.env
+sudo grep '^STYL_DATA_DIR=' /etc/styl/styl.env
+sudo grep '^STYL_ALLOWED_ORIGINS=' /etc/styl/styl.env
 ```
 
-This command should print nothing. Never print the complete environment file in
-logs or support messages because it contains the admin token.
+The first command should print nothing. The final two should show:
+
+```text
+STYL_DATA_DIR=/var/lib/styl
+STYL_ALLOWED_ORIGINS=http://54.156.37.31
+```
+
+Never print the complete environment file in logs or support messages because it
+contains the admin token.
 
 ## 6. Install services and the IP-address HTTP proxy
 
-Replace `LIGHTSAIL_STATIC_IP` in the command below with the attached static IPv4
-address. The `http://` prefix intentionally prevents certificate issuance during
-the IP-only phase.
+The Caddy configuration below already uses the current static IP `54.156.37.31`.
+The `http://` prefix intentionally prevents certificate issuance during the
+IP-only phase.
 
 ```bash
 sudo install -m 0644 /opt/styl/deploy/styl-api.service /etc/systemd/system/
@@ -274,7 +312,7 @@ sudo install -m 0644 /opt/styl/deploy/styl-backup.timer /etc/systemd/system/
 sudo chmod 0755 /opt/styl/deploy/backup.sh /opt/styl/deploy/deploy.sh
 
 sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
-http://LIGHTSAIL_STATIC_IP {
+http://54.156.37.31 {
   encode zstd gzip
 
   handle /health {
@@ -293,25 +331,41 @@ EOF
 
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
-sudo systemctl enable --now styl-api styl-web styl-backup.timer caddy
+sudo systemctl enable --now styl-api styl-web styl-backup.timer
+sudo systemctl enable caddy
+sudo systemctl restart caddy
+sudo systemctl --no-pager --full status styl-api styl-web caddy styl-backup.timer
 ```
 
-If the literal text `LIGHTSAIL_STATIC_IP` was used accidentally, replace it in
-both `/etc/caddy/Caddyfile` and `/etc/styl/styl.env`, then restart Caddy and the API.
+The explicit Caddy restart is required when the package's default welcome page
+was already running. Merely enabling an already-running Caddy service does not
+load the replacement Caddyfile.
 
 ## 7. Verify the IP-address deployment
 
 ```bash
 curl --fail http://127.0.0.1:8000/health
-curl --fail http://127.0.0.1:3000/
-curl --fail http://LIGHTSAIL_STATIC_IP/health
+curl --fail --head http://127.0.0.1:3000/
+curl --fail http://54.156.37.31/health
+curl --fail --head http://54.156.37.31/
 sudo systemctl --no-pager --full status styl-api styl-web caddy
 sudo journalctl -u styl-api -u styl-web -u caddy --since '10 minutes ago'
 ```
 
-Open `http://LIGHTSAIL_STATIC_IP` and verify that the storefront and product pages
+The health request should return `{"status":"ok","service":"styl-api"}`. Open
+`http://54.156.37.31` and verify that the storefront and product pages
 load. Browser warnings that the connection is not secure are expected in this
 temporary phase. Do not sign in at `/admin` or submit real inquiry data yet.
+
+If the Caddy welcome page still appears, reload the replacement configuration and
+refresh the browser without cache:
+
+```bash
+sudo cat /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+sudo journalctl -u caddy -n 100 --no-pager
+```
 
 Confirm ports 3000 and 8000 cannot be reached from the public internet. All public
 requests should enter through Caddy on port 80.
@@ -327,8 +381,8 @@ At the domain's DNS provider, remove conflicting `A`, `AAAA`, or `CNAME` records
 for the root and `www` names, then create:
 
 ```text
-A  @    LIGHTSAIL_STATIC_IP  TTL 300
-A  www  LIGHTSAIL_STATIC_IP  TTL 300
+A  @    54.156.37.31  TTL 300
+A  www  54.156.37.31  TTL 300
 ```
 
 Do not add an `AAAA` record unless IPv6 is intentionally configured. Check from
@@ -421,9 +475,11 @@ sudo ls -lh /var/backups/styl
 sudo systemctl list-timers styl-backup.timer
 ```
 
-Archives are retained for 14 days. Also enable a weekly Lightsail automatic
-snapshot from the instance's **Snapshots** tab and review the displayed monthly
-snapshot cost before enabling it. Local backup archives protect against editing
+Archives are retained for 14 days. For minimal cost, leave Lightsail automatic
+snapshots disabled during setup and testing. After the site contains production
+data, consider enabling automatic snapshots or taking periodic manual snapshots
+from the instance's **Snapshots** tab. Review the price and retention shown by
+Lightsail before enabling them. Local backup archives protect against editing
 mistakes; snapshots protect against instance or disk loss. A backup stored only
 on the same disk is not a complete disaster-recovery copy.
 
