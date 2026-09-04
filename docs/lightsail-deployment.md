@@ -9,8 +9,10 @@ catalog is a local JSON file.
 One Ubuntu server runs every component:
 
 ```text
-Internet -> Caddy :443 -> Next.js :3000
-                -> FastAPI :8000 for /api/* and /health
+Phase 1: Internet -> Caddy :80  by static IP
+Phase 2: Internet -> Caddy :443 by domain with automatic HTTPS
+Both phases: Caddy -> Next.js :3000
+       -> FastAPI :8000 for /api/* and /health
 FastAPI -> /var/lib/styl/products.json
       -> /var/lib/styl/uploads/
 ```
@@ -26,17 +28,17 @@ Have these values ready and use them consistently in every command:
 
 ```text
 REPOSITORY_URL=https://github.com/color4tree/STYL.git
-YOUR_DOMAIN=example.com
 LIGHTSAIL_STATIC_IP=203.0.113.10
+YOUR_DOMAIN=example.com  (not required until the DNS phase)
 ```
 
 Also confirm:
 
-1. You control the domain's DNS records.
-2. The repository contains the version to deploy.
-3. Product data in `backend/app/data/products.json` is ready to publish.
-4. Any existing files in `backend/app/uploads/` are available for separate copy.
-5. You have an AWS account with MFA enabled on the root user.
+1. The repository contains the version to deploy.
+2. Product data in `backend/app/data/products.json` is ready to publish.
+3. Any existing files in `backend/app/uploads/` are available for separate copy.
+4. You have an AWS account with MFA enabled on the root user.
+5. You control a domain's DNS records before beginning the later HTTPS phase.
 
 ## 0. Push and verify the source repository
 
@@ -106,26 +108,19 @@ free -h
 `free -h` should show approximately 2 GB of swap. Do not repeat the `fstab`
 command after it has already been added.
 
-## 2. Point the domain to Lightsail
+## 2. Choose the initial access mode
 
-At the domain's DNS provider, remove conflicting `A`, `AAAA`, or `CNAME` records
-for the root and `www` names, then create:
+The first deployment uses the Lightsail static IPv4 address and does not require
+a domain:
 
 ```text
-A  @    LIGHTSAIL_STATIC_IP  TTL 300
-A  www  LIGHTSAIL_STATIC_IP  TTL 300
+http://LIGHTSAIL_STATIC_IP
 ```
 
-DNS updates can take time. Check from the local computer until the returned IP
-matches the Lightsail static IP:
-
-```powershell
-Resolve-DnsName YOUR_DOMAIN
-Resolve-DnsName www.YOUR_DOMAIN
-```
-
-Do not start Caddy certificate issuance until public DNS resolves correctly.
-The deployment can be prepared while DNS propagates.
+This phase is useful for installation and storefront testing, but it is HTTP and
+does not encrypt traffic. Do not enter the admin token, update products, upload
+images, or accept real customer inquiries over the public IP. Complete the DNS
+and HTTPS phase before public use involving credentials or customer information.
 
 ## 3. Install system packages
 
@@ -164,6 +159,7 @@ a GitHub deploy key as described below.
 
 ```bash
 sudo useradd --system --create-home --home-dir /var/lib/styl-user --shell /bin/bash styl
+sudo install -d -m 0755 -o styl -g styl /opt/styl
 sudo -u styl git clone https://github.com/color4tree/STYL.git /opt/styl
 
 sudo -u styl python3 -m venv /opt/styl/backend/.venv
@@ -202,6 +198,7 @@ sudo -u styl chmod 600 /var/lib/styl-user/.ssh/config
 sudo -u styl ssh-keyscan github.com | sudo -u styl tee /var/lib/styl-user/.ssh/known_hosts >/dev/null
 sudo -u styl chmod 600 /var/lib/styl-user/.ssh/known_hosts
 sudo -u styl ssh -T git@github.com
+sudo install -d -m 0755 -o styl -g styl /opt/styl
 sudo -u styl git clone git@github.com:color4tree/STYL.git /opt/styl
 ```
 
@@ -209,8 +206,9 @@ GitHub's successful SSH test may say shell access is unavailable; that is normal
 
 ## 5. Create persistent data and secrets
 
-Replace `example.com` with the real domain. Record the generated admin token in
-a password manager; it is the password used on `/admin`.
+Replace `LIGHTSAIL_STATIC_IP` with the attached static IPv4 address. Record the
+generated admin token in a password manager; do not use it in the browser until
+HTTPS is enabled.
 
 ```bash
 sudo install -d -m 0750 -o styl -g styl /var/lib/styl /etc/styl
@@ -222,7 +220,7 @@ ADMIN_TOKEN=$(openssl rand -hex 32)
 sudo install -m 0600 -o styl -g styl \
   /opt/styl/deploy/styl.env.example /etc/styl/styl.env
 sudo sed -i "s/replace-with-a-long-random-token/$ADMIN_TOKEN/" /etc/styl/styl.env
-sudo sed -i "s/example.com/YOUR_DOMAIN/" /etc/styl/styl.env
+sudo sed -i "s#https://example.com#http://LIGHTSAIL_STATIC_IP#" /etc/styl/styl.env
 echo "Save this admin token: $ADMIN_TOKEN"
 ```
 
@@ -256,48 +254,134 @@ rm -rf /tmp/styl-uploads
 Confirm the production environment file has no placeholders:
 
 ```bash
-sudo grep -n 'replace-with\|example.com\|YOUR_' /etc/styl/styl.env
+sudo grep -n 'replace-with\|example.com\|LIGHTSAIL_STATIC_IP' /etc/styl/styl.env
 ```
 
 This command should print nothing. Never print the complete environment file in
 logs or support messages because it contains the admin token.
 
-## 6. Install services and HTTPS proxy
+## 6. Install services and the IP-address HTTP proxy
 
-Replace both placeholder hostnames before installing the Caddyfile. Using both
-names lets Caddy obtain certificates for the root and `www` domains:
+Replace `LIGHTSAIL_STATIC_IP` in the command below with the attached static IPv4
+address. The `http://` prefix intentionally prevents certificate issuance during
+the IP-only phase.
 
 ```bash
-sudo sed -i 's/example.com/YOUR_DOMAIN, www.YOUR_DOMAIN/' /opt/styl/deploy/Caddyfile
 sudo install -m 0644 /opt/styl/deploy/styl-api.service /etc/systemd/system/
 sudo install -m 0644 /opt/styl/deploy/styl-web.service /etc/systemd/system/
 sudo install -m 0644 /opt/styl/deploy/styl-backup.service /etc/systemd/system/
 sudo install -m 0644 /opt/styl/deploy/styl-backup.timer /etc/systemd/system/
-sudo install -m 0644 /opt/styl/deploy/Caddyfile /etc/caddy/Caddyfile
 sudo chmod 0755 /opt/styl/deploy/backup.sh /opt/styl/deploy/deploy.sh
+
+sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
+http://LIGHTSAIL_STATIC_IP {
+  encode zstd gzip
+
+  handle /health {
+    reverse_proxy 127.0.0.1:8000
+  }
+
+  handle /api/* {
+    reverse_proxy 127.0.0.1:8000
+  }
+
+  handle {
+    reverse_proxy 127.0.0.1:3000
+  }
+}
+EOF
 
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl daemon-reload
 sudo systemctl enable --now styl-api styl-web styl-backup.timer caddy
 ```
 
-Caddy obtains and renews the TLS certificate automatically after DNS resolves.
-If only one hostname is wanted, remove the other hostname from the first line of
-the installed Caddyfile.
+If the literal text `LIGHTSAIL_STATIC_IP` was used accidentally, replace it in
+both `/etc/caddy/Caddyfile` and `/etc/styl/styl.env`, then restart Caddy and the API.
 
-## 7. Verify the deployment
+## 7. Verify the IP-address deployment
 
 ```bash
 curl --fail http://127.0.0.1:8000/health
 curl --fail http://127.0.0.1:3000/
-curl --fail https://YOUR_DOMAIN/health
-curl --fail https://www.YOUR_DOMAIN/health
+curl --fail http://LIGHTSAIL_STATIC_IP/health
 sudo systemctl --no-pager --full status styl-api styl-web caddy
 sudo journalctl -u styl-api -u styl-web -u caddy --since '10 minutes ago'
 ```
 
-Open `https://YOUR_DOMAIN/admin` and sign in with the generated admin token.
-Test one product update and one image upload.
+Open `http://LIGHTSAIL_STATIC_IP` and verify that the storefront and product pages
+load. Browser warnings that the connection is not secure are expected in this
+temporary phase. Do not sign in at `/admin` or submit real inquiry data yet.
+
+Confirm ports 3000 and 8000 cannot be reached from the public internet. All public
+requests should enter through Caddy on port 80.
+
+## 8. Add DNS and enable automatic HTTPS
+
+Complete this phase before using `/admin`, accepting inquiries, or announcing the
+site publicly.
+
+### 8.1 Create DNS records
+
+At the domain's DNS provider, remove conflicting `A`, `AAAA`, or `CNAME` records
+for the root and `www` names, then create:
+
+```text
+A  @    LIGHTSAIL_STATIC_IP  TTL 300
+A  www  LIGHTSAIL_STATIC_IP  TTL 300
+```
+
+Do not add an `AAAA` record unless IPv6 is intentionally configured. Check from
+local PowerShell until both names return the Lightsail static IPv4 address:
+
+```powershell
+Resolve-DnsName YOUR_DOMAIN -Type A
+Resolve-DnsName www.YOUR_DOMAIN -Type A
+```
+
+DNS updates can take several minutes or longer. Do not continue until both names
+resolve to the correct address from a public network.
+
+### 8.2 Change the allowed browser origin
+
+On the Lightsail SSH terminal, replace the IP origin with the HTTPS domain and
+verify that no placeholder remains:
+
+```bash
+sudo sed -i 's#^STYL_ALLOWED_ORIGINS=.*#STYL_ALLOWED_ORIGINS=https://YOUR_DOMAIN,https://www.YOUR_DOMAIN#' /etc/styl/styl.env
+sudo grep '^STYL_ALLOWED_ORIGINS=' /etc/styl/styl.env
+```
+
+### 8.3 Switch Caddy from the IP to the domain
+
+Install the repository's HTTPS Caddy template, replace its placeholder, validate
+it, and restart the proxy and API:
+
+```bash
+sudo install -m 0644 /opt/styl/deploy/Caddyfile /etc/caddy/Caddyfile
+sudo sed -i 's/example.com/YOUR_DOMAIN, www.YOUR_DOMAIN/' /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl restart styl-api caddy
+sudo systemctl --no-pager --full status styl-api caddy
+sudo journalctl -u caddy --since '10 minutes ago' --no-pager
+```
+
+Caddy automatically requests and renews TLS certificates. Ports 80 and 443 must
+remain open while certificates are issued and renewed.
+
+After this change, use the domain as the supported public URL. Direct requests to
+the IP may no longer match a configured Caddy hostname; this is expected.
+
+### 8.4 Verify HTTPS and administration
+
+```bash
+curl --fail https://YOUR_DOMAIN/health
+curl --fail https://www.YOUR_DOMAIN/health
+```
+
+Open `https://YOUR_DOMAIN/admin`, verify that the browser shows a valid secure
+connection, and sign in with the saved admin token. Test one product update and
+one image upload only after HTTPS is working.
 
 Verify that anonymous catalog writes are rejected and the configured token works:
 
@@ -326,7 +410,7 @@ Complete this browser checklist:
 6. Uploaded images survive both service restart and application deployment.
 7. Ports `3000` and `8000` cannot be reached from the public internet.
 
-## 8. Verify backups
+## 9. Verify backups
 
 Run the backup once and inspect the archive:
 
@@ -356,7 +440,7 @@ sudo systemctl start styl-api
 
 After restoration, verify `/health`, the public catalog, and one uploaded image.
 
-## 9. Security and maintenance
+## 10. Security and maintenance
 
 Perform these tasks after launch:
 
@@ -399,7 +483,7 @@ unset NEW_TOKEN
 
 Existing browser sessions stop working immediately after token rotation.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 Check service logs first:
 
