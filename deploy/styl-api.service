@@ -1,0 +1,17 @@
+[Unit]
+Description=STYL FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=styl
+Group=styl
+WorkingDirectory=/opt/styl/backend
+EnvironmentFile=/etc/styl/styl.env
+ExecStart=/opt/styl/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

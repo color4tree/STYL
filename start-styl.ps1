@@ -100,6 +100,10 @@ if ($apiPort -ne 8000) {
     Write-Host "Port 8000 is still reserved by Windows; using API port $apiPort." -ForegroundColor Yellow
 }
 
+if (-not $env:STYL_ADMIN_TOKEN) {
+    $env:STYL_ADMIN_TOKEN = "local-development-token"
+}
+
 Write-Host "Starting backend..." -ForegroundColor Cyan
 $backendProcess = Start-Process -FilePath $python `
     -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", $apiPort) `
@@ -132,6 +136,7 @@ Write-Host ""
 Write-Host "STYL is ready." -ForegroundColor Green
 Write-Host "Portal: http://localhost:$frontendPort"
 Write-Host "Admin:  http://localhost:$frontendPort/admin"
+Write-Host "Token:  $env:STYL_ADMIN_TOKEN"
 Write-Host "API:    http://localhost:$apiPort/docs"
 Write-Host "Logs:   $runtime"
 

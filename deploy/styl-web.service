@@ -1,0 +1,17 @@
+[Unit]
+Description=STYL Next.js service
+After=network.target styl-api.service
+
+[Service]
+Type=simple
+User=styl
+Group=styl
+WorkingDirectory=/opt/styl/frontend
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

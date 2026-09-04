@@ -1,0 +1,6 @@
+[Unit]
+Description=Back up STYL catalog and uploads
+
+[Service]
+Type=oneshot
+ExecStart=/opt/styl/deploy/backup.sh

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 
@@ -29,42 +30,27 @@ const emptyProduct: Omit<Product, "id" | "slug"> = {
   features: [""],
 };
 
-export default function AdminPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [form, setForm] = useState<Omit<Product, "id" | "slug">>(emptyProduct);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+async function fetchProducts(): Promise<Product[]> {
+  const res = await fetch(`${API_BASE}/api/products`);
+  if (!res.ok) {
+    throw new Error("Unable to fetch products");
+  }
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const data = await res.json();
+  return Array.isArray(data.items) ? (data.items as Product[]) : [];
+}
 
-  const loadProducts = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/products`);
-      if (!res.ok) {
-        throw new Error("Unable to fetch products");
-      }
+async function verifyAdminToken(token: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/admin/verify`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    throw new Error(res.status === 503 ? "Admin access is not configured." : "Incorrect admin token.");
+  }
+}
 
-      const data = await res.json();
-      const items = Array.isArray(data.items) ? (data.items as Product[]) : [];
-      setProducts(items);
-
-      if (items.length > 0) {
-        setSelectedId(items[0].id);
-        setForm(toFormState(items[0]));
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to load products.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toFormState = (product: Product): Omit<Product, "id" | "slug"> => ({
+function toFormState(product: Product): Omit<Product, "id" | "slug"> {
+  return {
     name: product.name,
     category: product.category,
     price: product.price,
@@ -74,7 +60,78 @@ export default function AdminPage() {
     featured: product.featured,
     image: product.image,
     features: product.features.length > 0 ? product.features : [""],
-  });
+  };
+}
+
+export default function AdminPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [adminToken, setAdminToken] = useState("");
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [form, setForm] = useState<Omit<Product, "id" | "slug">>(emptyProduct);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const verifyAccess = async (token = adminToken) => {
+    setCheckingAccess(true);
+    setMessage(null);
+
+    try {
+      await verifyAdminToken(token);
+      window.sessionStorage.setItem("styl-admin-token", token);
+      setAdminToken(token);
+      setAuthenticated(true);
+    } catch (error) {
+      window.sessionStorage.removeItem("styl-admin-token");
+      setAuthenticated(false);
+      setMessage(error instanceof Error ? error.message : "Unable to verify admin access.");
+    } finally {
+      setCheckingAccess(false);
+    }
+  };
+
+  const signOut = () => {
+    window.sessionStorage.removeItem("styl-admin-token");
+    setAdminToken("");
+    setAuthenticated(false);
+    setMessage(null);
+  };
+
+  useEffect(() => {
+    async function initialize() {
+      try {
+        const items = await fetchProducts();
+        setProducts(items);
+
+        if (items.length > 0) {
+          setSelectedId(items[0].id);
+          setForm(toFormState(items[0]));
+        }
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Unable to load products.");
+      } finally {
+        setLoading(false);
+      }
+
+      const savedToken = window.sessionStorage.getItem("styl-admin-token");
+      if (savedToken) {
+        try {
+          await verifyAdminToken(savedToken);
+          setAdminToken(savedToken);
+          setAuthenticated(true);
+        } catch (error) {
+          window.sessionStorage.removeItem("styl-admin-token");
+          setMessage(error instanceof Error ? error.message : "Unable to verify admin access.");
+        }
+      }
+      setCheckingAccess(false);
+    }
+
+    initialize();
+  }, []);
 
   const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -127,6 +184,7 @@ export default function AdminPage() {
       body.append("image", image);
       const res = await fetch(`${API_BASE}/api/uploads/product-image`, {
         method: "POST",
+        headers: { Authorization: `Bearer ${adminToken}` },
         body,
       });
       const data = await res.json();
@@ -166,7 +224,10 @@ export default function AdminPage() {
 
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -199,8 +260,40 @@ export default function AdminPage() {
     [products],
   );
 
-  if (loading) {
+  if (loading || checkingAccess) {
     return <main className="min-h-screen bg-[var(--bg)] px-4 py-16 text-[var(--ink)]">Loading admin catalog...</main>;
+  }
+
+  if (!authenticated) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[var(--bg)] px-4 py-16 text-[var(--ink)]">
+        <form
+          className="w-full max-w-sm rounded-[28px] border border-[var(--line)] bg-white p-7"
+          onSubmit={(event) => {
+            event.preventDefault();
+            verifyAccess();
+          }}
+        >
+          <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
+          <h1 className="mt-3 text-3xl font-semibold">Sign in</h1>
+          <label className="mt-6 block text-sm font-medium">
+            Admin token
+            <input
+              type="password"
+              value={adminToken}
+              onChange={(event) => setAdminToken(event.target.value)}
+              autoComplete="current-password"
+              required
+              className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
+            />
+          </label>
+          <button type="submit" className="mt-5 w-full rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white">
+            Sign in
+          </button>
+          {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
+        </form>
+      </main>
+    );
   }
 
   return (
@@ -214,6 +307,9 @@ export default function AdminPage() {
           <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
             {products.length} products · ${totalValue.toLocaleString()} total value
           </div>
+          <button type="button" onClick={signOut} className="text-sm font-medium text-[var(--muted)]">
+            Sign out
+          </button>
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
@@ -383,9 +479,9 @@ export default function AdminPage() {
               <button type="button" onClick={saveProduct} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
                 {saving ? "Saving..." : selectedId ? "Save changes" : "Create product"}
               </button>
-              <a href="/" className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)]">
+              <Link href="/" className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)]">
                 View portal
-              </a>
+              </Link>
             </div>
 
             {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}

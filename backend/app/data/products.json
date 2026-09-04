@@ -49,5 +49,21 @@
       "Modular training configuration",
       "Designed for long-term reliability"
     ]
+  },
+  {
+    "id": 4,
+    "slug": "new-created-product",
+    "name": "New Created Product",
+    "category": "CARDIO",
+    "price": 3000.0,
+    "currency": "USD",
+    "shortDescription": "this is a short desc",
+    "description": "This is the full description of the. The Photo is not really related.",
+    "featured": true,
+    "image": "/api/uploads/25deae8f70984a15aeef1a9364162aef.png",
+    "features": [
+      "feature 1",
+      "feature 2"
+    ]
   }
 ]

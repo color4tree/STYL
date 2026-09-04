@@ -13,8 +13,8 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 
 - Frontend: Next.js + TypeScript + Tailwind CSS
 - Backend: FastAPI + Python
-- Database: PostgreSQL (planned for v1+ data model)
-- Deployment: Vercel + managed API + PostgreSQL service
+- Catalog storage: JSON and local uploads for the lightweight MVP
+- Deployment: Single AWS Lightsail instance with Caddy and automatic HTTPS
 
 ## Run locally
 
@@ -27,6 +27,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-styl.ps1
 ```
 
 The script stops stale servers, starts the backend and frontend, verifies both services, and opens the product management page. If port 8000 is still reserved by Windows, it automatically selects a free API port and configures the frontend to use it.
+The local admin token is printed in the terminal when startup completes.
+
+### Production
+
+Follow [the minimal AWS Lightsail deployment guide](docs/lightsail-deployment.md).
+Production catalog writes require `STYL_ADMIN_TOKEN`; writable catalog data and
+uploads are stored under `STYL_DATA_DIR`.
 
 ### Frontend
 

@@ -10,6 +10,7 @@
 **/__pycache__/
 *.pyc
 backend/app/uploads/
+backend/app/data/uploads/
 
 # Node / frontend build output
 frontend/node_modules/
