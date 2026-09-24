@@ -14,6 +14,7 @@ Phase 2: Internet -> Caddy :443 by domain with automatic HTTPS
 Both phases: Caddy -> Next.js :3000
        -> FastAPI :8000 for /api/* and /health
 FastAPI -> /var/lib/styl/products.json
+      -> /var/lib/styl/accessories.json
       -> /var/lib/styl/uploads/
 ```
 
@@ -39,7 +40,8 @@ For the current STYL instance, replace every `LIGHTSAIL_STATIC_IP` with
 Also confirm:
 
 1. The repository contains the version to deploy.
-2. Product data in `backend/app/data/products.json` is ready to publish.
+2. Product data in `backend/app/data/products.json` and accessory data in
+  `backend/app/data/accessories.json` are ready to publish.
 3. Any existing files in `backend/app/uploads/` are available for separate copy.
 4. You have an AWS account with MFA enabled on the root user.
 5. You control a domain's DNS records before beginning the later HTTPS phase.
@@ -228,6 +230,14 @@ else
   echo "/var/lib/styl/products.json already exists; it was not overwritten."
 fi
 
+if [ ! -f /var/lib/styl/accessories.json ]; then
+  sudo install -m 0640 -o styl -g styl \
+    /opt/styl/backend/app/data/accessories.json \
+    /var/lib/styl/accessories.json
+else
+  echo "/var/lib/styl/accessories.json already exists; it was not overwritten."
+fi
+
 if [ ! -f /etc/styl/styl.env ]; then
   ADMIN_TOKEN=$(openssl rand -hex 32)
 
@@ -250,8 +260,10 @@ else
 fi
 ```
 
-Do not rerun a plain copy of the repository's `products.json` after live edits;
-the guard above protects the production catalog from being reset accidentally.
+Do not rerun a plain copy of the repository's `products.json` or
+`accessories.json` after live edits; the guards above protect the production
+catalogs from being reset accidentally. If `accessories.json` is missing, the API
+creates it from the built-in placeholder catalog on first request.
 
 Existing local uploads are ignored by Git. Copy any required files separately
 from `backend/app/uploads/` into `/var/lib/styl/uploads/` before launch.
