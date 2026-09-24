@@ -1,17 +1,5 @@
 [
   {
-    "id": 1001,
-    "name": "Lat Pulldown Bar",
-    "category": "Bar",
-    "dimensions": "120 x 4 x 25 cm",
-    "material": "Chrome-plated steel, knurled grips",
-    "weight": "4.5 kg",
-    "price": 89,
-    "currency": "USD",
-    "notes": "Wide-grip pulldowns and overhead cable work.",
-    "image": "/images/accessories/lat-pulldown-bar.svg"
-  },
-  {
     "id": 1002,
     "name": "Straight Bar",
     "category": "Bar",

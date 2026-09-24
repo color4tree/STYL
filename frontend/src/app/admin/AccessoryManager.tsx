@@ -43,6 +43,7 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     fetchAccessories()
@@ -65,12 +66,14 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
     setSelectedId(item.id);
     setForm(toFormState(item));
     setMessage(null);
+    setConfirmingDelete(false);
   };
 
   const resetForm = () => {
     setSelectedId(null);
     setForm(emptyAccessory);
     setMessage(null);
+    setConfirmingDelete(false);
   };
 
   const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +140,41 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
       setMessage("Accessory saved successfully.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save accessory.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteAccessory = async () => {
+    const accessory = accessories.find((item) => item.id === selectedId);
+    if (!accessory) return;
+
+    setSaving(true);
+    setMessage(null);
+    setConfirmingDelete(false);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/accessories/${accessory.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data.detail === "string" ? data.detail : "Unable to delete accessory.");
+      }
+
+      const remaining = accessories.filter((item) => item.id !== accessory.id);
+      setAccessories(remaining);
+      if (remaining.length > 0) {
+        setSelectedId(remaining[0].id);
+        setForm(toFormState(remaining[0]));
+      } else {
+        setSelectedId(null);
+        setForm(emptyAccessory);
+      }
+      setMessage(`"${accessory.name}" deleted.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete accessory.");
     } finally {
       setSaving(false);
     }
@@ -269,6 +307,35 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
           <button type="button" onClick={saveAccessory} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
             {saving ? "Saving..." : selectedId ? "Save changes" : "Create accessory"}
           </button>
+          {selectedId && !confirmingDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={saving}
+              className="rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+            >
+              Delete accessory
+            </button>
+          ) : null}
+          {selectedId && confirmingDelete ? (
+            <>
+              <button
+                type="button"
+                onClick={deleteAccessory}
+                disabled={saving}
+                className="rounded-full bg-red-700 px-5 py-3 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
+              >
+                Confirm delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium"
+              >
+                Cancel
+              </button>
+            </>
+          ) : null}
           <Link href="/accessories" className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)]">
             View accessories page
           </Link>

@@ -443,6 +443,19 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
     raise HTTPException(status_code=404, detail="Accessory not found")
 
 
+@app.delete("/api/accessories/{accessory_id}", dependencies=[Depends(require_admin)])
+def delete_accessory(accessory_id: int) -> dict[str, str]:
+    with ACCESSORIES_LOCK:
+        accessories = load_accessories()
+        deleted = next((item for item in accessories if int(item.get("id", 0)) == accessory_id), None)
+        if deleted is None:
+            raise HTTPException(status_code=404, detail="Accessory not found")
+
+        write_json_list(ACCESSORIES_PATH, [item for item in accessories if item is not deleted])
+        delete_uploaded_image(deleted.get("image"))
+    return {"status": "deleted", "message": f"Accessory {accessory_id} deleted."}
+
+
 @app.post("/api/inquiries")
 def create_inquiry(request: InquiryRequest) -> dict[str, str]:
     return {

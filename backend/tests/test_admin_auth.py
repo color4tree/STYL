@@ -93,6 +93,25 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["item"]["id"], main.ACCESSORY_ID_OFFSET + 1)
 
+    def test_admin_can_delete_accessory(self) -> None:
+        first_id = self.client.get("/api/accessories").json()["items"][0]["id"]
+
+        unauthorized = self.client.delete(f"/api/accessories/{first_id}")
+        authorized = self.client.delete(
+            f"/api/accessories/{first_id}",
+            headers={"Authorization": "Bearer test-admin-token"},
+        )
+        missing = self.client.delete(
+            f"/api/accessories/{first_id}",
+            headers={"Authorization": "Bearer test-admin-token"},
+        )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(authorized.status_code, 200)
+        self.assertEqual(missing.status_code, 404)
+        ids = [item["id"] for item in self.client.get("/api/accessories").json()["items"]]
+        self.assertNotIn(first_id, ids)
+
 
 if __name__ == "__main__":
     unittest.main()

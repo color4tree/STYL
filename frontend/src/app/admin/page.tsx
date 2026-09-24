@@ -77,6 +77,7 @@ export default function AdminPage() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"products" | "accessories">("products");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const verifyAccess = async (token = adminToken) => {
     setCheckingAccess(true);
@@ -166,12 +167,14 @@ export default function AdminPage() {
   const selectProduct = (product: Product) => {
     setSelectedId(product.id);
     setForm(toFormState(product));
+    setConfirmingDelete(false);
   };
 
   const resetForm = () => {
     setForm(emptyProduct);
     setSelectedId(null);
     setMessage(null);
+    setConfirmingDelete(false);
   };
 
   const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -253,6 +256,41 @@ export default function AdminPage() {
       setMessage("Product saved successfully.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save product.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteProduct = async () => {
+    const product = products.find((item) => item.id === selectedId);
+    if (!product) return;
+
+    setSaving(true);
+    setMessage(null);
+    setConfirmingDelete(false);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/products/${product.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${adminToken}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data.detail === "string" ? data.detail : "Unable to delete product.");
+      }
+
+      const remaining = products.filter((item) => item.id !== product.id);
+      setProducts(remaining);
+      if (remaining.length > 0) {
+        setSelectedId(remaining[0].id);
+        setForm(toFormState(remaining[0]));
+      } else {
+        setSelectedId(null);
+        setForm(emptyProduct);
+      }
+      setMessage(`"${product.name}" deleted.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete product.");
     } finally {
       setSaving(false);
     }
@@ -503,6 +541,35 @@ export default function AdminPage() {
               <button type="button" onClick={saveProduct} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
                 {saving ? "Saving..." : selectedId ? "Save changes" : "Create product"}
               </button>
+              {selectedId && !confirmingDelete ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  disabled={saving}
+                  className="rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                >
+                  Delete product
+                </button>
+              ) : null}
+              {selectedId && confirmingDelete ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={deleteProduct}
+                    disabled={saving}
+                    className="rounded-full bg-red-700 px-5 py-3 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
+                  >
+                    Confirm delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : null}
               <Link href="/" className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)]">
                 View portal
               </Link>
