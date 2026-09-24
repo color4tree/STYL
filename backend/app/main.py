@@ -20,6 +20,7 @@ APP_PATH = Path(__file__).resolve().parent
 CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
 DATA_DIRECTORY = Path(CONFIGURED_DATA_DIRECTORY) if CONFIGURED_DATA_DIRECTORY else APP_PATH / "data"
 DATA_PATH = DATA_DIRECTORY / "products.json"
+ACCESSORIES_PATH = DATA_DIRECTORY / "accessories.json"
 UPLOAD_PATH = DATA_DIRECTORY / "uploads" if CONFIGURED_DATA_DIRECTORY else APP_PATH / "uploads"
 ADMIN_TOKEN = os.getenv("STYL_ADMIN_TOKEN", "")
 ALLOWED_ORIGINS = [
@@ -31,6 +32,9 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CATALOG_LOCK = Lock()
+ACCESSORIES_LOCK = Lock()
+# Accessory IDs start above this so they don't collide with product IDs in the shared cart.
+ACCESSORY_ID_OFFSET = 1000
 MAX_IMAGE_SIZE = 8 * 1024 * 1024
 IMAGE_EXTENSIONS = {
     "image/gif": ".gif",
@@ -77,6 +81,18 @@ class ProductPayload(BaseModel):
     featured: bool = False
     image: str | None = None
     features: list[str] = Field(default_factory=list)
+
+
+class AccessoryPayload(BaseModel):
+    name: str
+    category: str
+    dimensions: str = ""
+    material: str = ""
+    weight: str = ""
+    price: float = Field(ge=0)
+    currency: str = "USD"
+    notes: str = ""
+    image: str | None = None
 
 
 def require_admin(authorization: str | None = Header(default=None)) -> None:
@@ -178,10 +194,83 @@ def load_products() -> list[dict[str, object]]:
 
 
 def save_products(products: list[dict[str, object]]) -> None:
-    DATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = DATA_PATH.with_suffix(".tmp")
-    temporary_path.write_text(json.dumps(products, indent=2), encoding="utf-8")
-    temporary_path.replace(DATA_PATH)
+    write_json_list(DATA_PATH, products)
+
+
+def write_json_list(path: Path, items: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(".tmp")
+    temporary_path.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    temporary_path.replace(path)
+
+
+def seed_accessory(
+    accessory_id: int,
+    name: str,
+    category: str,
+    dimensions: str,
+    material: str,
+    weight: str,
+    price: float,
+    notes: str,
+    image: str,
+) -> dict[str, object]:
+    return {
+        "id": accessory_id,
+        "name": name,
+        "category": category,
+        "dimensions": dimensions,
+        "material": material,
+        "weight": weight,
+        "price": price,
+        "currency": "USD",
+        "notes": notes,
+        "image": f"/images/accessories/{image}.svg",
+    }
+
+
+def seed_accessories() -> list[dict[str, object]]:
+    # Placeholder catalog; replace with confirmed supplier specs and pricing via the admin page.
+    accessories = [
+        seed_accessory(1001, "Lat Pulldown Bar", "Bar", "120 x 4 x 25 cm", "Chrome-plated steel, knurled grips", "4.5 kg", 89, "Wide-grip pulldowns and overhead cable work.", "lat-pulldown-bar"),
+        seed_accessory(1002, "Straight Bar", "Bar", "50 x 3 x 12 cm", "Chrome-plated steel, revolving sleeve", "2.0 kg", 59, "Triceps pushdowns, curls, and upright rows.", "straight-bar"),
+        seed_accessory(1003, "EZ Curl Bar", "Bar", "60 x 3 x 14 cm", "Chrome-plated steel, angled knurled grips", "2.4 kg", 69, "Wrist-friendly curls and extensions.", "ez-curl-bar"),
+        seed_accessory(1004, "Triceps Rope", "Handle", "70 cm length, 3 cm diameter", "Braided nylon, rubber end caps, steel eyelet", "0.8 kg", 39, "Pushdowns, face pulls, and cable crunches.", "triceps-rope"),
+        seed_accessory(1005, "V-Bar / Close-Grip Row Handle", "Handle", "28 x 18 x 12 cm", "Solid steel, rubber-coated grips", "1.6 kg", 45, "Seated rows and close-grip pulldowns.", "v-bar"),
+        seed_accessory(1006, "Single D-Handle (Pair)", "Handle", "18 x 14 x 4 cm each", "Steel frame, anti-slip rubber grip", "0.5 kg each", 35, "Unilateral presses, flys, and rows.", "d-handle"),
+        seed_accessory(1007, "Ankle Strap (Pair)", "Strap", "30 x 9 cm each", "Padded neoprene, hook-and-loop, steel D-ring", "0.2 kg each", 29, "Glute kickbacks, hip abduction, leg raises.", "ankle-strap"),
+        seed_accessory(1008, "Nylon Stirrup Handle (Pair)", "Strap", "20 x 12 cm each", "Reinforced nylon webbing, ABS grip tube", "0.15 kg each", 25, "Lightweight option for flys and rotations.", "stirrup-handle"),
+        seed_accessory(1009, "Pull-up / Chin-up Handles", "Upper frame", "35 x 12 x 10 cm each", "Powder-coated steel, foam grips", "1.2 kg each", 79, "Neutral-grip pull-ups on the top crossmember.", "pullup-handles"),
+        seed_accessory(1010, "Carabiner & Chain Extender Kit", "Hardware", "Carabiner 10 cm, chain 40 cm", "Zinc-plated alloy steel", "0.4 kg", 19, "Quick attachment swaps and cable length tuning.", "carabiner-chain"),
+        seed_accessory(1011, "Adjustable Utility Bench", "Bench", "130 x 60 x 45 cm", "Steel frame, high-density foam, PU leather", "28 kg", 399, "Flat, incline, and decline positions for cable presses.", "utility-bench"),
+        seed_accessory(1012, "Accessory Storage Rack", "Storage", "60 x 20 x 90 cm", "Powder-coated steel, rubber hook sleeves", "6 kg", 129, "Mounts to the frame to organize attachments.", "storage-rack"),
+    ]
+    write_json_list(ACCESSORIES_PATH, accessories)
+    return accessories
+
+
+def load_accessories() -> list[dict[str, object]]:
+    try:
+        data = json.loads(ACCESSORIES_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return seed_accessories()
+
+    return data if isinstance(data, list) else seed_accessories()
+
+
+def accessory_from_payload(accessory_id: int, request: AccessoryPayload, fallback_image: str) -> dict[str, object]:
+    return {
+        "id": accessory_id,
+        "name": request.name.strip(),
+        "category": request.category.strip() or "General",
+        "dimensions": request.dimensions.strip(),
+        "material": request.material.strip(),
+        "weight": request.weight.strip(),
+        "price": float(request.price),
+        "currency": request.currency or "USD",
+        "notes": request.notes.strip(),
+        "image": request.image or fallback_image,
+    }
 
 
 def delete_uploaded_image(image: object) -> None:
@@ -310,6 +399,48 @@ def delete_product(product_id: int) -> dict[str, str]:
         if deleted_product:
             delete_uploaded_image(deleted_product.get("image"))
     return {"status": "deleted", "message": f"Product {product_id} deleted."}
+
+
+@app.get("/api/accessories")
+def get_accessories() -> dict[str, list[dict[str, object]]]:
+    return {"items": load_accessories()}
+
+
+@app.post("/api/accessories", dependencies=[Depends(require_admin)])
+def create_accessory(request: AccessoryPayload) -> dict[str, object]:
+    if not request.name.strip():
+        raise HTTPException(status_code=422, detail="Name is required.")
+
+    with ACCESSORIES_LOCK:
+        accessories = load_accessories()
+        highest_id = max((int(item.get("id", 0)) for item in accessories), default=ACCESSORY_ID_OFFSET)
+        created = accessory_from_payload(
+            max(highest_id, ACCESSORY_ID_OFFSET) + 1,
+            request,
+            "/images/accessories/straight-bar.svg",
+        )
+        accessories.append(created)
+        write_json_list(ACCESSORIES_PATH, accessories)
+    return {"status": "created", "item": created}
+
+
+@app.put("/api/accessories/{accessory_id}", dependencies=[Depends(require_admin)])
+def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, object]:
+    if not request.name.strip():
+        raise HTTPException(status_code=422, detail="Name is required.")
+
+    with ACCESSORIES_LOCK:
+        accessories = load_accessories()
+        for index, existing in enumerate(accessories):
+            if int(existing.get("id", 0)) == accessory_id:
+                updated = accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))
+                accessories[index] = updated
+                write_json_list(ACCESSORIES_PATH, accessories)
+                if existing.get("image") != updated["image"]:
+                    delete_uploaded_image(existing.get("image"))
+                return {"status": "updated", "item": updated}
+
+    raise HTTPException(status_code=404, detail="Accessory not found")
 
 
 @app.post("/api/inquiries")

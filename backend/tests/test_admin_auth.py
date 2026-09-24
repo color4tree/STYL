@@ -11,13 +11,16 @@ class AdminAuthenticationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
         self.original_data_path = main.DATA_PATH
+        self.original_accessories_path = main.ACCESSORIES_PATH
         self.original_admin_token = main.ADMIN_TOKEN
         main.DATA_PATH = Path(self.temporary_directory.name) / "products.json"
+        main.ACCESSORIES_PATH = Path(self.temporary_directory.name) / "accessories.json"
         main.ADMIN_TOKEN = "test-admin-token"
         self.client = TestClient(main.app)
 
     def tearDown(self) -> None:
         main.DATA_PATH = self.original_data_path
+        main.ACCESSORIES_PATH = self.original_accessories_path
         main.ADMIN_TOKEN = self.original_admin_token
         self.temporary_directory.cleanup()
 
@@ -59,6 +62,36 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.assertEqual(authorized.status_code, 200)
         self.assertEqual(authorized.json()["item"]["slug"], "test-bench")
         self.assertTrue(main.DATA_PATH.exists())
+
+    def test_accessories_are_public_and_editable_only_by_admin(self) -> None:
+        listing = self.client.get("/api/accessories")
+        self.assertEqual(listing.status_code, 200)
+        first = listing.json()["items"][0]
+
+        payload = {**first, "name": "Updated Bar", "price": 99}
+        unauthorized = self.client.put(f"/api/accessories/{first['id']}", json=payload)
+        authorized = self.client.put(
+            f"/api/accessories/{first['id']}",
+            json=payload,
+            headers={"Authorization": "Bearer test-admin-token"},
+        )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(authorized.status_code, 200)
+        self.assertEqual(authorized.json()["item"]["name"], "Updated Bar")
+        self.assertEqual(self.client.get("/api/accessories").json()["items"][0]["price"], 99)
+
+    def test_new_accessory_ids_stay_above_the_product_range(self) -> None:
+        main.ACCESSORIES_PATH.write_text("[]", encoding="utf-8")
+
+        response = self.client.post(
+            "/api/accessories",
+            json={"name": "Grip", "category": "Handle", "price": 10},
+            headers={"Authorization": "Bearer test-admin-token"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["item"]["id"], main.ACCESSORY_ID_OFFSET + 1)
 
 
 if __name__ == "__main__":

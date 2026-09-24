@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { addProductToCart, formatCartSummary, getCartCount, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
+import { addProductToCart, formatCartSummary, getCartCount, MAX_ITEM_QUANTITY, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
+import BrandLogo from "@/components/BrandLogo";
 
 type Product = {
   id: number;
@@ -81,22 +82,28 @@ const pillars = [
 
 const brandAssets = [
   {
-    name: "Pro Elite Series",
-    category: "Strength",
-    description: "Precision frame geometry and a refined home-studio profile.",
-    file: "/images/pro-elite.svg",
+    name: "Signature shield",
+    category: "Brand mark",
+    description: "Laser-etched into brushed stainless steel on every frame upright.",
+    file: "/images/brand/logo-plate.jpg",
   },
   {
-    name: "Studio Row Compact",
-    category: "Cardio",
-    description: "Quiet, low-profile motion designed for everyday use.",
-    file: "/images/studio-row.svg",
+    name: "J-hook",
+    category: "Rack hardware",
+    description: "Rubber-lined steel hooks that protect the bar and carry the wordmark.",
+    file: "/images/brand/j-hook.jpg",
   },
   {
-    name: "Summit Core Rig",
-    category: "Performance",
-    description: "A modular performance system for serious routines and spaces.",
-    file: "/images/summit-core.svg",
+    name: "Cable swivel plate",
+    category: "Cable system",
+    description: "Machined plate and 360° swivel for smooth, tangle-free cable work.",
+    file: "/images/brand/cable-swivel.jpg",
+  },
+  {
+    name: "Frame badge",
+    category: "Crossmember",
+    description: "Brushed steel badge finishing the top crossmember of the multi trainer.",
+    file: "/images/brand/frame-badge.jpg",
   },
 ];
 
@@ -209,20 +216,14 @@ export default function Home() {
     <main className="min-h-screen bg-[var(--bg)] pt-[81px] text-[var(--ink)]">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-[var(--line)] bg-white/90 shadow-[0_8px_30px_rgba(17,17,17,0.05)] backdrop-blur-xl">
         <div className="container flex items-center justify-between py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--ink)] text-sm font-bold text-white">
-              S
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-                STYL
-              </div>
-            </div>
-          </div>
+          <Link href="/" aria-label="STYL home">
+            <BrandLogo markClassName="h-9 w-auto" />
+          </Link>
 
           <nav className="hidden items-center gap-8 text-sm text-[var(--muted)] md:flex">
             <a href="#about">About</a>
             <a href="#products">Products</a>
+            <Link href="/accessories">Accessories</Link>
             <a href="#experience">Experience</a>
             <a href="#contact">Contact</a>
           </nav>
@@ -262,20 +263,14 @@ export default function Home() {
             </a>
           </div>
 
-          <div className="mt-10 flex flex-wrap gap-8 text-sm text-[var(--muted)]">
-            <div>
-              <div className="text-2xl font-semibold text-[var(--ink)]">4.9/5</div>
-              <div>Customer satisfaction</div>
+          <blockquote className="mt-10 max-w-lg border-l-2 border-[var(--ink)] pl-5">
+            <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+              Our business principle
             </div>
-            <div>
-              <div className="text-2xl font-semibold text-[var(--ink)]">12k+</div>
-              <div>Training sessions logged</div>
-            </div>
-            <div>
-              <div className="text-2xl font-semibold text-[var(--ink)]">24/7</div>
-              <div>Design support access</div>
-            </div>
-          </div>
+            <p className="mt-3 text-xl font-medium leading-8 tracking-[-0.02em] text-[var(--ink)]">
+              Maximize customer value first, then capture a fair share of the value created.
+            </p>
+          </blockquote>
         </div>
 
         <div className="soft-panel rounded-[32px] p-6 shadow-[0_20px_60px_rgba(17,17,17,0.08)]">
@@ -285,7 +280,11 @@ export default function Home() {
               <span>01</span>
             </div>
             <div className="mt-12 rounded-[24px] bg-white/10 p-6 backdrop-blur-sm">
-              <div className="mb-4 h-52 rounded-[20px] bg-[radial-gradient(circle_at_30%_30%,rgba(201,176,142,0.8),rgba(24,24,24,0.65)_58%)]" />
+              <img
+                src="/images/brand/frame-badge.jpg"
+                alt="STYL shield logo and wordmark on a brushed steel frame badge"
+                className="mb-4 h-52 w-full rounded-[20px] object-cover"
+              />
               <div className="flex items-end justify-between gap-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.22em] text-white/60">
@@ -375,22 +374,22 @@ export default function Home() {
         <div className="mb-10 flex items-end justify-between gap-6">
           <div>
             <div className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
-              Brand assets
+              Brand details
             </div>
             <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] md:text-5xl">
-              Visual language built for premium everyday performance.
+              Our mark, engineered into every piece.
             </h2>
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {brandAssets.map((asset) => (
             <article key={asset.name} className="group overflow-hidden rounded-[28px] border border-[var(--line)] bg-white p-4 shadow-[0_18px_44px_rgba(17,17,17,0.04)]">
               <div className="overflow-hidden rounded-[22px] bg-[#f3efe9]">
                 <img
                   src={asset.file}
                   alt={asset.name}
-                  className="h-72 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                  className="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                 />
               </div>
               <div className="mt-5">
@@ -457,7 +456,8 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.id, 1)}
-                        className="h-8 w-8 rounded-full border border-[var(--line)] bg-white text-lg"
+                        disabled={item.quantity >= MAX_ITEM_QUANTITY}
+                        className="h-8 w-8 rounded-full border border-[var(--line)] bg-white text-lg disabled:opacity-40"
                       >
                         +
                       </button>

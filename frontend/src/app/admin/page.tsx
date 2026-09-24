@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
+import AccessoryManager from "./AccessoryManager";
+import BrandLogo from "@/components/BrandLogo";
 
 type Product = {
   id: number;
@@ -74,6 +76,7 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"products" | "accessories">("products");
 
   const verifyAccess = async (token = adminToken) => {
     setCheckingAccess(true);
@@ -274,6 +277,7 @@ export default function AdminPage() {
             verifyAccess();
           }}
         >
+          <BrandLogo markClassName="h-8 w-auto" className="mb-6" />
           <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
           <h1 className="mt-3 text-3xl font-semibold">Sign in</h1>
           <label className="mt-6 block text-sm font-medium">
@@ -301,17 +305,37 @@ export default function AdminPage() {
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 border-b border-[var(--line)] pb-6 md:flex-row md:items-end">
           <div>
+            <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
-            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">Product management</h1>
+            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">
+              {activeTab === "products" ? "Product management" : "Accessory management"}
+            </h1>
+            <div className="mt-4 inline-flex rounded-full border border-[var(--line)] bg-white p-1 text-sm font-medium">
+              {(["products", "accessories"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`rounded-full px-4 py-1.5 capitalize ${activeTab === tab ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
-            {products.length} products · ${totalValue.toLocaleString()} total value
-          </div>
+          {activeTab === "products" ? (
+            <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
+              {products.length} products · ${totalValue.toLocaleString()} total value
+            </div>
+          ) : null}
           <button type="button" onClick={signOut} className="text-sm font-medium text-[var(--muted)]">
             Sign out
           </button>
         </header>
 
+        {activeTab === "accessories" ? (
+          <AccessoryManager adminToken={adminToken} />
+        ) : (
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <aside className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -487,6 +511,7 @@ export default function AdminPage() {
             {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
           </section>
         </div>
+        )}
       </div>
     </main>
   );

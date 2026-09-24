@@ -7,6 +7,7 @@ export type CartItem = {
 };
 
 export const CART_KEY = "styl-cart";
+export const MAX_ITEM_QUANTITY = 10;
 
 export function readCart(): CartItem[] {
   if (typeof window === "undefined") {
@@ -39,15 +40,20 @@ export function getCartCount(items: CartItem[] = readCart()) {
   return items.reduce((sum, item) => sum + item.quantity, 0);
 }
 
-export function addProductToCart(product: { id: number; name: string; price: number; slug?: string }) {
+export function addProductToCart(
+  product: { id: number; name: string; price: number; slug?: string },
+  quantity = 1,
+) {
   const existing = readCart();
   const index = existing.findIndex((item) => item.id === product.id);
 
   const next = index >= 0
     ? existing.map((item) =>
-        item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+        item.id === product.id
+          ? { ...item, quantity: Math.min(MAX_ITEM_QUANTITY, item.quantity + quantity) }
+          : item,
       )
-    : [...existing, { ...product, quantity: 1 }];
+    : [...existing, { ...product, quantity: Math.min(MAX_ITEM_QUANTITY, quantity) }];
 
   writeCart(next);
   return next;
@@ -57,7 +63,9 @@ export function updateCartQuantity(id: number, delta: number) {
   const existing = readCart();
   const next = existing
     .map((item) =>
-      item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item,
+      item.id === id
+        ? { ...item, quantity: Math.min(MAX_ITEM_QUANTITY, Math.max(0, item.quantity + delta)) }
+        : item,
     )
     .filter((item) => item.quantity > 0);
 

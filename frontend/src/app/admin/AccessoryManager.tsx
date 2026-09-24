@@ -1,0 +1,281 @@
+"use client";
+
+import Link from "next/link";
+import { type ChangeEvent, useEffect, useState } from "react";
+import { API_BASE, resolveProductImage } from "@/lib/api";
+import { fetchAccessories, type Accessory } from "@/lib/accessories";
+
+type AccessoryForm = Omit<Accessory, "id">;
+
+const emptyAccessory: AccessoryForm = {
+  name: "",
+  category: "",
+  dimensions: "",
+  material: "",
+  weight: "",
+  price: 0,
+  currency: "USD",
+  notes: "",
+  image: "",
+};
+
+function toFormState(item: Accessory): AccessoryForm {
+  return {
+    name: item.name,
+    category: item.category,
+    dimensions: item.dimensions,
+    material: item.material,
+    weight: item.weight,
+    price: item.price,
+    currency: item.currency,
+    notes: item.notes,
+    image: item.image,
+  };
+}
+
+const inputClass = "mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3";
+
+export default function AccessoryManager({ adminToken }: { adminToken: string }) {
+  const [accessories, setAccessories] = useState<Accessory[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [form, setForm] = useState<AccessoryForm>(emptyAccessory);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchAccessories()
+      .then((items) => {
+        setAccessories(items);
+        if (items.length > 0) {
+          setSelectedId(items[0].id);
+          setForm(toFormState(items[0]));
+        }
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load accessories."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const updateField = <K extends keyof AccessoryForm>(key: K, value: AccessoryForm[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const selectAccessory = (item: Accessory) => {
+    setSelectedId(item.id);
+    setForm(toFormState(item));
+    setMessage(null);
+  };
+
+  const resetForm = () => {
+    setSelectedId(null);
+    setForm(emptyAccessory);
+    setMessage(null);
+  };
+
+  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const image = event.target.files?.[0];
+    event.target.value = "";
+    if (!image) return;
+
+    setUploading(true);
+    setMessage(null);
+
+    try {
+      const body = new FormData();
+      body.append("image", image);
+      const res = await fetch(`${API_BASE}/api/uploads/product-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${adminToken}` },
+        body,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail ?? "Unable to upload image.");
+      }
+
+      updateField("image", data.image as string);
+      setMessage("Photo uploaded. Save changes to publish it.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to upload image.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const saveAccessory = async () => {
+    if (!form.name.trim() || !form.category.trim()) {
+      setMessage("Name and category are required.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const url = selectedId ? `${API_BASE}/api/accessories/${selectedId}` : `${API_BASE}/api/accessories`;
+      const res = await fetch(url, {
+        method: selectedId ? "PUT" : "POST",
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...form, price: Number(form.price || 0), image: form.image || null }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof data.detail === "string" ? data.detail : "Unable to save accessory.");
+      }
+      const saved = data.item as Accessory;
+
+      setAccessories((current) =>
+        selectedId ? current.map((item) => (item.id === selectedId ? saved : item)) : [...current, saved],
+      );
+      setSelectedId(saved.id);
+      setForm(toFormState(saved));
+      setMessage("Accessory saved successfully.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save accessory.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <p className="text-[var(--muted)]">Loading accessories...</p>;
+  }
+
+  return (
+    <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+      <aside className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Accessories ({accessories.length})</h2>
+          <button type="button" onClick={resetForm} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-medium">
+            New
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          {accessories.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => selectAccessory(item)}
+              className={`w-full rounded-[22px] border p-3 text-left transition ${selectedId === item.id ? "border-[var(--ink)] bg-[#f5f1ea]" : "border-[var(--line)] bg-white"}`}
+            >
+              <div className="flex items-center gap-3">
+                <img src={resolveProductImage(item.image)} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{item.name}</div>
+                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
+                    {item.category} · ${item.price.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <section className="rounded-[28px] border border-[var(--line)] bg-white/80 p-6">
+        <div className="grid gap-5 md:grid-cols-2">
+          <label className="block text-sm font-medium">
+            Accessory name
+            <input value={form.name} onChange={(event) => updateField("name", event.target.value)} className={inputClass} placeholder="Triceps Rope" />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Category
+            <input value={form.category} onChange={(event) => updateField("category", event.target.value)} className={inputClass} placeholder="Handle" />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Retail price
+            <input
+              type="number"
+              min={0}
+              value={form.price}
+              onChange={(event) => updateField("price", Number(event.target.value))}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Currency
+            <select value={form.currency} onChange={(event) => updateField("currency", event.target.value)} className={inputClass}>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="AUD">AUD</option>
+            </select>
+          </label>
+
+          <label className="block text-sm font-medium">
+            Dimensions
+            <input value={form.dimensions} onChange={(event) => updateField("dimensions", event.target.value)} className={inputClass} placeholder="70 cm length" />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Weight
+            <input value={form.weight} onChange={(event) => updateField("weight", event.target.value)} className={inputClass} placeholder="0.8 kg" />
+          </label>
+
+          <label className="block text-sm font-medium md:col-span-2">
+            Material
+            <input value={form.material} onChange={(event) => updateField("material", event.target.value)} className={inputClass} placeholder="Braided nylon, steel eyelet" />
+          </label>
+
+          <label className="block text-sm font-medium md:col-span-2">
+            Notes / use
+            <textarea
+              value={form.notes}
+              onChange={(event) => updateField("notes", event.target.value)}
+              className={`${inputClass} min-h-24`}
+              placeholder="Pushdowns, face pulls, and cable crunches."
+            />
+          </label>
+
+          <div className="md:col-span-2">
+            <div className="text-sm font-medium">Accessory photo</div>
+            <div className="mt-2 grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-[160px_1fr] sm:items-center">
+              <div className="overflow-hidden rounded-xl bg-[#efeae4]">
+                <img src={resolveProductImage(form.image)} alt="Accessory photo preview" className="h-36 w-full object-cover" />
+              </div>
+              <div>
+                <label className="inline-flex cursor-pointer rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white">
+                  {uploading ? "Uploading..." : "Upload or change photo"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={uploadImage}
+                    disabled={uploading}
+                    className="sr-only"
+                  />
+                </label>
+                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">JPG, PNG, WebP, or GIF up to 8 MB.</p>
+                <input
+                  value={form.image}
+                  onChange={(event) => updateField("image", event.target.value)}
+                  className="mt-3 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
+                  aria-label="Accessory image URL or path"
+                  placeholder="Image URL or path"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={saveAccessory} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+            {saving ? "Saving..." : selectedId ? "Save changes" : "Create accessory"}
+          </button>
+          <Link href="/accessories" className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)]">
+            View accessories page
+          </Link>
+        </div>
+
+        {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
+      </section>
+    </div>
+  );
+}

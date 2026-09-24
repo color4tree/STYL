@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { addProductToCart, getCartCount, readCart } from "@/lib/cart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
+import BrandLogo from "@/components/BrandLogo";
 
 type Product = {
   id: number;
@@ -89,6 +90,9 @@ export default function ProductDetailPage() {
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
+        <Link href="/" aria-label="STYL home" className="mb-8 inline-flex">
+          <BrandLogo markClassName="h-8 w-auto" />
+        </Link>
         <div className="mb-8 flex items-center justify-between gap-4">
           <Link href="/" className="text-sm font-medium text-[var(--muted)]">
             ← Back to collection

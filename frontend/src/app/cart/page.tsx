@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { clearCart, readCart, removeProductFromCart, updateCartQuantity, type CartItem } from "@/lib/cart";
+import { clearCart, MAX_ITEM_QUANTITY, readCart, removeProductFromCart, updateCartQuantity, type CartItem } from "@/lib/cart";
+import BrandLogo from "@/components/BrandLogo";
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -31,6 +32,9 @@ export default function CartPage() {
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl">
+        <Link href="/" aria-label="STYL home" className="mb-8 inline-flex">
+          <BrandLogo markClassName="h-8 w-auto" />
+        </Link>
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Cart</div>
@@ -81,7 +85,8 @@ export default function CartPage() {
                       <button
                         type="button"
                         onClick={() => updateQuantity(item.id, 1)}
-                        className="h-9 w-9 rounded-full border border-[var(--line)] bg-white text-lg"
+                        disabled={item.quantity >= MAX_ITEM_QUANTITY}
+                        className="h-9 w-9 rounded-full border border-[var(--line)] bg-white text-lg disabled:opacity-40"
                         aria-label={`Increase quantity for ${item.name}`}
                       >
                         +
