@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import AccessoryManager from "./AccessoryManager";
+import HeroManager from "./HeroManager";
 import BrandLogo from "@/components/BrandLogo";
 
 type Product = {
@@ -19,6 +20,14 @@ type Product = {
   image: string;
   features: string[];
 };
+
+type AdminTab = "products" | "accessories" | "banner";
+
+const adminTabs: { id: AdminTab; label: string; heading: string }[] = [
+  { id: "products", label: "Products", heading: "Product management" },
+  { id: "accessories", label: "Accessories", heading: "Accessory management" },
+  { id: "banner", label: "Home banner", heading: "Home banner" },
+];
 
 const emptyProduct: Omit<Product, "id" | "slug"> = {
   name: "",
@@ -76,7 +85,7 @@ export default function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"products" | "accessories">("products");
+  const [activeTab, setActiveTab] = useState<AdminTab>("products");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const verifyAccess = async (token = adminToken) => {
@@ -346,17 +355,17 @@ export default function AdminPage() {
             <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">
-              {activeTab === "products" ? "Product management" : "Accessory management"}
+              {adminTabs.find((tab) => tab.id === activeTab)?.heading}
             </h1>
             <div className="mt-4 inline-flex rounded-full border border-[var(--line)] bg-white p-1 text-sm font-medium">
-              {(["products", "accessories"] as const).map((tab) => (
+              {adminTabs.map((tab) => (
                 <button
-                  key={tab}
+                  key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`rounded-full px-4 py-1.5 capitalize ${activeTab === tab ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-full px-4 py-1.5 ${activeTab === tab.id ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
                 >
-                  {tab}
+                  {tab.label}
                 </button>
               ))}
             </div>
@@ -371,7 +380,9 @@ export default function AdminPage() {
           </button>
         </header>
 
-        {activeTab === "accessories" ? (
+        {activeTab === "banner" ? (
+          <HeroManager adminToken={adminToken} />
+        ) : activeTab === "accessories" ? (
           <AccessoryManager adminToken={adminToken} />
         ) : (
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">

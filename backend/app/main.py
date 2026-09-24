@@ -21,6 +21,7 @@ CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
 DATA_DIRECTORY = Path(CONFIGURED_DATA_DIRECTORY) if CONFIGURED_DATA_DIRECTORY else APP_PATH / "data"
 DATA_PATH = DATA_DIRECTORY / "products.json"
 ACCESSORIES_PATH = DATA_DIRECTORY / "accessories.json"
+HERO_PATH = DATA_DIRECTORY / "hero.json"
 UPLOAD_PATH = DATA_DIRECTORY / "uploads" if CONFIGURED_DATA_DIRECTORY else APP_PATH / "uploads"
 ADMIN_TOKEN = os.getenv("STYL_ADMIN_TOKEN", "")
 ALLOWED_ORIGINS = [
@@ -33,6 +34,7 @@ ALLOWED_ORIGINS = [
 ]
 CATALOG_LOCK = Lock()
 ACCESSORIES_LOCK = Lock()
+HERO_LOCK = Lock()
 # Accessory IDs start above this so they don't collide with product IDs in the shared cart.
 ACCESSORY_ID_OFFSET = 1000
 MAX_IMAGE_SIZE = 8 * 1024 * 1024
@@ -93,6 +95,25 @@ class AccessoryPayload(BaseModel):
     currency: str = "USD"
     notes: str = ""
     image: str | None = None
+
+
+class HeroPayload(BaseModel):
+    tag: str = Field(default="", max_length=40)
+    number: str = Field(default="", max_length=10)
+    eyebrow: str = Field(default="", max_length=60)
+    title: str = Field(default="", max_length=80)
+    priceLabel: str = Field(default="", max_length=40)
+    image: str = Field(default="", max_length=500)
+
+
+DEFAULT_HERO = HeroPayload(
+    tag="Signature",
+    number="01",
+    eyebrow="Pro Elite",
+    title="Series X",
+    priceLabel="$2,499",
+    image="/images/brand/frame-badge.jpg",
+)
 
 
 def require_admin(authorization: str | None = Header(default=None)) -> None:
@@ -197,7 +218,7 @@ def save_products(products: list[dict[str, object]]) -> None:
     write_json_list(DATA_PATH, products)
 
 
-def write_json_list(path: Path, items: list[dict[str, object]]) -> None:
+def write_json_list(path: Path, items: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_suffix(".tmp")
     temporary_path.write_text(json.dumps(items, indent=2), encoding="utf-8")
@@ -454,6 +475,31 @@ def delete_accessory(accessory_id: int) -> dict[str, str]:
         write_json_list(ACCESSORIES_PATH, [item for item in accessories if item is not deleted])
         delete_uploaded_image(deleted.get("image"))
     return {"status": "deleted", "message": f"Accessory {accessory_id} deleted."}
+
+
+def load_hero() -> dict[str, object]:
+    try:
+        data = json.loads(HERO_PATH.read_text(encoding="utf-8"))
+        return HeroPayload(**data).model_dump()
+    except (FileNotFoundError, json.JSONDecodeError, TypeError, ValueError):
+        return DEFAULT_HERO.model_dump()
+
+
+@app.get("/api/hero")
+def get_hero() -> dict[str, object]:
+    return {"item": load_hero()}
+
+
+@app.put("/api/hero", dependencies=[Depends(require_admin)])
+def update_hero(request: HeroPayload) -> dict[str, object]:
+    with HERO_LOCK:
+        previous = load_hero()
+        updated = {key: value.strip() for key, value in request.model_dump().items()}
+        updated["image"] = updated["image"] or DEFAULT_HERO.image
+        write_json_list(HERO_PATH, updated)
+        if previous.get("image") != updated["image"]:
+            delete_uploaded_image(previous.get("image"))
+    return {"status": "updated", "item": updated}
 
 
 @app.post("/api/inquiries")

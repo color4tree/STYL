@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { addProductToCart, formatCartSummary, getCartCount, MAX_ITEM_QUANTITY, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import BrandLogo from "@/components/BrandLogo";
+import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 
 type Product = {
   id: number;
@@ -119,6 +120,7 @@ export default function Home() {
     message: "",
   });
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
+  const [hero, setHero] = useState<Hero>(defaultHero);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -161,6 +163,9 @@ export default function Home() {
     }
 
     fetchProducts();
+    fetchHero()
+      .then(setHero)
+      .catch((error) => console.error("Using default home banner:", error));
   }, []);
 
   const total = useMemo(
@@ -276,23 +281,23 @@ export default function Home() {
         <div className="soft-panel rounded-[32px] p-6 shadow-[0_20px_60px_rgba(17,17,17,0.08)]">
           <div className="rounded-[28px] bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-6 text-white">
             <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-white/70">
-              <span>Signature</span>
-              <span>01</span>
+              <span>{hero.tag}</span>
+              <span>{hero.number}</span>
             </div>
             <div className="mt-12 rounded-[24px] bg-white/10 p-6 backdrop-blur-sm">
               <img
-                src="/images/brand/frame-badge.jpg"
-                alt="STYL shield logo and wordmark on a brushed steel frame badge"
+                src={resolveProductImage(hero.image)}
+                alt={`${hero.eyebrow} ${hero.title}`.trim() || "STYL signature equipment"}
                 className="mb-4 h-52 w-full rounded-[20px] object-cover"
               />
               <div className="flex items-end justify-between gap-4">
                 <div>
                   <div className="text-xs uppercase tracking-[0.22em] text-white/60">
-                    Pro Elite
+                    {hero.eyebrow}
                   </div>
-                  <div className="mt-2 text-2xl font-semibold">Series X</div>
+                  <div className="mt-2 text-2xl font-semibold">{hero.title}</div>
                 </div>
-                <div className="text-xl font-medium">$2,499</div>
+                <div className="text-xl font-medium">{hero.priceLabel}</div>
               </div>
             </div>
           </div>

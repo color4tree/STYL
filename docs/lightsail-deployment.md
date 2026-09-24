@@ -15,6 +15,7 @@ Both phases: Caddy -> Next.js :3000
        -> FastAPI :8000 for /api/* and /health
 FastAPI -> /var/lib/styl/products.json
       -> /var/lib/styl/accessories.json
+      -> /var/lib/styl/hero.json (created on first home-banner save)
       -> /var/lib/styl/uploads/
 ```
 

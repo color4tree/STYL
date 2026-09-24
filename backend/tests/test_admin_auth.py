@@ -15,12 +15,15 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.original_admin_token = main.ADMIN_TOKEN
         main.DATA_PATH = Path(self.temporary_directory.name) / "products.json"
         main.ACCESSORIES_PATH = Path(self.temporary_directory.name) / "accessories.json"
+        self.original_hero_path = main.HERO_PATH
+        main.HERO_PATH = Path(self.temporary_directory.name) / "hero.json"
         main.ADMIN_TOKEN = "test-admin-token"
         self.client = TestClient(main.app)
 
     def tearDown(self) -> None:
         main.DATA_PATH = self.original_data_path
         main.ACCESSORIES_PATH = self.original_accessories_path
+        main.HERO_PATH = self.original_hero_path
         main.ADMIN_TOKEN = self.original_admin_token
         self.temporary_directory.cleanup()
 
@@ -111,6 +114,23 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 404)
         ids = [item["id"] for item in self.client.get("/api/accessories").json()["items"]]
         self.assertNotIn(first_id, ids)
+
+    def test_hero_defaults_and_admin_update(self) -> None:
+        self.assertEqual(self.client.get("/api/hero").json()["item"]["title"], "Series X")
+
+        payload = {"tag": "New", "number": "02", "eyebrow": "Multi", "title": "Trainer", "priceLabel": "$3,999", "image": ""}
+        unauthorized = self.client.put("/api/hero", json=payload)
+        authorized = self.client.put(
+            "/api/hero",
+            json=payload,
+            headers={"Authorization": "Bearer test-admin-token"},
+        )
+
+        self.assertEqual(unauthorized.status_code, 401)
+        self.assertEqual(authorized.status_code, 200)
+        saved = self.client.get("/api/hero").json()["item"]
+        self.assertEqual(saved["title"], "Trainer")
+        self.assertEqual(saved["image"], main.DEFAULT_HERO.image)
 
 
 if __name__ == "__main__":
