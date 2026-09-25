@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { CircleAlert, CircleCheck } from "lucide-react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import { fetchAccessories, type Accessory } from "@/lib/accessories";
 import PhotoEditor from "@/components/PhotoEditor";
@@ -49,8 +50,16 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: "error" | "success"; title: string; text: string } | null>(null);
+  const messageRef = useRef<HTMLDivElement>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  useEffect(() => {
+    if (message?.type === "error") {
+      messageRef.current?.scrollIntoView({ block: "center" });
+      messageRef.current?.focus({ preventScroll: true });
+    }
+  }, [message]);
 
   useEffect(() => {
     onBusyChange(saving || uploading);
@@ -66,12 +75,13 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
           setForm(toFormState(items[0]));
         }
       })
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load accessories."))
+      .catch((error) => setMessage({ type: "error", title: "Load failed", text: error instanceof Error ? error.message : "Unable to load accessories." }))
       .finally(() => setLoading(false));
   }, []);
 
   const updateField = <K extends keyof AccessoryForm>(key: K, value: AccessoryForm[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setMessage((current) => current?.type === "success" ? null : current);
   };
 
   const selectAccessory = (item: Accessory) => {
@@ -90,7 +100,7 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
 
   const saveAccessory = async () => {
     if (!form.name.trim() || !form.category.trim()) {
-      setMessage("Name and category are required.");
+      setMessage({ type: "error", title: "Save failed", text: "Changes were not saved. Name and category are required." });
       return;
     }
 
@@ -119,9 +129,9 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
       );
       setSelectedId(saved.id);
       setForm(toFormState(saved));
-      setMessage("Accessory saved successfully.");
+      setMessage({ type: "success", title: "Saved", text: "Accessory saved successfully." });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to save accessory.");
+      setMessage({ type: "error", title: "Save failed", text: error instanceof Error ? error.message : "Unable to save accessory." });
     } finally {
       setSaving(false);
     }
@@ -154,9 +164,9 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
         setSelectedId(null);
         setForm(emptyAccessory);
       }
-      setMessage(`"${accessory.name}" deleted.`);
+      setMessage({ type: "success", title: "Deleted", text: `"${accessory.name}" deleted.` });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to delete accessory.");
+      setMessage({ type: "error", title: "Delete failed", text: error instanceof Error ? error.message : "Unable to delete accessory." });
     } finally {
       setSaving(false);
     }
@@ -255,7 +265,7 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
             />
           </label>
 
-          <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: getCatalogCover(photos) }))} />
+          <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => { setForm((current) => ({ ...current, photos, image: getCatalogCover(photos) })); setMessage((current) => current?.type === "success" ? null : current); }} />
           <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />
         </div>
 
@@ -297,7 +307,15 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
           </Link>
         </div>
 
-        {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
+        {message ? (
+          <div ref={messageRef} tabIndex={-1} role={message.type === "error" ? "alert" : "status"} className={`mt-4 flex items-start gap-3 rounded-lg border-2 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${message.type === "error" ? "border-red-600 bg-red-50 text-red-900 focus:ring-red-600" : "border-green-600 bg-green-50 text-green-900 focus:ring-green-600"}`}>
+            {message.type === "error" ? <CircleAlert size={24} aria-hidden="true" className="shrink-0" /> : <CircleCheck size={24} aria-hidden="true" className="shrink-0" />}
+            <div className="min-w-0 break-words">
+              <p className="text-base font-semibold">{message.title}</p>
+              <p className="mt-1">{message.text}</p>
+            </div>
+          </div>
+        ) : null}
       </section>
     </fieldset>
   );
