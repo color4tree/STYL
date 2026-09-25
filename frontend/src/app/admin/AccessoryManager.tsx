@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import { fetchAccessories, type Accessory } from "@/lib/accessories";
+import PhotoEditor from "@/components/PhotoEditor";
+import { CompatibilityEditor } from "@/components/Compatibility";
+import { getCatalogPhotos, emptyCompatibility } from "@/lib/catalogDetails";
 
 type AccessoryForm = Omit<Accessory, "id">;
 
@@ -17,6 +20,8 @@ const emptyAccessory: AccessoryForm = {
   currency: "USD",
   notes: "",
   image: "",
+  photos: [],
+  compatibility: emptyCompatibility,
 };
 
 function toFormState(item: Accessory): AccessoryForm {
@@ -30,12 +35,14 @@ function toFormState(item: Accessory): AccessoryForm {
     currency: item.currency,
     notes: item.notes,
     image: item.image,
+    photos: getCatalogPhotos(item),
+    compatibility: item.compatibility ?? emptyCompatibility,
   };
 }
 
 const inputClass = "mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3";
 
-export default function AccessoryManager({ adminToken }: { adminToken: string }) {
+export default function AccessoryManager({ adminToken, onBusyChange }: { adminToken: string; onBusyChange: (busy: boolean) => void }) {
   const [accessories, setAccessories] = useState<Accessory[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<AccessoryForm>(emptyAccessory);
@@ -44,6 +51,11 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  useEffect(() => {
+    onBusyChange(saving || uploading);
+    return () => onBusyChange(false);
+  }, [saving, uploading, onBusyChange]);
 
   useEffect(() => {
     fetchAccessories()
@@ -74,36 +86,6 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
     setForm(emptyAccessory);
     setMessage(null);
     setConfirmingDelete(false);
-  };
-
-  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const image = event.target.files?.[0];
-    event.target.value = "";
-    if (!image) return;
-
-    setUploading(true);
-    setMessage(null);
-
-    try {
-      const body = new FormData();
-      body.append("image", image);
-      const res = await fetch(`${API_BASE}/api/uploads/product-image`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${adminToken}` },
-        body,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail ?? "Unable to upload image.");
-      }
-
-      updateField("image", data.image as string);
-      setMessage("Photo uploaded. Save changes to publish it.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to upload image.");
-    } finally {
-      setUploading(false);
-    }
   };
 
   const saveAccessory = async () => {
@@ -185,7 +167,7 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+    <fieldset disabled={saving || uploading} className="grid min-w-0 gap-8 lg:grid-cols-[0.8fr_1.2fr]">
       <aside className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Accessories ({accessories.length})</h2>
@@ -273,34 +255,8 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
             />
           </label>
 
-          <div className="md:col-span-2">
-            <div className="text-sm font-medium">Accessory photo</div>
-            <div className="mt-2 grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-[160px_1fr] sm:items-center">
-              <div className="overflow-hidden rounded-xl bg-[#efeae4]">
-                <img src={resolveProductImage(form.image)} alt="Accessory photo preview" className="h-36 w-full object-cover" />
-              </div>
-              <div>
-                <label className="inline-flex cursor-pointer rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white">
-                  {uploading ? "Uploading..." : "Upload or change photo"}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    onChange={uploadImage}
-                    disabled={uploading}
-                    className="sr-only"
-                  />
-                </label>
-                <p className="mt-2 text-xs leading-5 text-[var(--muted)]">JPG, PNG, WebP, or GIF up to 8 MB.</p>
-                <input
-                  value={form.image}
-                  onChange={(event) => updateField("image", event.target.value)}
-                  className="mt-3 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-                  aria-label="Accessory image URL or path"
-                  placeholder="Image URL or path"
-                />
-              </div>
-            </div>
-          </div>
+          <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: photos[0] ?? "" }))} />
+          <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />
         </div>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -343,6 +299,6 @@ export default function AccessoryManager({ adminToken }: { adminToken: string })
 
         {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
       </section>
-    </div>
+    </fieldset>
   );
 }

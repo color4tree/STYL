@@ -1,6 +1,7 @@
 import { API_BASE } from "@/lib/api";
+import type { CatalogDetails } from "@/lib/catalogDetails";
 
-export type Accessory = {
+export type Accessory = CatalogDetails & {
   id: number;
   name: string;
   category: string;

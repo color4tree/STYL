@@ -17,6 +17,9 @@ class AdminAuthenticationTests(unittest.TestCase):
         main.ACCESSORIES_PATH = Path(self.temporary_directory.name) / "accessories.json"
         self.original_hero_path = main.HERO_PATH
         main.HERO_PATH = Path(self.temporary_directory.name) / "hero.json"
+        self.original_upload_path = main.UPLOAD_PATH
+        main.UPLOAD_PATH = Path(self.temporary_directory.name) / "uploads"
+        main.UPLOAD_PATH.mkdir()
         main.ADMIN_TOKEN = "test-admin-token"
         self.client = TestClient(main.app)
 
@@ -24,6 +27,7 @@ class AdminAuthenticationTests(unittest.TestCase):
         main.DATA_PATH = self.original_data_path
         main.ACCESSORIES_PATH = self.original_accessories_path
         main.HERO_PATH = self.original_hero_path
+        main.UPLOAD_PATH = self.original_upload_path
         main.ADMIN_TOKEN = self.original_admin_token
         self.temporary_directory.cleanup()
 
@@ -131,6 +135,88 @@ class AdminAuthenticationTests(unittest.TestCase):
         saved = self.client.get("/api/hero").json()["item"]
         self.assertEqual(saved["title"], "Trainer")
         self.assertEqual(saved["image"], main.DEFAULT_HERO.image)
+
+
+    def test_catalog_photos_and_compatibility_round_trip(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        for endpoint in ("products", "accessories"):
+            with self.subTest(endpoint=endpoint):
+                payload = {
+                    "name": "Gallery test", "category": "Test", "price": 10,
+                    "shortDescription": "Test", "description": "Test",
+                    "photos": ["/images/front.jpg", "/images/side.jpg"],
+                    "compatibility": {"uprightSize": "75 x 75 mm", "holeDiameter": "1 inch", "holeSpacing": "50 mm", "models": "Confirmed rack", "limitations": "Not confirmed for 3 x 3 inch"},
+                }
+                self.assertEqual(self.client.post(f"/api/{endpoint}", json=payload).status_code, 401)
+                created = self.client.post(f"/api/{endpoint}", json=payload, headers=headers)
+                self.assertEqual(created.status_code, 200)
+                item = created.json()["item"]
+                self.assertEqual(item["image"], payload["photos"][0])
+                payload["photos"].reverse()
+                updated = self.client.put(f"/api/{endpoint}/{item['id']}", json=payload, headers=headers)
+                self.assertEqual(updated.status_code, 200)
+                saved = updated.json()["item"]
+                self.assertEqual(saved["image"], "/images/side.jpg")
+                self.assertEqual(saved["compatibility"], payload["compatibility"])
+                del payload["photos"]
+                del payload["compatibility"]
+                legacy_update = self.client.put(f"/api/{endpoint}/{item['id']}", json=payload, headers=headers)
+                self.assertEqual(legacy_update.json()["item"]["photos"], saved["photos"])
+                self.assertEqual(legacy_update.json()["item"]["compatibility"], saved["compatibility"])
+                listed = self.client.get(f"/api/{endpoint}").json()["items"]
+                self.assertEqual(next(entry for entry in listed if entry["id"] == item["id"])["photos"], saved["photos"])
+                payload["photos"] = []
+                cleared = self.client.put(f"/api/{endpoint}/{item['id']}", json=payload, headers=headers)
+                self.assertEqual(cleared.json()["item"]["image"], "")
+                self.assertEqual(cleared.json()["item"]["photos"], [])
+
+    def test_shared_photos_are_kept_until_last_reference_is_deleted(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        shared = main.UPLOAD_PATH / "shared.jpg"
+        removed = main.UPLOAD_PATH / "removed.jpg"
+        shared.write_bytes(b"test")
+        removed.write_bytes(b"test")
+        payload = {"name": "Gallery", "category": "Test", "price": 1, "photos": ["/api/uploads/shared.jpg", "/api/uploads/removed.jpg"]}
+        first = self.client.post("/api/accessories", json=payload, headers=headers).json()["item"]
+        second = self.client.post("/api/accessories", json={**payload, "photos": ["/api/uploads/shared.jpg"]}, headers=headers).json()["item"]
+        updated = self.client.put(f"/api/accessories/{first['id']}", json={**payload, "photos": ["/api/uploads/shared.jpg"]}, headers=headers)
+        self.assertEqual(updated.status_code, 200)
+        self.assertFalse(removed.exists())
+        self.client.delete(f"/api/accessories/{first['id']}", headers=headers)
+        self.assertTrue(shared.exists())
+        self.client.delete(f"/api/accessories/{second['id']}", headers=headers)
+        self.assertFalse(shared.exists())
+
+    def test_invalid_catalog_details_are_rejected(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        payload = {"name": "Gallery", "category": "Test", "price": 1}
+        for fields in ({"photos": ["/images/test.jpg"] * 13}, {"photos": ["javascript:alert(1)"]}, {"compatibility": {"uprightSize": "x" * 301}}):
+            response = self.client.post("/api/accessories", json={**payload, **fields}, headers=headers)
+            self.assertEqual(response.status_code, 422)
+
+    def test_uploaded_gallery_reorder_and_cross_catalog_cleanup(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        photos = []
+        for name in ("front.jpg", "side.jpg"):
+            response = self.client.post("/api/uploads/product-image", headers=headers, files={"image": (name, b"test image", "image/jpeg")})
+            self.assertEqual(response.status_code, 200)
+            photos.append(response.json()["image"])
+        payload = {"name": "Uploaded gallery", "category": "Test", "price": 1, "shortDescription": "Test", "description": "Test", "photos": photos}
+        product = self.client.post("/api/products", json=payload, headers=headers).json()["item"]
+        accessory = self.client.post("/api/accessories", json={**payload, "photos": [photos[0]]}, headers=headers).json()["item"]
+        self.client.put("/api/hero", json={"image": photos[1]}, headers=headers)
+        reordered = self.client.put(f"/api/products/{product['id']}", json={**payload, "photos": list(reversed(photos))}, headers=headers)
+        self.assertEqual(reordered.status_code, 200)
+        self.assertEqual(reordered.json()["item"]["image"], photos[1])
+        paths = [main.UPLOAD_PATH / Path(photo).name for photo in photos]
+        self.assertTrue(all(path.exists() for path in paths))
+        self.client.delete(f"/api/products/{product['id']}", headers=headers)
+        self.assertTrue(all(path.exists() for path in paths))
+        self.client.delete(f"/api/accessories/{accessory['id']}", headers=headers)
+        self.assertFalse(paths[0].exists())
+        self.assertTrue(paths[1].exists())
+        self.client.put("/api/hero", json={"image": ""}, headers=headers)
+        self.assertFalse(paths[1].exists())
 
 
 if __name__ == "__main__":

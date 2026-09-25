@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { resolveProductImage } from "@/lib/api";
+import PhotoGallery from "@/components/PhotoGallery";
+import { CompatibilityDetails } from "@/components/Compatibility";
+import { getCatalogPhotos } from "@/lib/catalogDetails";
 import BrandLogo from "@/components/BrandLogo";
 import { fetchAccessories, type Accessory } from "@/lib/accessories";
 import { addProductToCart, getCartCount, MAX_ITEM_QUANTITY, readCart, type CartItem } from "@/lib/cart";
@@ -46,7 +48,7 @@ export default function AccessoriesPage() {
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Accessories</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">Multi trainer accessories</h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--muted)]">
-              Every attachment below is compatible with the STYL multi trainer. Contact us for bundle pricing.
+              Attachments for your training setup. Contact us for fit confirmation and bundle pricing.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -78,9 +80,7 @@ export default function AccessoriesPage() {
                 key={item.id}
                 className="flex flex-col rounded-[28px] border border-[var(--line)] bg-white/70 p-4 shadow-[0_16px_40px_rgba(17,17,17,0.04)]"
               >
-                <div className="overflow-hidden rounded-[22px] bg-[#efeae4]">
-                  <img src={resolveProductImage(item.image)} alt={item.name} className="h-52 w-full object-cover" />
-                </div>
+                <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} compact />
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{item.category}</span>
                   <span className="text-lg font-semibold">${item.price.toLocaleString()}</span>
@@ -101,6 +101,7 @@ export default function AccessoriesPage() {
                     <dd className="text-right">{item.weight}</dd>
                   </div>
                 </dl>
+                <CompatibilityDetails value={item.compatibility} />
                 <div className="mt-auto flex gap-3">
                   <div
                     className={`flex items-stretch overflow-hidden rounded-full border border-[var(--line)] bg-white ${remaining <= 0 ? "opacity-50" : ""}`}

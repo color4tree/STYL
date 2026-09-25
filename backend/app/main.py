@@ -33,8 +33,8 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CATALOG_LOCK = Lock()
-ACCESSORIES_LOCK = Lock()
-HERO_LOCK = Lock()
+ACCESSORIES_LOCK = CATALOG_LOCK
+HERO_LOCK = CATALOG_LOCK
 # Accessory IDs start above this so they don't collide with product IDs in the shared cart.
 ACCESSORY_ID_OFFSET = 1000
 MAX_IMAGE_SIZE = 8 * 1024 * 1024
@@ -71,7 +71,20 @@ class InquiryRequest(BaseModel):
     source: Literal["website", "inquiry", "retail"] = "website"
 
 
-class ProductPayload(BaseModel):
+class CompatibilityPayload(BaseModel):
+    uprightSize: str = Field(default="", max_length=300)
+    holeDiameter: str = Field(default="", max_length=300)
+    holeSpacing: str = Field(default="", max_length=300)
+    models: str = Field(default="", max_length=1000)
+    limitations: str = Field(default="", max_length=2000)
+
+
+class CatalogDetailsPayload(BaseModel):
+    photos: list[str] | None = Field(default=None, max_length=12)
+    compatibility: CompatibilityPayload | None = None
+
+
+class ProductPayload(CatalogDetailsPayload):
     id: int | None = None
     slug: str | None = None
     name: str
@@ -85,7 +98,7 @@ class ProductPayload(BaseModel):
     features: list[str] = Field(default_factory=list)
 
 
-class AccessoryPayload(BaseModel):
+class AccessoryPayload(CatalogDetailsPayload):
     name: str
     category: str
     dimensions: str = ""
@@ -294,9 +307,47 @@ def accessory_from_payload(accessory_id: int, request: AccessoryPayload, fallbac
     }
 
 
+def catalog_photos(item: dict[str, object]) -> list[str]:
+    photos = item.get("photos")
+    values = photos if isinstance(photos, list) else []
+    return list(dict.fromkeys(str(value) for value in [item.get("image"), *values] if value))
+
+
+def catalog_details(
+    request: ProductPayload | AccessoryPayload,
+    previous: dict[str, object],
+    fallback_image: str,
+) -> dict[str, object]:
+    if request.photos is not None:
+        photos = list(dict.fromkeys(photo.strip() for photo in request.photos if photo.strip()))
+        if any(not (photo.startswith("/images/") or photo.startswith("/api/uploads/") or photo.startswith("https://")) for photo in photos):
+            raise HTTPException(status_code=422, detail="Photos must use an /images/ or /api/uploads/ path, or an HTTPS URL.")
+    else:
+        photos = catalog_photos(previous)
+        if request.image:
+            photos = list(dict.fromkeys([request.image, *photos]))
+        if not photos and fallback_image:
+            photos = [fallback_image]
+
+    compatibility = (
+        {key: value.strip() for key, value in request.compatibility.model_dump().items()}
+        if request.compatibility is not None
+        else previous.get("compatibility", CompatibilityPayload().model_dump())
+    )
+    return {"photos": photos, "image": photos[0] if photos else "", "compatibility": compatibility}
+
+
+def delete_catalog_images(item: dict[str, object]) -> None:
+    for image in catalog_photos(item):
+        delete_uploaded_image(image)
+
+
 def delete_uploaded_image(image: object) -> None:
     image_path = str(image or "")
     if not image_path.startswith("/api/uploads/"):
+        return
+
+    if any(image_path in catalog_photos(item) for item in [*load_products(), *load_accessories(), load_hero()]):
         return
 
     filename = Path(image_path).name
@@ -373,6 +424,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
             "image": request.image or "/images/pro-elite.svg",
             "features": [feature.strip() for feature in request.features if feature and feature.strip()],
         }
+        product.update(catalog_details(request, {}, "/images/pro-elite.svg"))
         products.append(product)
         save_products(products)
     return {"status": "created", "item": product}
@@ -396,10 +448,10 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                     "image": request.image or str(product.get("image") or "/images/pro-elite.svg"),
                     "features": [feature.strip() for feature in request.features if feature and feature.strip()],
                 }
+                updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
                 products[index] = updated
                 save_products(products)
-                if product.get("image") != updated["image"]:
-                    delete_uploaded_image(product.get("image"))
+                delete_catalog_images(product)
                 return {"status": "updated", "item": updated}
 
     raise HTTPException(status_code=404, detail="Product not found")
@@ -418,7 +470,7 @@ def delete_product(product_id: int) -> dict[str, str]:
 
         save_products(filtered)
         if deleted_product:
-            delete_uploaded_image(deleted_product.get("image"))
+            delete_catalog_images(deleted_product)
     return {"status": "deleted", "message": f"Product {product_id} deleted."}
 
 
@@ -440,6 +492,7 @@ def create_accessory(request: AccessoryPayload) -> dict[str, object]:
             request,
             "/images/accessories/straight-bar.svg",
         )
+        created.update(catalog_details(request, {}, "/images/accessories/straight-bar.svg"))
         accessories.append(created)
         write_json_list(ACCESSORIES_PATH, accessories)
     return {"status": "created", "item": created}
@@ -455,10 +508,10 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
         for index, existing in enumerate(accessories):
             if int(existing.get("id", 0)) == accessory_id:
                 updated = accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))
+                updated.update(catalog_details(request, existing, "/images/accessories/straight-bar.svg"))
                 accessories[index] = updated
                 write_json_list(ACCESSORIES_PATH, accessories)
-                if existing.get("image") != updated["image"]:
-                    delete_uploaded_image(existing.get("image"))
+                delete_catalog_images(existing)
                 return {"status": "updated", "item": updated}
 
     raise HTTPException(status_code=404, detail="Accessory not found")
@@ -473,7 +526,7 @@ def delete_accessory(accessory_id: int) -> dict[str, str]:
             raise HTTPException(status_code=404, detail="Accessory not found")
 
         write_json_list(ACCESSORIES_PATH, [item for item in accessories if item is not deleted])
-        delete_uploaded_image(deleted.get("image"))
+        delete_catalog_images(deleted)
     return {"status": "deleted", "message": f"Accessory {accessory_id} deleted."}
 
 

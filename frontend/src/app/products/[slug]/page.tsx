@@ -4,10 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { addProductToCart, getCartCount, readCart } from "@/lib/cart";
-import { API_BASE, resolveProductImage } from "@/lib/api";
+import { API_BASE } from "@/lib/api";
 import BrandLogo from "@/components/BrandLogo";
+import PhotoGallery from "@/components/PhotoGallery";
+import { CompatibilityDetails } from "@/components/Compatibility";
+import { getCatalogPhotos, type CatalogDetails } from "@/lib/catalogDetails";
 
-type Product = {
+type Product = CatalogDetails & {
   id: number;
   slug: string;
   name: string;
@@ -103,19 +106,14 @@ export default function ProductDetailPage() {
         </div>
 
         <section className="grid gap-10 rounded-[32px] border border-[var(--line)] bg-white/70 p-6 md:grid-cols-[1.1fr_0.9fr] md:p-8">
-          <div className="overflow-hidden rounded-[28px] bg-[#efeae4]">
-            <img
-              src={resolveProductImage(product.image)}
-              alt={product.name}
-              className="h-[440px] w-full object-cover"
-            />
-          </div>
+          <PhotoGallery key={product.id} photos={getCatalogPhotos(product)} name={product.name} />
 
-          <div>
+          <div className="min-w-0 break-words">
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">{product.category}</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] md:text-5xl">{product.name}</h1>
             <div className="mt-5 text-3xl font-semibold">{priceLabel}</div>
             <p className="mt-6 text-lg leading-8 text-[var(--muted)]">{product.description ?? product.shortDescription}</p>
+            <CompatibilityDetails value={product.compatibility} />
 
             <div className="mt-8 flex flex-wrap gap-4">
               <button type="button" onClick={addToCart} className="rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white">

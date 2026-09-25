@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import AccessoryManager from "./AccessoryManager";
 import HeroManager from "./HeroManager";
 import BrandLogo from "@/components/BrandLogo";
+import PhotoEditor from "@/components/PhotoEditor";
+import { CompatibilityEditor } from "@/components/Compatibility";
+import { getCatalogPhotos, emptyCompatibility, type CatalogDetails } from "@/lib/catalogDetails";
 
-type Product = {
+type Product = CatalogDetails & {
   id: number;
   slug: string;
   name: string;
@@ -37,7 +40,9 @@ const emptyProduct: Omit<Product, "id" | "slug"> = {
   shortDescription: "",
   description: "",
   featured: false,
-  image: "/images/pro-elite.svg",
+  image: "",
+  photos: [],
+  compatibility: emptyCompatibility,
   features: [""],
 };
 
@@ -70,6 +75,8 @@ function toFormState(product: Product): Omit<Product, "id" | "slug"> {
     description: product.description,
     featured: product.featured,
     image: product.image,
+    photos: getCatalogPhotos(product),
+    compatibility: product.compatibility ?? emptyCompatibility,
     features: product.features.length > 0 ? product.features : [""],
   };
 }
@@ -84,6 +91,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [accessoryBusy, setAccessoryBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -184,36 +192,6 @@ export default function AdminPage() {
     setSelectedId(null);
     setMessage(null);
     setConfirmingDelete(false);
-  };
-
-  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const image = event.target.files?.[0];
-    event.target.value = "";
-    if (!image) return;
-
-    setUploading(true);
-    setMessage(null);
-
-    try {
-      const body = new FormData();
-      body.append("image", image);
-      const res = await fetch(`${API_BASE}/api/uploads/product-image`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${adminToken}` },
-        body,
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail ?? "Unable to upload image.");
-      }
-
-      updateField("image", data.image as string);
-      setMessage("Photo uploaded. Save changes to publish it.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to upload image.");
-    } finally {
-      setUploading(false);
-    }
   };
 
   const saveProduct = async () => {
@@ -349,7 +327,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+      <fieldset disabled={saving || uploading || accessoryBusy} className="mx-auto min-w-0 max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 border-b border-[var(--line)] pb-6 md:flex-row md:items-end">
           <div>
             <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
@@ -383,7 +361,7 @@ export default function AdminPage() {
         {activeTab === "banner" ? (
           <HeroManager adminToken={adminToken} />
         ) : activeTab === "accessories" ? (
-          <AccessoryManager adminToken={adminToken} />
+          <AccessoryManager adminToken={adminToken} onBusyChange={setAccessoryBusy} />
         ) : (
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <aside className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4">
@@ -459,38 +437,8 @@ export default function AdminPage() {
                 </select>
               </label>
 
-              <div className="md:col-span-2">
-                <div className="text-sm font-medium">Product photo</div>
-                <div className="mt-2 grid gap-4 rounded-2xl border border-[var(--line)] bg-white p-4 sm:grid-cols-[160px_1fr] sm:items-center">
-                  <div className="overflow-hidden rounded-xl bg-[#efeae4]">
-                    <img
-                      src={resolveProductImage(form.image)}
-                      alt="Product photo preview"
-                      className="h-36 w-full object-cover"
-                    />
-                  </div>
-                  <div>
-                    <label className="inline-flex cursor-pointer rounded-full bg-[var(--ink)] px-4 py-2.5 text-sm font-medium text-white">
-                      {uploading ? "Uploading..." : "Upload or change photo"}
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        onChange={uploadImage}
-                        disabled={uploading}
-                        className="sr-only"
-                      />
-                    </label>
-                    <p className="mt-2 text-xs leading-5 text-[var(--muted)]">JPG, PNG, WebP, or GIF up to 8 MB.</p>
-                    <input
-                      value={form.image}
-                      onChange={(event) => updateField("image", event.target.value)}
-                      className="mt-3 w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-sm"
-                      aria-label="Product image URL or path"
-                      placeholder="Image URL or path"
-                    />
-                  </div>
-                </div>
-              </div>
+              <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: photos[0] ?? "" }))} />
+              <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />
 
               <label className="block text-sm font-medium md:col-span-2">
                 Short description
@@ -590,7 +538,7 @@ export default function AdminPage() {
           </section>
         </div>
         )}
-      </div>
+      </fieldset>
     </main>
   );
 }
