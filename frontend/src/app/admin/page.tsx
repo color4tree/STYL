@@ -8,7 +8,7 @@ import HeroManager from "./HeroManager";
 import BrandLogo from "@/components/BrandLogo";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
-import { getCatalogPhotos, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
+import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
 
 type Product = CatalogDetails & ProductSpecifications & {
   id: number;
@@ -465,7 +465,7 @@ export default function AdminPage() {
                 </div>
               </fieldset>
 
-              <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: photos[0] ?? "" }))} />
+              <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: getCatalogCover(photos) }))} />
               <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />
 
               <label className="block text-sm font-medium md:col-span-2">

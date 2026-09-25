@@ -1,20 +1,29 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
+import smtplib
+import ssl
 from contextlib import contextmanager
+from datetime import datetime, timezone
+from email.message import EmailMessage
 from pathlib import Path
 from threading import Lock
 from collections.abc import Iterator
 from typing import Literal
 from uuid import uuid4
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
+
+from app.media import VIDEO_FORMATS, upload_video, video_response
 
 APP_PATH = Path(__file__).resolve().parent
 CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
@@ -22,6 +31,9 @@ DATA_DIRECTORY = Path(CONFIGURED_DATA_DIRECTORY) if CONFIGURED_DATA_DIRECTORY el
 DATA_PATH = DATA_DIRECTORY / "products.json"
 ACCESSORIES_PATH = DATA_DIRECTORY / "accessories.json"
 HERO_PATH = DATA_DIRECTORY / "hero.json"
+INQUIRIES_PATH = DATA_DIRECTORY / "inquiries"
+INQUIRY_RECIPIENT = "styl@stylfitness.com"
+logger = logging.getLogger(__name__)
 UPLOAD_PATH = DATA_DIRECTORY / "uploads" if CONFIGURED_DATA_DIRECTORY else APP_PATH / "uploads"
 ADMIN_TOKEN = os.getenv("STYL_ADMIN_TOKEN", "")
 ALLOWED_ORIGINS = [
@@ -63,11 +75,11 @@ app.add_middleware(
 
 
 class InquiryRequest(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     email: EmailStr
-    phone: str | None = None
-    company: str | None = None
-    message: str
+    phone: str | None = Field(default=None, max_length=100)
+    company: str | None = Field(default=None, max_length=300)
+    message: str = Field(min_length=1, max_length=10000)
     source: Literal["website", "inquiry", "retail"] = "website"
 
 
@@ -334,8 +346,9 @@ def catalog_details(
         if any(not (photo.startswith("/images/") or photo.startswith("/api/uploads/") or photo.startswith("https://")) for photo in photos):
             raise HTTPException(status_code=422, detail="Photos must use an /images/ or /api/uploads/ path, or an HTTPS URL.")
     else:
-        photos = catalog_photos(previous)
-        if request.image:
+        previous_photos = previous.get("photos")
+        photos = list(previous_photos) if isinstance(previous_photos, list) else catalog_photos(previous)
+        if request.image and request.image != previous.get("image"):
             photos = list(dict.fromkeys([request.image, *photos]))
         if not photos and fallback_image:
             photos = [fallback_image]
@@ -345,7 +358,10 @@ def catalog_details(
         if request.compatibility is not None
         else previous.get("compatibility", CompatibilityPayload().model_dump())
     )
-    return {"photos": photos, "image": photos[0] if photos else "", "compatibility": compatibility}
+    image = next((photo for photo in photos if Path(urlsplit(photo).path).suffix.lower() not in VIDEO_FORMATS), "")
+    if not image and photos and photos[0].startswith("/api/uploads/") and photos[0].endswith(".mp4"):
+        image = photos[0][:-4] + ".poster.jpg"
+    return {"photos": photos, "image": image, "compatibility": compatibility}
 
 
 def delete_catalog_images(item: dict[str, object]) -> None:
@@ -365,11 +381,16 @@ def delete_uploaded_image(image: object) -> None:
     if not image_path.startswith("/api/uploads/"):
         return
 
-    if any(image_path in catalog_photos(item) for item in [*load_products(), *load_accessories(), load_hero()]):
+    references = {image_path}
+    if image_path.endswith(".poster.jpg"):
+        references.add(image_path[:-11] + ".mp4")
+    if any(references.intersection(catalog_photos(item)) for item in [*load_products(), *load_accessories(), load_hero()]):
         return
 
     filename = Path(image_path).name
     (UPLOAD_PATH / filename).unlink(missing_ok=True)
+    if image_path.endswith(".mp4"):
+        delete_uploaded_image(image_path[:-4] + ".poster.jpg")
 
 
 @app.get("/health")
@@ -421,6 +442,11 @@ async def upload_product_image(image: UploadFile = File(...)) -> dict[str, str]:
     filename = f"{uuid4().hex}{extension}"
     (UPLOAD_PATH / filename).write_bytes(content)
     return {"image": f"/api/uploads/{filename}"}
+
+
+@app.post("/api/uploads/product-video", dependencies=[Depends(require_admin)])
+def upload_product_video(video: UploadFile = File(...)) -> dict[str, str]:
+    return upload_video(video, UPLOAD_PATH)
 
 
 @app.post("/api/products", dependencies=[Depends(require_admin)])
@@ -580,12 +606,81 @@ def update_hero(request: HeroPayload) -> dict[str, object]:
     return {"status": "updated", "item": updated}
 
 
+def send_inquiry_email(request: InquiryRequest, inquiry_id: str) -> str:
+    host = os.getenv("STYL_SMTP_HOST", "")
+    username = os.getenv("STYL_SMTP_USERNAME", "")
+    password = os.getenv("STYL_SMTP_PASSWORD", "")
+    if not all((host, username, password)):
+        return "unconfigured"
+
+    port = int(os.getenv("STYL_SMTP_PORT", "587"))
+    email = EmailMessage()
+    email["From"] = os.getenv("STYL_SMTP_FROM", INQUIRY_RECIPIENT)
+    email["To"] = INQUIRY_RECIPIENT
+    email["Reply-To"] = str(request.email)
+    email["Subject"] = f"STYL inquiry {inquiry_id}"
+    email.set_content(
+        f"Inquiry ID: {inquiry_id}\n"
+        f"Name: {request.name}\n"
+        f"Email: {request.email}\n"
+        f"Phone: {request.phone or ''}\n"
+        f"Company: {request.company or ''}\n"
+        f"Source: {request.source}\n\n"
+        f"{request.message}\n"
+    )
+    context = ssl.create_default_context()
+    if port == 465:
+        with smtplib.SMTP_SSL(host, port, timeout=10, context=context) as smtp:
+            smtp.login(username, password)
+            refused = smtp.send_message(email)
+    else:
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            smtp.starttls(context=context)
+            smtp.login(username, password)
+            refused = smtp.send_message(email)
+    if refused:
+        raise smtplib.SMTPException("Inquiry recipient refused")
+    return "sent"
+
+
 @app.post("/api/inquiries")
 def create_inquiry(request: InquiryRequest) -> dict[str, str]:
+    inquiry_id = uuid4().hex
+    path = INQUIRIES_PATH / f"{inquiry_id}.json"
+    inquiry = {
+        **request.model_dump(mode="json"),
+        "id": inquiry_id,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "emailStatus": "pending",
+    }
+    try:
+        write_json_list(path, inquiry)
+    except OSError:
+        logger.error("Unable to save inquiry %s", inquiry_id)
+        raise HTTPException(status_code=503, detail="Unable to save your inquiry. Please try again.") from None
+
+    try:
+        inquiry["emailStatus"] = send_inquiry_email(request, inquiry_id)
+    except (OSError, smtplib.SMTPException, ValueError):
+        inquiry["emailStatus"] = "failed"
+    if inquiry["emailStatus"] != "sent":
+        logger.warning("Inquiry %s saved; email status: %s", inquiry_id, inquiry["emailStatus"])
+    try:
+        write_json_list(path, inquiry)
+    except OSError:
+        logger.error("Unable to update email status for saved inquiry %s", inquiry_id)
     return {
         "status": "received",
+        "id": inquiry_id,
         "message": f"Thank you, {request.name}. Our team will contact you shortly.",
     }
+
+
+@app.get("/api/uploads/{filename}.mp4")
+def get_uploaded_video(filename: str, range: str | None = Header(default=None)) -> StreamingResponse:
+    if not re.fullmatch(r"[a-f0-9]{32}", filename):
+        raise HTTPException(status_code=404, detail="Video not found.")
+    return video_response(UPLOAD_PATH / f"{filename}.mp4", range)
 
 
 app.mount("/api/uploads", StaticFiles(directory=UPLOAD_PATH), name="uploads")

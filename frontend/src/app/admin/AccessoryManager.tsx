@@ -6,7 +6,7 @@ import { API_BASE, resolveProductImage } from "@/lib/api";
 import { fetchAccessories, type Accessory } from "@/lib/accessories";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
-import { getCatalogPhotos, emptyCompatibility } from "@/lib/catalogDetails";
+import { getCatalogPhotos, getCatalogCover, emptyCompatibility } from "@/lib/catalogDetails";
 
 type AccessoryForm = Omit<Accessory, "id">;
 
@@ -255,7 +255,7 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
             />
           </label>
 
-          <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: photos[0] ?? "" }))} />
+          <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: getCatalogCover(photos) }))} />
           <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />
         </div>
 

@@ -11,6 +11,7 @@
 *.pyc
 backend/app/uploads/
 backend/app/data/uploads/
+backend/app/data/inquiries/
 
 # Node / frontend build output
 frontend/node_modules/

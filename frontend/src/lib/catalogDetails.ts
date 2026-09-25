@@ -13,6 +13,19 @@ export type CatalogDetails = {
 };
 
 export const MAX_PHOTOS = 12;
+export const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
+
+export function isVideo(path: string): boolean {
+  return /\.(mp4|mov|m4v|webm|mkv|avi)(?:[?#]|$)/i.test(path);
+}
+
+export function getVideoPoster(path: string): string | undefined {
+  return /^\/api\/uploads\/[^/]+\.mp4$/.test(path) ? path.slice(0, -4) + ".poster.jpg" : undefined;
+}
+
+export function getCatalogCover(photos: string[]): string {
+  return photos.find((photo) => !isVideo(photo)) ?? (photos[0] ? getVideoPoster(photos[0]) : "") ?? "";
+}
 
 export const productSpecificationFields = [
   { key: "modelSku", label: "Model / SKU", limit: 200, rows: 1 },

@@ -1,6 +1,8 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -13,6 +15,8 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.original_data_path = main.DATA_PATH
         self.original_accessories_path = main.ACCESSORIES_PATH
         self.original_admin_token = main.ADMIN_TOKEN
+        self.original_inquiries_path = main.INQUIRIES_PATH
+        main.INQUIRIES_PATH = Path(self.temporary_directory.name) / "inquiries"
         main.DATA_PATH = Path(self.temporary_directory.name) / "products.json"
         main.ACCESSORIES_PATH = Path(self.temporary_directory.name) / "accessories.json"
         self.original_hero_path = main.HERO_PATH
@@ -29,7 +33,71 @@ class AdminAuthenticationTests(unittest.TestCase):
         main.HERO_PATH = self.original_hero_path
         main.UPLOAD_PATH = self.original_upload_path
         main.ADMIN_TOKEN = self.original_admin_token
+        main.INQUIRIES_PATH = self.original_inquiries_path
         self.temporary_directory.cleanup()
+
+    def test_inquiry_is_saved_before_email_and_sent_to_styl(self) -> None:
+        payload = {"name": "Customer", "email": "customer@example.com", "message": "Quote for a rack", "phone": "123", "company": "Studio"}
+        settings = {"STYL_SMTP_HOST": "smtp.example.com", "STYL_SMTP_USERNAME": "sender", "STYL_SMTP_PASSWORD": "test-password", "STYL_SMTP_FROM": "sender@example.com"}
+        for port in ("587", "465"):
+            with self.subTest(port=port), patch.dict(main.os.environ, {**settings, "STYL_SMTP_PORT": port}, clear=True), patch.object(main.smtplib, "SMTP") as smtp, patch.object(main.smtplib, "SMTP_SSL") as smtp_ssl:
+                transport = smtp_ssl if port == "465" else smtp
+                connection = transport.return_value.__enter__.return_value
+
+                def accept_message(email):
+                    self.assertEqual(email["To"], "styl@stylfitness.com")
+                    self.assertEqual(email["From"], "sender@example.com")
+                    self.assertEqual(email["Reply-To"], payload["email"])
+                    self.assertIn(payload["message"], email.get_content())
+                    self.assertIn("Company: Studio", email.get_content())
+                    inquiry_id = str(email["Subject"]).split()[-1]
+                    saved = json.loads((main.INQUIRIES_PATH / f"{inquiry_id}.json").read_text())
+                    self.assertEqual(saved["emailStatus"], "pending")
+                    return {}
+
+                connection.send_message.side_effect = accept_message
+                response = self.client.post("/api/inquiries", json=payload)
+                self.assertEqual(response.status_code, 200)
+                saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
+                self.assertEqual(saved["emailStatus"], "sent")
+                self.assertEqual(saved["message"], payload["message"])
+                connection.login.assert_called_once_with("sender", "test-password")
+                connection.send_message.assert_called_once()
+                if port == "587":
+                    connection.starttls.assert_called_once()
+                    smtp_ssl.assert_not_called()
+                else:
+                    connection.starttls.assert_not_called()
+                    smtp.assert_not_called()
+                self.assertEqual(self.client.get(f"/api/uploads/../inquiries/{saved['id']}.json").status_code, 404)
+
+    def test_inquiry_is_retained_when_email_is_unconfigured_or_fails(self) -> None:
+        payload = {"name": "Customer", "email": "customer@example.com", "message": "Quote"}
+        with patch.dict(main.os.environ, {}, clear=True), patch.object(main.smtplib, "SMTP") as smtp:
+            response = self.client.post("/api/inquiries", json=payload)
+            self.assertEqual(response.status_code, 200)
+            saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
+            self.assertEqual(saved["emailStatus"], "unconfigured")
+            smtp.assert_not_called()
+        with patch.object(main, "send_inquiry_email", side_effect=main.smtplib.SMTPException("SMTP failure")):
+            response = self.client.post("/api/inquiries", json=payload)
+            self.assertEqual(response.status_code, 200)
+            saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
+            self.assertEqual(saved["emailStatus"], "failed")
+            self.assertEqual(saved["email"], payload["email"])
+
+    def test_inquiry_storage_failure_does_not_report_success_or_send_email(self) -> None:
+        with patch.object(main, "write_json_list", side_effect=OSError("Disk full")), patch.object(main, "send_inquiry_email") as send:
+            response = self.client.post("/api/inquiries", json={"name": "Customer", "email": "customer@example.com", "message": "Quote"})
+            self.assertEqual(response.status_code, 503)
+            send.assert_not_called()
+
+    def test_inquiry_rejects_invalid_or_oversized_fields(self) -> None:
+        payload = {"name": "Customer", "email": "customer@example.com", "message": "Quote"}
+        for override in ({"email": "invalid"}, {"email": "customer@example.com\r\nBcc: other@example.com"}, {"message": ""}, {"message": "x" * 10001}, {"name": "x" * 201}):
+            with self.subTest(override=override):
+                self.assertEqual(self.client.post("/api/inquiries", json={**payload, **override}).status_code, 422)
+        self.assertFalse(main.INQUIRIES_PATH.exists())
 
     def test_admin_access_is_disabled_without_a_configured_token(self) -> None:
         main.ADMIN_TOKEN = ""
