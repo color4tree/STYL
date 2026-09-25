@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { addProductToCart, formatCartSummary, formatPrice, getCartCount, getCartTotals, MAX_ITEM_QUANTITY, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import BrandLogo from "@/components/BrandLogo";
+import PhotoGallery from "@/components/PhotoGallery";
+import { getCatalogPhotos, type CatalogDetails } from "@/lib/catalogDetails";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 
-type Product = {
+type Product = CatalogDetails & {
   id: number;
   slug: string;
   name: string;
@@ -17,7 +19,6 @@ type Product = {
   shortDescription: string;
   description?: string;
   featured?: boolean;
-  image?: string;
   features?: string[];
 };
 
@@ -267,13 +268,7 @@ export default function Home() {
           <div className="grid gap-7 md:grid-cols-3">
             {products.map((product) => (
               <article key={product.id} className="soft-panel rounded-[28px] p-5 shadow-[0_16px_40px_rgba(17,17,17,0.04)]">
-                <div className="overflow-hidden rounded-[22px] bg-[#efeae4]">
-                  <img
-                    src={resolveProductImage(product.image)}
-                    alt={product.name}
-                    className="h-64 w-full object-cover"
-                  />
-                </div>
+                <PhotoGallery photos={getCatalogPhotos(product)} name={product.name} compact />
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                     {product.category}

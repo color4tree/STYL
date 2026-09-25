@@ -18,7 +18,7 @@ const emptyAccessory: AccessoryForm = {
   material: "",
   weight: "",
   price: 0,
-  currency: "USD",
+  currency: "CAD",
   notes: "",
   image: "",
   photos: [],
@@ -234,9 +234,8 @@ export default function AccessoryManager({ adminToken, onBusyChange }: { adminTo
           <label className="block text-sm font-medium">
             Currency
             <select value={form.currency} onChange={(event) => updateField("currency", event.target.value)} className={inputClass}>
+              <option value="CAD">CAD</option>
               <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="AUD">AUD</option>
             </select>
           </label>
 

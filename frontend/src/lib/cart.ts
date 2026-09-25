@@ -15,7 +15,7 @@ function currencyCode(currency?: string) {
 }
 
 export function formatPrice(price: number, currency?: string) {
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode(currency), currencyDisplay: "code" }).format(price);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode(currency), currencyDisplay: "narrowSymbol" }).format(price);
 }
 
 export function getCartTotals(items: CartItem[]): [string, number][] {

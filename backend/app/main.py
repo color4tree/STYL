@@ -113,7 +113,7 @@ class ProductPayload(CatalogDetailsPayload, ProductSpecificationsPayload):
     name: str
     category: str
     price: float
-    currency: str = "CAD"
+    currency: Literal["CAD", "USD"] = "CAD"
     shortDescription: str = ""
     description: str = ""
     featured: bool = False
@@ -128,7 +128,7 @@ class AccessoryPayload(CatalogDetailsPayload):
     material: str = ""
     weight: str = ""
     price: float = Field(ge=0)
-    currency: str = "USD"
+    currency: Literal["CAD", "USD"] = "CAD"
     notes: str = ""
     image: str | None = None
 

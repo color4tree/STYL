@@ -433,8 +433,6 @@ export default function AdminPage() {
                 >
                   <option value="CAD">CAD</option>
                   <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="AUD">AUD</option>
                 </select>
               </label>
 

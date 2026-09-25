@@ -138,6 +138,32 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.assertEqual(authorized.json()["item"]["slug"], "test-bench")
         self.assertTrue(main.DATA_PATH.exists())
 
+    def test_catalog_currency_is_limited_to_cad_and_usd(self) -> None:
+        headers = {"Authorization": f"Bearer {main.ADMIN_TOKEN}"}
+        payload = {"name": "Currency test", "category": "Test", "price": 10}
+
+        product = self.client.post("/api/products", json=payload, headers=headers)
+        accessory = self.client.post("/api/accessories", json=payload, headers=headers)
+        self.assertEqual(product.json()["item"]["currency"], "CAD")
+        self.assertEqual(accessory.json()["item"]["currency"], "CAD")
+
+        for endpoint in ("products", "accessories"):
+            for currency in ("CAD", "USD"):
+                response = self.client.post(
+                    f"/api/{endpoint}",
+                    json={**payload, "name": f"{endpoint}-{currency}", "currency": currency},
+                    headers=headers,
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["item"]["currency"], currency)
+
+            rejected = self.client.post(
+                f"/api/{endpoint}",
+                json={**payload, "currency": "EUR"},
+                headers=headers,
+            )
+            self.assertEqual(rejected.status_code, 422)
+
     def test_optional_product_specifications_can_be_saved_preserved_and_cleared(self) -> None:
         headers = {"Authorization": "Bearer test-admin-token"}
         payload = {"name": "Optional fields", "category": "Racks", "price": 100}

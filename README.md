@@ -106,6 +106,12 @@ The project includes a lightweight admin page for editing product catalog data, 
 
 ## Product and accessory videos
 
+Products and accessories support CAD and USD only. New admin entries default to
+CAD; existing entries retain their saved currency. Storefront prices display
+only `$`, while cart totals remain grouped by currency without conversion.
+Home product cards use the same photo/video gallery as accessories and product
+detail pages, managed through the shared admin media editor.
+
 Galleries support up to 12 photos and videos combined. Photos retain the 8 MiB
 per-file limit. Uploaded videos are limited to 50 MiB (52,428,800 bytes), checked
 by both the admin UI and API. Supported containers: MP4, iPhone MOV, M4V, WebM,

@@ -150,7 +150,7 @@ export default function AccessoriesPage() {
         )}
 
         <p className="mt-6 text-xs text-[var(--muted)]">
-          Prices in USD. Specifications may vary slightly by production batch.
+          Specifications may vary slightly by production batch.
         </p>
       </div>
     </main>
