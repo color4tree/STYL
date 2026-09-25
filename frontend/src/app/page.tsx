@@ -21,12 +21,6 @@ type Product = {
   features?: string[];
 };
 
-const pillars = [
-  "Engineered for long-term durability",
-  "Premium design language for modern spaces",
-  "Built for discreet, high-performance training",
-];
-
 const brandAssets = [
   {
     name: "Signature shield",
@@ -174,7 +168,6 @@ export default function Home() {
             <a href="#about">About</a>
             <a href="#products">Products</a>
             <Link href="/accessories">Accessories</Link>
-            <a href="#experience">Experience</a>
             <a href="#contact">Contact</a>
           </nav>
 
@@ -189,7 +182,7 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="container grid gap-10 py-16 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:py-24">
+      <section className="container grid gap-10 pt-16 pb-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:pt-24">
         <div>
           <div className="mb-5 inline-flex rounded-full border border-[var(--line)] bg-white/70 px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             Premium performance, minimal form
@@ -249,17 +242,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="experience" className="scroll-mt-24 border-y border-[var(--line)] bg-white/40">
-        <div className="container grid gap-6 py-10 md:grid-cols-3">
-          {pillars.map((item) => (
-            <div key={item} className="rounded-2xl border border-[var(--line)] bg-white/70 p-5 text-sm leading-7 text-[var(--muted)]">
-              {item}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section id="products" className="container scroll-mt-24 py-20">
+      <section id="products" className="container scroll-mt-24 pt-8 pb-20">
         <div className="mb-10 flex items-end justify-between gap-6">
           <div>
             <div className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
