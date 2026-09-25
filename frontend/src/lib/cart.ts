@@ -2,12 +2,30 @@ export type CartItem = {
   id: number;
   name: string;
   price: number;
+  currency?: string;
   quantity: number;
   slug?: string;
 };
 
 export const CART_KEY = "styl-cart";
 export const MAX_ITEM_QUANTITY = 10;
+
+function currencyCode(currency?: string) {
+  return currency && /^[a-z]{3}$/i.test(currency) ? currency.toUpperCase() : "USD";
+}
+
+export function formatPrice(price: number, currency?: string) {
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode(currency), currencyDisplay: "code" }).format(price);
+}
+
+export function getCartTotals(items: CartItem[]): [string, number][] {
+  const totals = new Map<string, number>();
+  for (const item of items) {
+    const currency = currencyCode(item.currency);
+    totals.set(currency, (totals.get(currency) ?? 0) + item.price * item.quantity);
+  }
+  return [...totals];
+}
 
 export function readCart(): CartItem[] {
   if (typeof window === "undefined") {
@@ -41,7 +59,7 @@ export function getCartCount(items: CartItem[] = readCart()) {
 }
 
 export function addProductToCart(
-  product: { id: number; name: string; price: number; slug?: string },
+  product: { id: number; name: string; price: number; slug?: string; currency?: string },
   quantity = 1,
 ) {
   const existing = readCart();
@@ -50,7 +68,7 @@ export function addProductToCart(
   const next = index >= 0
     ? existing.map((item) =>
         item.id === product.id
-          ? { ...item, quantity: Math.min(MAX_ITEM_QUANTITY, item.quantity + quantity) }
+          ? { ...item, ...product, quantity: Math.min(MAX_ITEM_QUANTITY, item.quantity + quantity) }
           : item,
       )
     : [...existing, { ...product, quantity: Math.min(MAX_ITEM_QUANTITY, quantity) }];

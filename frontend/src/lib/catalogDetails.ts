@@ -14,6 +14,30 @@ export type CatalogDetails = {
 
 export const MAX_PHOTOS = 12;
 
+export const productSpecificationFields = [
+  { key: "modelSku", label: "Model / SKU", limit: 200, rows: 1 },
+  { key: "dimensions", label: "Dimensions", limit: 500, rows: 2 },
+  { key: "material", label: "Material", limit: 500, rows: 2 },
+  { key: "colourOptions", label: "Colour / options", limit: 1000, rows: 2 },
+  { key: "included", label: "What's included", limit: 4000, rows: 3 },
+  { key: "warranty", label: "Warranty", limit: 4000, rows: 3 },
+] as const;
+
+export const stockStatuses = ["In stock", "Out of stock", "Preorder", "Made to order"] as const;
+
+export type ProductSpecifications = Partial<Record<(typeof productSpecificationFields)[number]["key"], string>> & {
+  stockStatus?: "" | (typeof stockStatuses)[number];
+  publicationStatus?: "" | "draft" | "published";
+};
+
+export function getProductSpecifications(product: ProductSpecifications): ProductSpecifications {
+  return {
+    ...Object.fromEntries(productSpecificationFields.map(({ key }) => [key, product[key] ?? ""])),
+    stockStatus: product.stockStatus ?? "",
+    publicationStatus: product.publicationStatus || "published",
+  };
+}
+
 export const emptyCompatibility: Compatibility = {
   uprightSize: "",
   holeDiameter: "",

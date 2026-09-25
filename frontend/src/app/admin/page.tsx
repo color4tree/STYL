@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import AccessoryManager from "./AccessoryManager";
 import HeroManager from "./HeroManager";
 import BrandLogo from "@/components/BrandLogo";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
-import { getCatalogPhotos, emptyCompatibility, type CatalogDetails } from "@/lib/catalogDetails";
+import { getCatalogPhotos, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
 
-type Product = CatalogDetails & {
+type Product = CatalogDetails & ProductSpecifications & {
   id: number;
   slug: string;
   name: string;
@@ -33,10 +33,11 @@ const adminTabs: { id: AdminTab; label: string; heading: string }[] = [
 ];
 
 const emptyProduct: Omit<Product, "id" | "slug"> = {
+  ...getProductSpecifications({}),
   name: "",
   category: "",
   price: 0,
-  currency: "USD",
+  currency: "CAD",
   shortDescription: "",
   description: "",
   featured: false,
@@ -46,8 +47,11 @@ const emptyProduct: Omit<Product, "id" | "slug"> = {
   features: [""],
 };
 
-async function fetchProducts(): Promise<Product[]> {
-  const res = await fetch(`${API_BASE}/api/products`);
+async function fetchProducts(token: string): Promise<Product[]> {
+  const res = await fetch(`${API_BASE}/api/admin/products`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
   if (!res.ok) {
     throw new Error("Unable to fetch products");
   }
@@ -67,17 +71,18 @@ async function verifyAdminToken(token: string): Promise<void> {
 
 function toFormState(product: Product): Omit<Product, "id" | "slug"> {
   return {
+    ...getProductSpecifications(product),
     name: product.name,
     category: product.category,
     price: product.price,
     currency: product.currency,
-    shortDescription: product.shortDescription,
-    description: product.description,
+    shortDescription: product.shortDescription ?? "",
+    description: product.description ?? "",
     featured: product.featured,
     image: product.image,
     photos: getCatalogPhotos(product),
     compatibility: product.compatibility ?? emptyCompatibility,
-    features: product.features.length > 0 ? product.features : [""],
+    features: product.features?.length > 0 ? product.features : [""],
   };
 }
 
@@ -102,6 +107,10 @@ export default function AdminPage() {
 
     try {
       await verifyAdminToken(token);
+      const items = await fetchProducts(token);
+      setProducts(items);
+      setSelectedId(items[0]?.id ?? null);
+      setForm(items[0] ? toFormState(items[0]) : emptyProduct);
       window.sessionStorage.setItem("styl-admin-token", token);
       setAdminToken(token);
       setAuthenticated(true);
@@ -123,24 +132,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     async function initialize() {
-      try {
-        const items = await fetchProducts();
-        setProducts(items);
-
-        if (items.length > 0) {
-          setSelectedId(items[0].id);
-          setForm(toFormState(items[0]));
-        }
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Unable to load products.");
-      } finally {
-        setLoading(false);
-      }
-
       const savedToken = window.sessionStorage.getItem("styl-admin-token");
       if (savedToken) {
         try {
           await verifyAdminToken(savedToken);
+          const items = await fetchProducts(savedToken);
+          setProducts(items);
+          setSelectedId(items[0]?.id ?? null);
+          setForm(items[0] ? toFormState(items[0]) : emptyProduct);
           setAdminToken(savedToken);
           setAuthenticated(true);
         } catch (error) {
@@ -148,6 +147,7 @@ export default function AdminPage() {
           setMessage(error instanceof Error ? error.message : "Unable to verify admin access.");
         }
       }
+      setLoading(false);
       setCheckingAccess(false);
     }
 
@@ -283,10 +283,7 @@ export default function AdminPage() {
     }
   };
 
-  const totalValue = useMemo(
-    () => products.reduce((sum, product) => sum + product.price, 0),
-    [products],
-  );
+  const categories = [...new Set(["Strength", "Racks", "Multi trainers", "Benches", "Cardio", "Recovery", "Accessories", "General", ...products.map((product) => product.category)])].filter(Boolean);
 
   if (loading || checkingAccess) {
     return <main className="min-h-screen bg-[var(--bg)] px-4 py-16 text-[var(--ink)]">Loading admin catalog...</main>;
@@ -350,7 +347,7 @@ export default function AdminPage() {
           </div>
           {activeTab === "products" ? (
             <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
-              {products.length} products · ${totalValue.toLocaleString()} total value
+              {products.length} products · {products.filter((product) => product.publicationStatus === "draft").length} drafts
             </div>
           ) : null}
           <button type="button" onClick={signOut} className="text-sm font-medium text-[var(--muted)]">
@@ -385,6 +382,7 @@ export default function AdminPage() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{product.name}</div>
                       <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">{product.category}</div>
+                      <div className="mt-1 text-xs text-[var(--muted)]">{product.publicationStatus === "draft" ? "Draft" : "Published"}</div>
                     </div>
                   </div>
                 </button>
@@ -406,12 +404,14 @@ export default function AdminPage() {
 
               <label className="block text-sm font-medium">
                 Category
-                <input
+                <select
                   value={form.category}
                   onChange={(event) => updateField("category", event.target.value)}
                   className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
-                  placeholder="Strength"
-                />
+                >
+                  <option value="">Select category</option>
+                  {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
               </label>
 
               <label className="block text-sm font-medium">
@@ -431,11 +431,39 @@ export default function AdminPage() {
                   onChange={(event) => updateField("currency", event.target.value)}
                   className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
                 >
+                  <option value="CAD">CAD</option>
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
                   <option value="AUD">AUD</option>
                 </select>
               </label>
+
+              <label className="block text-sm font-medium">
+                Publication status
+                <select value={form.publicationStatus || "published"} onChange={(event) => updateField("publicationStatus", event.target.value as ProductSpecifications["publicationStatus"])} className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                </select>
+              </label>
+              <label className="block text-sm font-medium">
+                Stock status (optional)
+                <select value={form.stockStatus ?? ""} onChange={(event) => updateField("stockStatus", event.target.value as ProductSpecifications["stockStatus"])} className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3">
+                  <option value="">Not specified</option>
+                  {stockStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+              </label>
+
+              <fieldset className="min-w-0 border-t border-[var(--line)] pt-5 md:col-span-2">
+                <legend className="text-lg font-semibold">Product details (optional)</legend>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {productSpecificationFields.map((field) => (
+                    <label key={field.key} className="block min-w-0 text-sm font-medium">
+                      {field.label}
+                      <textarea value={form[field.key] ?? ""} onChange={(event) => updateField(field.key, event.target.value)} maxLength={field.limit} rows={field.rows} className="mt-2 w-full rounded-lg border border-[var(--line)] bg-white px-3 py-2 font-normal" />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
 
               <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: photos[0] ?? "" }))} />
               <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />

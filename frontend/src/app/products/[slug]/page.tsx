@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { addProductToCart, getCartCount, readCart } from "@/lib/cart";
+import { addProductToCart, formatPrice, getCartCount, readCart } from "@/lib/cart";
 import { API_BASE } from "@/lib/api";
 import BrandLogo from "@/components/BrandLogo";
 import PhotoGallery from "@/components/PhotoGallery";
 import { CompatibilityDetails } from "@/components/Compatibility";
-import { getCatalogPhotos, type CatalogDetails } from "@/lib/catalogDetails";
+import { getCatalogPhotos, productSpecificationFields, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
 
-type Product = CatalogDetails & {
+type Product = CatalogDetails & ProductSpecifications & {
   id: number;
   slug: string;
   name: string;
@@ -42,8 +42,9 @@ export default function ProductDetailPage() {
         }
 
         const data = await res.json();
-        setProduct(data.item as Product);
+        setProduct(data.item?.publicationStatus === "draft" ? null : data.item as Product);
       } catch (error) {
+        setProduct(null);
         console.error(error);
       } finally {
         setLoading(false);
@@ -66,7 +67,7 @@ export default function ProductDetailPage() {
 
   const priceLabel = useMemo(() => {
     if (!product) return "";
-    return `$${product.price.toLocaleString()}`;
+    return formatPrice(product.price, product.currency);
   }, [product]);
 
   if (loading) {
@@ -90,6 +91,12 @@ export default function ProductDetailPage() {
     );
   }
 
+  const photos = getCatalogPhotos(product);
+  const specifications = productSpecificationFields.filter((field) => product[field.key]?.trim());
+  const features = product.features?.filter((feature) => feature.trim()) ?? [];
+  const shortDescription = product.shortDescription?.trim();
+  const description = product.description?.trim();
+
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -105,14 +112,28 @@ export default function ProductDetailPage() {
           </Link>
         </div>
 
-        <section className="grid gap-10 rounded-[32px] border border-[var(--line)] bg-white/70 p-6 md:grid-cols-[1.1fr_0.9fr] md:p-8">
-          <PhotoGallery key={product.id} photos={getCatalogPhotos(product)} name={product.name} />
+        <section className={`grid gap-10 rounded-[32px] border border-[var(--line)] bg-white/70 p-6 md:p-8 ${photos.length ? "md:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+          {photos.length ? <PhotoGallery key={product.id} photos={photos} name={product.name} /> : null}
 
           <div className="min-w-0 break-words">
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">{product.category}</div>
             <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] md:text-5xl">{product.name}</h1>
             <div className="mt-5 text-3xl font-semibold">{priceLabel}</div>
-            <p className="mt-6 text-lg leading-8 text-[var(--muted)]">{product.description ?? product.shortDescription}</p>
+            {product.stockStatus?.trim() ? <p className="mt-3 text-sm font-medium">{product.stockStatus}</p> : null}
+            {shortDescription ? <p className="mt-6 whitespace-pre-line text-lg leading-8 text-[var(--muted)]">{shortDescription}</p> : null}
+            {specifications.length ? (
+              <section className="my-5 border-t border-[var(--line)] pt-4">
+                <h2 className="text-base font-semibold">Specifications</h2>
+                <dl className="mt-3 space-y-3 text-sm">
+                  {specifications.map((field) => (
+                    <div key={field.key}>
+                      <dt className="text-[var(--muted)]">{field.label}</dt>
+                      <dd className="mt-1 whitespace-pre-line break-words">{product[field.key]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            ) : null}
             <CompatibilityDetails value={product.compatibility} />
 
             <div className="mt-8 flex flex-wrap gap-4">
@@ -126,31 +147,24 @@ export default function ProductDetailPage() {
           </div>
         </section>
 
-        <section className="mt-10 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[28px] border border-[var(--line)] bg-white/70 p-6">
-            <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Why it stands out</div>
-            <ul className="mt-6 space-y-4 text-lg leading-8 text-[var(--muted)]">
-              {(product.features ?? [
-                "Built for durable daily use",
-                "Premium design language for modern spaces",
-                "Comfort-focused and high-performance",
-              ]).map((item) => (
-                <li key={item} className="flex gap-3">
-                  <span className="mt-2 h-2.5 w-2.5 rounded-full bg-[var(--ink)]" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
+        {features.length || description ? (
+          <div className="mt-10 grid gap-8 md:grid-cols-2">
+            {features.length ? (
+              <section className="min-w-0 border-t border-[var(--line)] pt-5">
+                <h2 className="text-lg font-semibold">Features</h2>
+                <ul className="mt-4 list-inside list-disc space-y-3 break-words text-base leading-7 text-[var(--muted)]">
+                  {features.map((feature, index) => <li key={index}>{feature}</li>)}
+                </ul>
+              </section>
+            ) : null}
+            {description ? (
+              <section className="min-w-0 border-t border-[var(--line)] pt-5">
+                <h2 className="text-lg font-semibold">Overview</h2>
+                <p className="mt-4 whitespace-pre-line break-words text-base leading-7 text-[var(--muted)]">{description}</p>
+              </section>
+            ) : null}
           </div>
-
-          <div className="rounded-[28px] border border-[var(--line)] bg-[var(--ink)] p-6 text-white">
-            <div className="text-xs uppercase tracking-[0.24em] text-white/60">Overview</div>
-            <div className="mt-6 space-y-5 text-base leading-7 text-white/80">
-              <p>{product.shortDescription}</p>
-              <p>Designed for users who want premium performance without compromising the design of home or studio spaces.</p>
-            </div>
-          </div>
-        </section>
+        ) : null}
       </div>
     </main>
   );

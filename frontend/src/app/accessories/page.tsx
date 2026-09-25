@@ -7,7 +7,7 @@ import { CompatibilityDetails } from "@/components/Compatibility";
 import { getCatalogPhotos } from "@/lib/catalogDetails";
 import BrandLogo from "@/components/BrandLogo";
 import { fetchAccessories, type Accessory } from "@/lib/accessories";
-import { addProductToCart, getCartCount, MAX_ITEM_QUANTITY, readCart, type CartItem } from "@/lib/cart";
+import { addProductToCart, formatPrice, getCartCount, MAX_ITEM_QUANTITY, readCart, type CartItem } from "@/lib/cart";
 
 export default function AccessoriesPage() {
   const [accessories, setAccessories] = useState<Accessory[]>([]);
@@ -28,7 +28,7 @@ export default function AccessoriesPage() {
   }, []);
 
   const addToCart = (item: Accessory, quantity: number) => {
-    setCart(addProductToCart({ id: item.id, name: item.name, price: item.price }, quantity));
+    setCart(addProductToCart({ id: item.id, name: item.name, price: item.price, currency: item.currency }, quantity));
     setLastAddedId(item.id);
     setQuantities((current) => ({ ...current, [item.id]: 1 }));
   };
@@ -81,9 +81,9 @@ export default function AccessoriesPage() {
                 className="flex flex-col rounded-[28px] border border-[var(--line)] bg-white/70 p-4 shadow-[0_16px_40px_rgba(17,17,17,0.04)]"
               >
                 <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} compact />
-                <div className="mt-4 flex items-center justify-between gap-3">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">{item.category}</span>
-                  <span className="text-lg font-semibold">${item.price.toLocaleString()}</span>
+                  <span className="text-lg font-semibold">{formatPrice(item.price, item.currency)}</span>
                 </div>
                 <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em]">{item.name}</h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{item.notes}</p>

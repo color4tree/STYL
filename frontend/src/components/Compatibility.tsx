@@ -26,10 +26,10 @@ export function CompatibilityEditor({ value, onChange }: { value?: Compatibility
 
 export function CompatibilityDetails({ value }: { value?: Compatibility }) {
   const fields = compatibilityFields.filter((field) => value?.[field.key]?.trim());
+  if (!fields.length) return null;
   return (
     <section className="my-5 min-w-0 border-t border-[var(--line)] pt-4">
       <h3 className="text-base font-semibold">Compatibility</h3>
-      {fields.length ? (
         <dl className="mt-3 space-y-3 text-sm">
           {fields.map((field) => (
             <div key={field.key}>
@@ -38,7 +38,6 @@ export function CompatibilityDetails({ value }: { value?: Compatibility }) {
             </div>
           ))}
         </dl>
-      ) : <p className="mt-2 text-sm text-[var(--muted)]">Compatibility not specified. Contact STYL to confirm fit.</p>}
     </section>
   );
 }

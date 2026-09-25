@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { clearCart, MAX_ITEM_QUANTITY, readCart, removeProductFromCart, updateCartQuantity, type CartItem } from "@/lib/cart";
+import { clearCart, formatPrice, getCartTotals, MAX_ITEM_QUANTITY, readCart, removeProductFromCart, updateCartQuantity, type CartItem } from "@/lib/cart";
 import BrandLogo from "@/components/BrandLogo";
 
 export default function CartPage() {
@@ -12,8 +12,8 @@ export default function CartPage() {
     setItems(readCart());
   }, []);
 
-  const total = useMemo(
-    () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+  const totals = useMemo(
+    () => getCartTotals(items),
     [items],
   );
 
@@ -35,7 +35,7 @@ export default function CartPage() {
         <Link href="/" aria-label="STYL home" className="mb-8 inline-flex">
           <BrandLogo markClassName="h-8 w-auto" />
         </Link>
-        <div className="mb-8 flex items-center justify-between gap-4">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Cart</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">Your selected equipment</h1>
@@ -68,10 +68,10 @@ export default function CartPage() {
                 <div key={item.id} className="flex flex-col gap-4 rounded-[24px] border border-[var(--line)] bg-white/70 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-xl font-semibold">{item.name}</div>
-                    <div className="mt-2 text-sm text-[var(--muted)]">Unit price: ${item.price.toLocaleString()}</div>
+                    <div className="mt-2 text-sm text-[var(--muted)]">Unit price: {formatPrice(item.price, item.currency)}</div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 sm:justify-end">
+                  <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -95,7 +95,7 @@ export default function CartPage() {
 
                     <div className="flex items-center gap-3">
                       <div className="min-w-24 text-right font-semibold">
-                        ${(item.price * item.quantity).toLocaleString()}
+                        {formatPrice(item.price * item.quantity, item.currency)}
                       </div>
                       <button
                         type="button"
@@ -112,19 +112,25 @@ export default function CartPage() {
 
             <aside className="rounded-[28px] border border-[var(--line)] bg-[var(--ink)] p-6 text-white">
               <div className="text-xs uppercase tracking-[0.24em] text-white/60">Summary</div>
-              <div className="mt-6 flex items-center justify-between text-lg">
-                <span>Subtotal</span>
-                <span>${total.toLocaleString()}</span>
+              <div className="mt-6 space-y-2 text-lg">
+                {totals.map(([currency, total]) => (
+                  <div key={currency} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Subtotal</span>
+                    <span>{formatPrice(total, currency)}</span>
+                  </div>
+                ))}
               </div>
               <div className="mt-3 flex items-center justify-between text-sm text-white/70">
                 <span>Shipping</span>
                 <span>Calculated later</span>
               </div>
               <div className="mt-8 border-t border-white/15 pt-5 text-xl font-semibold">
-                <div className="flex items-center justify-between">
-                  <span>Total</span>
-                  <span>${total.toLocaleString()}</span>
-                </div>
+                {totals.map(([currency, total]) => (
+                  <div key={currency} className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Total</span>
+                    <span>{formatPrice(total, currency)}</span>
+                  </div>
+                ))}
               </div>
 
               <Link href="/?quote=cart#contact" className="mt-8 inline-flex w-full items-center justify-center rounded-full bg-white px-4 py-3 text-sm font-medium text-[var(--ink)]">

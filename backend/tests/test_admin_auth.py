@@ -70,6 +70,63 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.assertEqual(authorized.json()["item"]["slug"], "test-bench")
         self.assertTrue(main.DATA_PATH.exists())
 
+    def test_optional_product_specifications_can_be_saved_preserved_and_cleared(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        payload = {"name": "Optional fields", "category": "Racks", "price": 100}
+        created = self.client.post("/api/products", json=payload, headers=headers)
+        self.assertEqual(created.status_code, 200)
+        product = created.json()["item"]
+        self.assertEqual(product["currency"], "CAD")
+        for field in main.ProductSpecificationsPayload.model_fields:
+            self.assertEqual(product[field], "")
+        details = {
+            "modelSku": " STYL-R1 ", "dimensions": " 210 x 120 x 120 cm ",
+            "material": " Steel ", "included": " Rack\nJ-hooks ", "colourOptions": " Black / red ",
+            "warranty": " 2 years ", "stockStatus": "Preorder", "publicationStatus": "published",
+        }
+        url = f"/api/products/{product['id']}"
+        updated = self.client.put(url, json={**payload, **details, "currency": "USD"}, headers=headers)
+        self.assertEqual(updated.status_code, 200)
+        expected = {key: value.strip() for key, value in details.items()}
+        for field, value in expected.items():
+            self.assertEqual(updated.json()["item"][field], value)
+        legacy_update = self.client.put(url, json=payload, headers=headers).json()["item"]
+        self.assertEqual(legacy_update["currency"], "USD")
+        for field, value in expected.items():
+            self.assertEqual(legacy_update[field], value)
+        public = self.client.get(f"/api/products/{product['slug']}").json()["item"]
+        self.assertEqual(public["included"], "Rack\nJ-hooks")
+        cleared = self.client.put(url, json={**payload, **{key: "" for key in details}}, headers=headers)
+        self.assertEqual(cleared.status_code, 200)
+        for field in details:
+            self.assertEqual(cleared.json()["item"][field], "")
+
+    def test_drafts_are_private_and_can_be_published(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        payload = {"name": "Private draft", "category": "Draft only category", "price": 1, "publicationStatus": "draft"}
+        product = self.client.post("/api/products", json=payload, headers=headers).json()["item"]
+        self.assertEqual(self.client.get("/api/admin/products").status_code, 401)
+        self.assertEqual(self.client.get("/api/admin/products", headers={"Authorization": "Bearer wrong"}).status_code, 401)
+        self.assertNotIn(product["id"], [item["id"] for item in self.client.get("/api/products").json()["items"]])
+        self.assertNotIn(payload["category"], self.client.get("/api/categories").json()["items"])
+        self.assertEqual(self.client.get(f"/api/products/{product['slug']}").status_code, 404)
+        self.assertIn(product["id"], [item["id"] for item in self.client.get("/api/admin/products", headers=headers).json()["items"]])
+        published = self.client.put(f"/api/products/{product['id']}", json={**payload, "publicationStatus": "published"}, headers=headers)
+        self.assertEqual(published.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/products/{product['slug']}").status_code, 200)
+        self.assertIn(product["id"], [item["id"] for item in self.client.get("/api/products").json()["items"]])
+        self.assertIn(payload["category"], self.client.get("/api/categories").json()["items"])
+        self.assertEqual(self.client.get("/api/products/pro-elite-series").status_code, 200)
+        unpublished = self.client.put(f"/api/products/{product['id']}", json=payload, headers=headers)
+        self.assertEqual(unpublished.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/products/{product['slug']}").status_code, 404)
+
+    def test_invalid_optional_product_values_are_rejected(self) -> None:
+        headers = {"Authorization": "Bearer test-admin-token"}
+        payload = {"name": "Invalid values", "category": "Racks", "price": 100}
+        for fields in ({"modelSku": "x" * 201}, {"stockStatus": "invalid"}, {"publicationStatus": "invalid"}):
+            self.assertEqual(self.client.post("/api/products", json={**payload, **fields}, headers=headers).status_code, 422)
+
     def test_accessories_are_public_and_editable_only_by_admin(self) -> None:
         listing = self.client.get("/api/accessories")
         self.assertEqual(listing.status_code, 200)

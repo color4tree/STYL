@@ -84,15 +84,26 @@ class CatalogDetailsPayload(BaseModel):
     compatibility: CompatibilityPayload | None = None
 
 
-class ProductPayload(CatalogDetailsPayload):
+class ProductSpecificationsPayload(BaseModel):
+    modelSku: str = Field(default="", max_length=200)
+    dimensions: str = Field(default="", max_length=500)
+    material: str = Field(default="", max_length=500)
+    included: str = Field(default="", max_length=4000)
+    colourOptions: str = Field(default="", max_length=1000)
+    warranty: str = Field(default="", max_length=4000)
+    stockStatus: Literal["", "In stock", "Out of stock", "Preorder", "Made to order"] = ""
+    publicationStatus: Literal["", "draft", "published"] = ""
+
+
+class ProductPayload(CatalogDetailsPayload, ProductSpecificationsPayload):
     id: int | None = None
     slug: str | None = None
     name: str
     category: str
     price: float
-    currency: str = "USD"
-    shortDescription: str
-    description: str
+    currency: str = "CAD"
+    shortDescription: str = ""
+    description: str = ""
     featured: bool = False
     image: str | None = None
     features: list[str] = Field(default_factory=list)
@@ -342,6 +353,13 @@ def delete_catalog_images(item: dict[str, object]) -> None:
         delete_uploaded_image(image)
 
 
+def product_specifications(request: ProductPayload, previous: dict[str, object]) -> dict[str, object]:
+    return {
+        field: getattr(request, field).strip() if field in request.model_fields_set else previous.get(field, "")
+        for field in ProductSpecificationsPayload.model_fields
+    }
+
+
 def delete_uploaded_image(image: object) -> None:
     image_path = str(image or "")
     if not image_path.startswith("/api/uploads/"):
@@ -366,13 +384,18 @@ def verify_admin() -> dict[str, str]:
 
 @app.get("/api/products")
 def get_products() -> dict[str, list[dict[str, object]]]:
+    return {"items": [product for product in load_products() if product.get("publicationStatus") != "draft"]}
+
+
+@app.get("/api/admin/products", dependencies=[Depends(require_admin)])
+def get_admin_products() -> dict[str, list[dict[str, object]]]:
     return {"items": load_products()}
 
 
 @app.get("/api/products/{slug}")
 def get_product_by_slug(slug: str) -> dict[str, object]:
     for product in load_products():
-        if product.get("slug") == slug:
+        if product.get("slug") == slug and product.get("publicationStatus") != "draft":
             return {"item": product}
 
     raise HTTPException(status_code=404, detail="Product not found")
@@ -380,7 +403,7 @@ def get_product_by_slug(slug: str) -> dict[str, object]:
 
 @app.get("/api/categories")
 def get_categories() -> dict[str, list[str]]:
-    categories = sorted({str(product.get("category", "")).strip() for product in load_products() if product.get("category")})
+    categories = sorted({str(product.get("category", "")).strip() for product in load_products() if product.get("category") and product.get("publicationStatus") != "draft"})
     return {"items": categories}
 
 
@@ -417,7 +440,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
             "name": request.name.strip(),
             "category": request.category.strip() or "General",
             "price": float(request.price),
-            "currency": request.currency or "USD",
+            "currency": request.currency or "CAD",
             "shortDescription": request.shortDescription.strip(),
             "description": request.description.strip(),
             "featured": bool(request.featured),
@@ -425,6 +448,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
             "features": [feature.strip() for feature in request.features if feature and feature.strip()],
         }
         product.update(catalog_details(request, {}, "/images/pro-elite.svg"))
+        product.update(product_specifications(request, {}))
         products.append(product)
         save_products(products)
     return {"status": "created", "item": product}
@@ -441,7 +465,7 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                     "name": request.name.strip(),
                     "category": request.category.strip() or "General",
                     "price": float(request.price),
-                    "currency": request.currency or str(product.get("currency", "USD")),
+                    "currency": request.currency if "currency" in request.model_fields_set and request.currency else str(product.get("currency", "USD")),
                     "shortDescription": request.shortDescription.strip(),
                     "description": request.description.strip(),
                     "featured": bool(request.featured),
@@ -449,6 +473,7 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                     "features": [feature.strip() for feature in request.features if feature and feature.strip()],
                 }
                 updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
+                updated.update(product_specifications(request, product))
                 products[index] = updated
                 save_products(products)
                 delete_catalog_images(product)

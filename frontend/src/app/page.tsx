@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { addProductToCart, formatCartSummary, getCartCount, MAX_ITEM_QUANTITY, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
+import { addProductToCart, formatCartSummary, formatPrice, getCartCount, getCartTotals, MAX_ITEM_QUANTITY, readCart, updateCartQuantity, type CartItem } from "@/lib/cart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import BrandLogo from "@/components/BrandLogo";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
@@ -20,60 +20,6 @@ type Product = {
   image?: string;
   features?: string[];
 };
-
-const fallbackProducts: Product[] = [
-  {
-    id: 1,
-    slug: "pro-elite-series",
-    name: "Pro Elite Series",
-    category: "Strength",
-    price: 2499,
-    currency: "USD",
-    shortDescription: "Commercial-grade training for focused, durable performance.",
-    description: "A premium strength platform built for controlled, stable, and high-performance training.",
-    featured: true,
-    image: "/images/pro-elite.svg",
-    features: [
-      "Precision-balanced frame",
-      "Industrial-grade resistance system",
-      "Low-noise operation",
-    ],
-  },
-  {
-    id: 2,
-    slug: "studio-row-compact",
-    name: "Studio Row Compact",
-    category: "Cardio",
-    price: 1899,
-    currency: "USD",
-    shortDescription: "Minimal footprint, low noise, and premium daily use.",
-    description: "A compact cardio machine designed for clean form and premium residential spaces.",
-    featured: true,
-    image: "/images/studio-row.svg",
-    features: [
-      "Compact footprint",
-      "Low-impact cardio training",
-      "Smooth full-body motion",
-    ],
-  },
-  {
-    id: 3,
-    slug: "summit-core-rig",
-    name: "Summit Core Rig",
-    category: "Performance",
-    price: 3299,
-    currency: "USD",
-    shortDescription: "Precision-built frame for serious home training environments.",
-    description: "A premium multi-use training rig built for athletes and serious home setups.",
-    featured: false,
-    image: "/images/summit-core.svg",
-    features: [
-      "Heavy-duty stability frame",
-      "Modular training configuration",
-      "Designed for long-term reliability",
-    ],
-  },
-];
 
 const pillars = [
   "Engineered for long-term durability",
@@ -109,7 +55,8 @@ const brandAssets = [
 ];
 
 export default function Home() {
-  const [products, setProducts] = useState<Product[]>(fallbackProducts);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [catalogError, setCatalogError] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [inquiry, setInquiry] = useState({
@@ -131,11 +78,12 @@ export default function Home() {
         }
 
         const data = await res.json();
-        if (Array.isArray(data.items) && data.items.length > 0) {
+        if (Array.isArray(data.items)) {
           setProducts(data.items as Product[]);
         }
       } catch (error) {
-        console.error("Using fallback product data:", error);
+        console.error("Unable to load products:", error);
+        setCatalogError(true);
       } finally {
         setLoading(false);
       }
@@ -168,11 +116,8 @@ export default function Home() {
       .catch((error) => console.error("Using default home banner:", error));
   }, []);
 
-  const total = useMemo(
-    () =>
-      cart.reduce((sum, item) => {
-        return sum + item.price * item.quantity;
-      }, 0),
+  const totals = useMemo(
+    () => getCartTotals(cart),
     [cart],
   );
 
@@ -331,6 +276,10 @@ export default function Home() {
 
         {loading ? (
           <div className="text-[var(--muted)]">Loading products...</div>
+        ) : catalogError ? (
+          <p className="text-[var(--muted)]">Products are unavailable right now. Please try again later.</p>
+        ) : products.length === 0 ? (
+          <p className="text-[var(--muted)]">No products are currently available.</p>
         ) : (
           <div className="grid gap-7 md:grid-cols-3">
             {products.map((product) => (
@@ -342,18 +291,18 @@ export default function Home() {
                     className="h-64 w-full object-cover"
                   />
                 </div>
-                <div className="mt-5 flex items-center justify-between gap-3">
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                     {product.category}
                   </span>
-                  <span className="text-lg font-semibold">${product.price.toLocaleString()}</span>
+                  <span className="text-lg font-semibold">{formatPrice(product.price, product.currency)}</span>
                 </div>
                 <h3 className="mt-4 text-2xl font-semibold tracking-[-0.04em]">
                   {product.name}
                 </h3>
-                <p className="mt-3 text-base leading-7 text-[var(--muted)]">
+                {product.shortDescription?.trim() ? <p className="mt-3 text-base leading-7 text-[var(--muted)]">
                   {product.shortDescription}
-                </p>
+                </p> : null}
                 <div className="mt-6 flex gap-3">
                   <button
                     type="button"
@@ -443,13 +392,13 @@ export default function Home() {
               </div>
             ) : (
               cart.map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-2xl bg-[#f8f5f2] p-4">
-                  <div>
+                <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#f8f5f2] p-4">
+                  <div className="min-w-0 break-words">
                     <div className="font-medium">{item.name}</div>
                     <div className="text-sm text-[var(--muted)]">Qty: {item.quantity}</div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="font-medium">${(item.price * item.quantity).toLocaleString()}</div>
+                    <div className="font-medium">{formatPrice(item.price * item.quantity, item.currency)}</div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -472,10 +421,16 @@ export default function Home() {
               ))
             )}
           </div>
-          <div className="mt-6 flex items-center justify-between border-t border-[var(--line)] pt-5 text-lg font-semibold">
-            <span>Total</span>
-            <span>${total.toLocaleString()}</span>
-          </div>
+          {totals.length ? (
+            <div className="mt-6 space-y-2 border-t border-[var(--line)] pt-5 text-lg font-semibold">
+              {totals.map(([currency, total]) => (
+                <div key={currency} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Total</span>
+                  <span>{formatPrice(total, currency)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div id="contact" className="soft-panel scroll-mt-24 rounded-[28px] p-6">
