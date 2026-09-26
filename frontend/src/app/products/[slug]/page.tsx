@@ -30,7 +30,7 @@ export default function ProductDetailPage() {
   const slug = params?.slug;
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
-  const { cart, add, error, notice } = useCart();
+  const { cart, add, loading: cartLoading, error, notice } = useCart();
   const action = useRef<HTMLDivElement>(null);
   const [actionVisible, setActionVisible] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -40,7 +40,7 @@ export default function ProductDetailPage() {
 
     const loadProduct = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/products/${slug}`);
+        const res = await fetch(`${API_BASE}/api/products/${slug}`, { cache: "no-store" });
         if (!res.ok) {
           throw new Error("Product not found");
         }
@@ -119,7 +119,7 @@ export default function ProductDetailPage() {
           <div className="min-w-0 break-words">
             {shortDescription ? <p className="whitespace-pre-line text-base leading-7 text-[var(--muted)] lg:text-lg lg:leading-8">{shortDescription}</p> : null}
             <div ref={action} className="my-5 flex flex-wrap gap-3">
-              <button type="button" disabled={atLimit} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50">
+              <button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50">
                 {atLimit ? "Maximum 10 in cart" : "Add to cart"}
               </button>
               <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}#contact`} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">
@@ -162,7 +162,7 @@ export default function ProductDetailPage() {
           </div>
         ) : null}
       </div>
-      {!actionVisible ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="font-semibold">{priceLabel}</span><button type="button" disabled={atLimit} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button></div> : null}
+      {!actionVisible ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="font-semibold">{priceLabel}</span><button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button></div> : null}
     </main>
     </>
   );

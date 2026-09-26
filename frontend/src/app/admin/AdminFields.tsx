@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { emptyProvenance, type Provenance } from "@/lib/catalogDetails";
+import type { MarketCurrency, MarketPrices } from "@/lib/pricing";
 
 export const inputClass = "mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3";
 
@@ -53,11 +54,11 @@ export function parsePrice(value: string): number | null {
 
 export const priceError = "Enter a nonnegative price with no more than two decimal places (for example, 19.99).";
 
-export function PriceInput({ value, onChange, id }: { value: string; onChange: (value: string) => void; id: string }) {
-  const invalid = parsePrice(value) === null;
+export function PriceInput({ value, onChange, id, label = "Retail price", optional = false }: { value: string; onChange: (value: string) => void; id: string; label?: string; optional?: boolean }) {
+  const invalid = !(optional && value === "") && parsePrice(value) === null;
   return (
     <div className="text-sm font-medium">
-      <label htmlFor={id}>Retail price</label>
+      <label htmlFor={id}>{label}</label>
       <input id={id} type="text" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={() => {
         const price = parsePrice(value);
         if (price !== null) onChange(price.toFixed(2));
@@ -65,6 +66,30 @@ export function PriceInput({ value, onChange, id }: { value: string; onChange: (
       {invalid ? <span id={`${id}-error`} className="mt-2 block text-sm text-red-700">{priceError}</span> : null}
     </div>
   );
+}
+
+export function parseMarketPrices(values: Record<MarketCurrency, string>): MarketPrices | null {
+  const CAD = values.CAD === "" ? null : parsePrice(values.CAD);
+  const USD = values.USD === "" ? null : parsePrice(values.USD);
+  if ((values.CAD !== "" && CAD === null) || (values.USD !== "" && USD === null)) return null;
+  return { CAD, USD };
+}
+
+export function MarketPriceInputs({ value, onChange, prefix }: { value: Record<MarketCurrency, string>; onChange: (value: Record<MarketCurrency, string>) => void; prefix: string }) {
+  return <fieldset className="grid min-w-0 gap-4 md:col-span-2 md:grid-cols-2">
+    <legend className="mb-3 text-lg font-semibold">Country pricing</legend>
+    <PriceInput id={`${prefix}-cad`} label="Canada price (CAD)" optional value={value.CAD} onChange={(CAD) => onChange({ ...value, CAD })} />
+    <PriceInput id={`${prefix}-usd`} label="US price (USD)" optional value={value.USD} onChange={(USD) => onChange({ ...value, USD })} />
+    <p className="text-sm text-[var(--muted)] md:col-span-2">USD applies to the US and all countries other than Canada. A blank price hides this item in that market; zero is a valid price. No currency conversion is applied.</p>
+    {(!value.CAD || !value.USD) ? <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:col-span-2">Needs attention: {![value.CAD, value.USD].some(Boolean) ? "Canada and US" : !value.CAD ? "Canada" : "US / other countries"} price missing. This item will not appear in that market.</p> : null}
+  </fieldset>;
+}
+
+export function MarketPriceSummary({ prices }: { prices: MarketPrices }) {
+  return <div className="mt-1 text-sm">
+    <div>CAD {prices.CAD === null ? "Not set" : `$${prices.CAD.toFixed(2)}`} · USD {prices.USD === null ? "Not set" : `$${prices.USD.toFixed(2)}`}</div>
+    {prices.CAD === null || prices.USD === null ? <div className="mt-1 font-medium text-amber-800">Needs attention: missing {prices.CAD === null ? "Canada" : ""}{prices.CAD === null && prices.USD === null ? " and " : ""}{prices.USD === null ? "US" : ""} price</div> : null}
+  </div>;
 }
 
 export function ProvenanceEditor({ value, onChange }: { value?: Provenance; onChange: (value: Provenance) => void }) {

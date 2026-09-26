@@ -10,7 +10,7 @@ import CartFeedback from "@/components/CartFeedback";
 import InquiryForm from "@/components/InquiryForm";
 import PhotoGallery from "@/components/PhotoGallery";
 import { getCatalogPhotos, type CatalogDetails } from "@/lib/catalogDetails";
-import { defaultHero, fetchHero, formatHeroPriceLabel, type Hero } from "@/lib/hero";
+import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 
 type Product = CatalogDetails & {
   id: number;
@@ -36,10 +36,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [hero, setHero] = useState<Hero>(defaultHero);
-  const { cart, add, error, notice } = useCart();
+  const { cart, add, loading: cartLoading, error, notice } = useCart();
   useEffect(() => {
     let active = true;
-    fetch(`${API_BASE}/api/products`).then(async (response) => {
+    fetch(`${API_BASE}/api/products`, { cache: "no-store" }).then(async (response) => {
       if (!response.ok) throw new Error("Unable to load products.");
       const data = await response.json();
       if (!Array.isArray(data.items)) throw new Error("Invalid catalog response.");
@@ -52,7 +52,7 @@ export default function Home() {
     return () => { active = false; };
   }, [retry]);
   useEffect(() => {
-    fetchHero().then(setHero).catch((error) => console.error("Using default home banner:", error));
+    fetchHero().then(setHero).catch((error) => console.error("Unable to load home banner; using defaults:", error));
   }, []);
 
   return (
@@ -80,9 +80,9 @@ export default function Home() {
           <aside aria-label="Home banner" className="hidden rounded-3xl bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-4 text-white md:block lg:p-7">
             <div className="flex items-center justify-between text-sm text-white/80"><span>{hero.tag}</span><span>{hero.number}</span></div>
             <img src={resolveProductImage(hero.image)} alt={`${hero.eyebrow} ${hero.title}`.trim() || "STYL equipment"} fetchPriority="high" className="mt-3 h-32 w-full rounded-xl bg-white/10 object-cover sm:h-48 lg:mt-8 lg:h-64" />
-            <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
-              <div><p className="text-sm text-white/80">{hero.eyebrow}</p><p className="text-2xl font-semibold">{hero.title}</p></div>
-              <span className="text-lg font-medium">{formatHeroPriceLabel(hero.priceLabel)}</span>
+            <div className="mt-3">
+              <p className="text-sm text-white/80">{hero.eyebrow}</p>
+              <p className="text-2xl font-semibold">{hero.title}</p>
             </div>
           </aside>
         </section>
@@ -105,7 +105,7 @@ export default function Home() {
                       <h3 className="mt-2 break-words text-2xl font-semibold"><Link href={`/products/${product.slug}`} className="hover:underline">{product.name}</Link></h3>
                       {product.shortDescription?.trim() ? <p className="mt-3 leading-7 text-[var(--muted)]">{product.shortDescription}</p> : null}
                       <div className="mt-5 flex flex-wrap gap-3">
-                        <button type="button" disabled={atLimit} onClick={() => add(product)} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button>
+                        <button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button>
                         <Link href={`/products/${product.slug}`} className="inline-flex min-h-12 items-center rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium">Details</Link>
                       </div>
                     </article>;

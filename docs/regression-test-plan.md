@@ -1,0 +1,605 @@
+# STYL living regression test plan
+
+Version: 1.0
+
+Updated: 2026-09-26
+
+Scope: System behavior, admin workflows, and customer experience on desktop and
+mobile. This is an expandable test catalog and execution/sign-off process.
+
+Baseline: committed history through `c9837e6` plus the pending Round 2 working
+changes, including the latest **standalone, price-free Home banner** decision.
+Record the exact tested commit and working-tree patch for every future run.
+
+Agent workflow: [styl-regression](../.github/skills/styl-regression/SKILL.md).
+Repository [Copilot instructions](../.github/copilot-instructions.md) route full
+regression requests to this plan and require coverage maintenance for new features
+and bug fixes. The plan remains the source of truth; the skill does not replace
+case-level evidence or make manual checks automatic.
+
+## 1. Purpose and operating rules
+
+A regression pass should answer:
+
+1. Does the system still enforce the correct data, visibility, and privacy rules?
+2. Can a real customer browse, inspect equipment, select items, and request a quote?
+3. Can an administrator edit safely and understand whether changes were saved?
+4. Are previous bugs prevented and agreed enhancements still present?
+5. Which environments and failure cases were actually verified?
+
+Passing tests provides evidence for a defined build and environment; it is not a
+guarantee that every browser, network, deployment, or future data combination works.
+
+### How this document is maintained
+
+- Assign a stable ID to every new case. Never recycle an ID for a different rule.
+- Every bug fix gets a regression case reproducing the failure when feasible.
+- Every enhancement gets both a positive workflow and relevant negative/boundary
+  checks at the system and user levels.
+- Link each case to actual automation where available. Do not label a planned
+  test automated merely because a nearby test exists.
+- Keep the expected behavior synchronized with the latest approved requirements.
+- Retire superseded expectations with a reason; do not silently rewrite history.
+- Do not mark a reported bug Fixed without a reproduced failure and verified fix,
+  or another explicitly documented resolution.
+- Record failures, blocked cases, untested areas, and accepted warnings alongside
+  passes. Never report skipped/blocked/manual-not-run cases as passing.
+
+### Reference documents
+
+- [Current behavior and execution setup](../README.md)
+- [Project history and decisions](project-history.md)
+- [Responsive UX design](mobile-ux-design.md)
+- [GeoIP provisioning and trust boundary](geoip-pricing.md)
+- [Deployment, backup, and rollback](lightsail-deployment.md)
+- [Future catalog/admin schema](catalog-and-admin-schema-design.md)
+
+The future schema is not the current release oracle. Global SKUs, unified
+Equipment/Attachments storage, and fully configurable enums are not implemented
+by the current Round 2 work.
+
+## 2. Current product rules: the regression oracle
+
+These rules supersede earlier requirements when they conflict:
+
+| Area | Current expected behavior |
+| --- | --- |
+| Country prices | Independent Canada/CAD and US/USD values for products and accessories; no currency conversion or copying between markets |
+| Visitor market | Canadian IP location uses CAD; US, other countries, and unknown locations use USD |
+| Missing price | Hide the item for that market, including product detail access and cart eligibility; flag missing markets in admin |
+| Price display | Catalog/detail/cart values include currency and exactly two decimals, e.g. `CAD $4,005.25` |
+| Legacy pricing | Preserve the original price only in its original currency; the other market remains unset |
+| Publication | New Product and Accessory default to Draft; existing Product lifecycle is retained and Accessories gain equivalent controls/filtering |
+| Legacy status | Records without a publication status retain their existing published behavior; unrelated updates do not unpublish them |
+| Categories | One controlled source for both forms; normalize Bench to Benches and case/spacing without a broad taxonomy redesign |
+| Technical content | Separate descriptions, public use, features, included contents, selling unit, finish/colour, compatibility, and optional weight |
+| Captured date | Private date-only `YYYY-MM-DD`; no timezone conversion or day shift |
+| Home banner | Independently editable text and image; no product selector, price field, price preview, or automatic price display |
+| Banner responsive rule | Hidden below 768 CSS px; visible at 768 px and above |
+| Brand principle | Exact statement remains prominent in the introduction, above shopping actions, without an About-section duplicate |
+| Collection shortcut | Browse accessories beside the collection heading is hidden at 1024 px and above; main Accessories navigation remains |
+| Featured | Prioritizes a product within the full eligible homepage collection; does not determine publication |
+| Media | Up to 12 combined photos/videos; images up to 8 MiB, source videos up to 50 MiB |
+| Upload feedback | Current batch results are distinct from unresolved earlier failures; failed-only retry does not resend successful files |
+| Commerce | Cart is a selection for a quote, not a paid order; quantity counts sale units and remains capped at 10 per item |
+| Layout | Mobile and desktop both remain optimized; mobile changes must not remove desktop functionality |
+
+Exact business principle:
+
+> Maximize customer value first, then capture a fair share of the value created.
+
+## 3. Test levels, priority, and coverage notation
+
+### Test levels
+
+- **System:** API validation, persistence, regional selection, authentication,
+  privacy, media processing, caching, recovery, and deployment integration.
+- **End-user/admin:** real browser workflows, keyboard/touch interactions,
+  visible feedback, responsive layout, and saved-state behavior.
+- **Operational:** installed service/proxy configuration, real country database,
+  backup/restore, actual email delivery, and production smoke checks.
+
+### Priority
+
+- **P0:** incorrect money, exposed private/draft data, lost saved data, or a blocked
+  core selection/admin/inquiry flow. Blocks release in the applicable environment.
+- **P1:** important functionality, accessibility, media usability, or navigation.
+  Requires a fix or explicitly approved, documented exception before release.
+- **P2:** lower-risk polish, exploratory checks, and measured improvements.
+
+### Coverage notation used in the catalog
+
+- **A:** existing automation covers the stated core check.
+- **P:** partially automated; complete the remaining manual or additional checks.
+- **M:** manual/operational check; no equivalent complete automation is claimed.
+- **F:** future requirement, not an active release gate until approved/implemented.
+
+Coverage is not a run result. An A case can still be Not run, Failed, or Blocked.
+
+## 4. Existing automation map
+
+Use these short references in the case tables:
+
+| Ref | Source | What it currently provides |
+| --- | --- | --- |
+| B-AUTH | [test_admin_auth.py](../backend/tests/test_admin_auth.py) | Admin access, inquiry validation/storage/email behavior, product specifications/status, gallery persistence and shared-file cleanup, banner updates |
+| B-CAT | [test_catalog_contracts.py](../backend/tests/test_catalog_contracts.py) | Names/prices, accessory fields, provenance privacy, category source, media count and image-size boundary |
+| B-GEO | [test_location.py](../backend/tests/test_location.py) | Country resolver, invalid/private IPs, ignored headers, missing/corrupt/replaced database, reader concurrency; mocked MMDB records |
+| B-REG | [test_regional_catalog.py](../backend/tests/test_regional_catalog.py) | Regional public/API results, no-store headers, missing prices, Draft behavior, legacy mapping, dates/weight, price-free legacy banner |
+| B-MEDIA | [test_media.py](../backend/tests/test_media.py) | Supported video formats, limits, decode/timeouts, conversion/poster, byte ranges, cleanup, real HEVC conversion fixture |
+| U-CART | [cart.test.mjs](../frontend/tests/cart.test.mjs) | Currency formatting, cents, sale-unit text, regional reconciliation, legacy cart compatibility, quantity cap, storage failure |
+| E-CATALOG | [catalog.spec.ts](../frontend/tests/e2e/catalog.spec.ts) | Production-build browser journeys, admin/content/media/cart/inquiry/banner/responsive checks |
+| E-MARKET | [market-ui.spec.ts](../frontend/tests/e2e/market-ui.spec.ts) | Mocked Canadian browser pricing/repricing and visible current-versus-earlier upload results |
+| E-ROUND2 | [round-two.spec.ts](../frontend/tests/e2e/round-two.spec.ts) | Both catalogs: Draft/missing-price/weight/category workflows and exact date entry-to-reload trace |
+
+Representative exact entry points for diagnosis:
+
+- B-REG: `test_country_prices_and_no_shared_cache_for_all_public_surfaces`
+- B-REG: `test_missing_price_hides_item_and_admin_flags_it_without_conversion`
+- B-REG: `test_banner_restores_custom_content_and_never_exposes_legacy_price`
+- B-AUTH: `test_inquiry_storage_failure_does_not_report_success_or_send_email`
+- B-AUTH: `test_uploaded_gallery_reorder_and_cross_catalog_cleanup`
+- E-ROUND2: `${endpoint}: captured date survives editing notes, save and reload`
+- E-CATALOG: `home banner custom content and upload persist without any price information`
+- E-CATALOG: `upload partial failure retries only failed media and enforces 12-item cap`
+- E-MARKET: `a successful new upload batch separates earlier failures from current results`
+
+Do not use a test-name match as proof of every clause in a case. Inspect assertions
+when expanding the coverage map.
+
+## 5. Environments and safe fixture data
+
+### 5.1 Environment matrix
+
+| Environment | Required checks | Important limitation |
+| --- | --- | --- |
+| Local API/unit | All backend and frontend unit checks | Does not exercise production proxy/browser/native controls |
+| Local production-build browser | Desktop Chromium 1440 x 1000, phone Chromium 390 x 844, boundary widths | Phone viewport/touch emulation is not a physical phone |
+| WebKit | Current configured Round 2 date/publication tests | Windows WebKit is not certification of physical iOS Safari; other journeys are not automatically covered by this project |
+| Staging, production-like | Actual Caddy/Uvicorn trust chain, real MMDB, persistence/restart, approved test mailbox | Must use staging data and controlled accounts |
+| Physical devices | iPhone Safari and Android Chrome; portrait/landscape and keyboard | Record OS/browser/device versions, not just "mobile passed" |
+| Production smoke | Read-only public browsing, health/version checks, approved limited admin/mail checks | No destructive fault injection, bulk edits, or unapproved customer-data changes |
+
+Boundary widths: **320, 390, 767, 768, 1023, 1024, 1440 CSS px**.
+Also test text zoom, short landscape heights, long names, and slow connections.
+
+Date timezones: **America/Toronto** and **Pacific/Auckland**.
+When diagnosing physical-device behavior, also record locale, input method,
+autofill, and whether the date was typed by segments or picked from a calendar.
+
+### 5.2 Reusable fixtures
+
+Use unique test names and noncustomer data. Reference examples:
+
+| Fixture | Values / purpose |
+| --- | --- |
+| F-EQUIPMENT | Published equipment; CAD 4005.25; USD 4000.95; weight `35.5 kg`; main image plus second image and short video |
+| F-PAIR | Published attachment/accessory; CAD 29.95; USD 19.95; Pair; package quantity 2; distinct descriptions, use text, and features |
+| F-MISSING-CA | CAD unset; USD 19.95; published; hidden in Canada |
+| F-MISSING-US | CAD 29.95; USD unset; published; hidden for US/other/unknown |
+| F-NO-PRICES | Both prices unset; admin warnings; not public in any market |
+| F-ZERO | Price 0.00 in a selected market; must not be mistaken for missing |
+| F-DRAFT | Both market prices supplied, Draft; privacy tests independent of price hiding |
+| F-LEGACY | Single USD or CAD price; missing status; category `Bench`; image-only media; old cart without optional fields |
+| F-PROVENANCE | Captured date `2026-09-26`; synthetic private marker distinct from every public field |
+| F-BANNER | Independent tag/number/heading/title/image plus a legacy stored priceLabel marker that must never be returned/rendered |
+| F-MEDIA | Valid supported images; deterministic short video with visible progression and audio; invalid/oversized files |
+
+Use a synthetic regional fixture for deterministic UI tests. Separately verify
+real GeoIP with controlled known-country egress against the installed database.
+Do not equate injecting a country header or mocking a JSON response with real
+IP-to-country detection.
+
+### 5.3 Safety and cleanup
+
+- Never point the E2E runner at production storage or a production admin token.
+- The runner creates temporary catalog data and an ephemeral token and disables SMTP.
+- No real customer contact data, production credentials, or private source
+  documents in fixtures or committed snapshots.
+- Failure traces can contain form values and the ephemeral test token. Keep test
+  reports private and ignored by Git; do not upload them blindly.
+- Ensure test ports 3102 and 8102 are free. Do not kill unrelated Node/Python processes.
+- Do not override test data-directory settings with a valuable existing directory:
+  the test harness owns and removes its temporary directory.
+- Clean only specific known test artifacts. Never delete a broad workspace or
+  temporary root to resolve a failed cleanup.
+- GeoIP/provider credentials and licensed databases stay outside the repository.
+
+## 6. When to run which regression set
+
+| Run | Trigger | Minimum scope |
+| --- | --- | --- |
+| Change-focused | Each functional change | Related cases at both layers plus direct downstream consumers |
+| Core smoke | Before handing off a functional build | Authentication, normal create/save/reload, one price/visibility check, browsing/cart/inquiry, banner/navigation |
+| Full code regression | Before merging/pushing a release candidate, or after broad shared-model/UI changes | Backend suite, frontend unit suite, lint, type/build, entire configured E2E suite; examine warnings |
+| Staging release regression | Before deploying a release changing pricing, persistence, proxy, media, or delivery | Full code pass plus applicable physical-device and operational P0/P1 cases |
+| Post-deploy smoke | After deployment | Verify actual deployed revision, health, region pricing/no-store, public visibility, media and approved inquiry flow |
+
+Examples of impact selection:
+
+- Price/model changes: SYS-003 through SYS-009, GEO-001 through GEO-005,
+  ADM-002/005, USR-002/005/006, and inquiry context.
+- Provenance/date changes: SYS-010/011, ADM-004, DATE-001 through DATE-004.
+- Gallery/upload changes: MED-001 through MED-008, ADM-006/007,
+  USR-003, SYS-012, and OPS-003.
+- Shared layout/controls: all USR cases and ADM-001/003/007/008 at desktop/phone
+  boundaries; business principle and banner must remain correct.
+- Banner changes: SYS-013, ADM-008, USR-007/008; shared-image cleanup if uploads change.
+- Publication/category changes: SYS-005/006/007, ADM-002/005,
+  USR-001/002/005 and direct product URL checks.
+
+## 7. System-level test catalog
+
+### 7.1 Core API, persistence, content, and privacy
+
+| ID | Priority | Steps / input | Expected result | Coverage |
+| --- | --- | --- | --- | --- |
+| SYS-001 | P0 | Start frontend/API using isolated configuration; call health and public catalog routes. | Services start; health is valid; empty catalog is distinguishable from a failed request; no test data touches production. | P: E-CATALOG harness; startup/health response contract also inspect manually |
+| SYS-002 | P0 | Use no token, wrong token, valid token, and unconfigured admin access against protected list/write/upload routes. | Unauthorized access rejected; unconfigured access returns the repository-standard unavailable response; failed attempts do not mutate records/files. | P: B-AUTH/B-MEDIA/E-CATALOG cover key paths; expand explicit route matrix as endpoints grow |
+| SYS-003 | P0 | Create and update each catalog using 19, 19.5, 19.95, 0, negative, nonfinite, too-large, and excess-precision prices in each market. | Valid amounts retain cents; invalid values receive clear errors and do not change existing prices. Zero is available; null is missing. | A: B-CAT/B-REG/U-CART; admin cases in E-CATALOG/E-ROUND2 |
+| SYS-004 | P0 | Set CAD and USD independently; update/clear one while omitting the other. Load legacy single-price records. | Other-market price survives; explicit null clears only that market; no exchange-rate conversion/copy; legacy value appears only in original currency. | A: B-REG |
+| SYS-005 | P0 | Create both item types without status; publish, reload, change only status to Draft; request public lists and selection; request product URL directly. | New defaults Draft; published eligible item is visible; Draft excluded from every public surface. Product direct URL returns unavailable. Do not invent an accessory detail endpoint that does not exist. | P: B-AUTH/B-REG/E-ROUND2; maintain explicit endpoint matrix including selection |
+| SYS-006 | P0 | Load legacy records without status; edit an unrelated field while omitting status. | Existing published behavior preserved. No broad migration silently hides legacy items. | A: B-REG, supplemented by legacy fixture review |
+| SYS-007 | P1 | Use Bench, Benches, case/spacing variations, an existing custom category, and an invented category. | One canonical Benches option; both forms share options; old references remain valid; unknown new labels rejected; no unrelated category reclassification. | A: B-CAT/B-REG/E-ROUND2 |
+| SYS-008 | P1 | Save distinct short/full/use descriptions, features, finish, included contents, Pair/2, and weight for both applicable types; reopen and clear optional fields. | No field overwrites another. Spec omission/clear behavior is deliberate; optional unknown values accepted; equipment weight retained. | P: B-CAT/B-REG/E-CATALOG/E-ROUND2; include explicit display check for equipment weight |
+| SYS-009 | P0 | Apply an invalid update to an existing item; simulate an authorized storage failure on isolated/staging data. | No success-shaped response; original valid data remains readable; no partial catalog write. | P: invalid-update preservation covered by B-CAT/B-REG; catalog storage-failure injection needs additional coverage |
+| SYS-010 | P0 | Save unique private notes, source URL/listing ID/date; query admin and every public list/detail/banner/selection route. | Admin sees authorized private fields. Public payloads contain none of those private fields/markers. Hiding HTML alone is insufficient. | P: B-CAT/B-REG/E-CATALOG/E-ROUND2; expand nested-field matrix with future schema additions |
+| SYS-011 | P0 | Enter valid/invalid captured dates, then edit notes; inspect UI value, request, response, persisted record, and reload. | Exact valid date-only string retained; invalid date rejected; no timezone shift or public exposure. | A for exact current trace: B-CAT/B-REG/E-ROUND2; see detailed DATE cases |
+| SYS-012 | P0 | Share uploaded images/video/posters across items and banner; reorder, remove one reference, delete an item, then remove the last reference. | Still-used files remain; only unreferenced uploads are cleaned; order and cover remain correct. | A: B-AUTH/B-MEDIA |
+| SYS-013 | P1 | Load legacy custom banner containing priceLabel; edit tag/number/heading/title/image; save/reload; attempt unsupported price/selector fields. | Original text/image retained, price omitted from API/editor/public output, legacy price removed on subsequent save, unsupported new fields rejected. | A: B-AUTH/B-REG/E-CATALOG |
+| SYS-014 | P0 | Save an inquiry, simulate SMTP absent/failing, then simulate storage failure before notification. | Receipt only after persistence; SMTP failure does not discard inquiry; storage failure is not success and sends no email. | A: B-AUTH; real receipt in E-CATALOG |
+| SYS-015 | P0 | Submit invalid email, whitespace/empty required text, oversized content, and control-character email input. | Clear validation failure; no invalid stored inquiry or unintended mail headers; optional legitimate blanks remain accepted. | P: B-AUTH covers listed API cases; keep client/API validation matrix synchronized |
+
+### 7.2 Regional pricing and GeoIP
+
+| ID | Priority | Steps / input | Expected result | Coverage |
+| --- | --- | --- | --- | --- |
+| GEO-001 | P0 | Resolve controlled CA, US, other-country, unknown, private/local, IPv6, and IPv4-mapped addresses. | CA -> CAD; other/unknown -> USD; nonpublic/invalid addresses do not become guessed countries. Registration country is not visitor location. | A: B-GEO with mocked MMDB |
+| GEO-002 | P0 | Supply untrusted country/forwarded headers to the application; verify actual installed reverse proxy overwrites incoming forwarded IP. | Application does not trust user country headers. Only approved loopback proxy forwarding influences client address. | P: B-GEO checks resolver; real Caddy/Uvicorn chain requires OPS-002 |
+| GEO-003 | P0 | Unset database; missing/unreadable/corrupt file; remove/replace a loaded file; concurrent lookup during replacement. | Unknown/USD fallback, concise diagnostics without IP/secret exposure, no stale country result, safe reader refresh. | A: B-GEO; live update procedure remains operational |
+| GEO-004 | P0 | For F-EQUIPMENT, request public list/detail/selection under CA, US, other, unknown markets. Inspect cache headers. | Exact configured regional price/currency returned; no cross-country shared-cache leakage; location-dependent responses are private/no-store. | A: B-REG; Canadian browser rendering separately E-MARKET |
+| GEO-005 | P0 | View F-MISSING-CA/US/NONE/ZERO under each market, including direct product URL and saved cart. | Missing-market item not exposed; admin warning accurate; no fallback to the other price; zero-price item is not hidden merely for being zero. | A core: B-REG/U-CART/E-MARKET/E-ROUND2; physical/live geography needs OPS-002 |
+| GEO-006 | P1 | Change market between visits and revisit a saved cart/quote; inject a failed current-price request. | Current available items repriced without conversion, unavailable items removed with notice, quantities preserved; failure does not pretend stale prices are current. | P: U-CART/E-MARKET cover reconciliation; extend browser network-failure scenario |
+
+### 7.3 Media processing
+
+| ID | Priority | Steps / input | Expected result | Coverage |
+| --- | --- | --- | --- | --- |
+| MED-001 | P1 | Upload supported image MIME types and video containers; unsupported image type/video extension; malformed/empty video. | Supported content accepted; invalid input rejected with clear error; no empty successful video asset. | P: B-MEDIA/E-CATALOG; supported-image content-decoding validation is not fully certified by MIME-only tests |
+| MED-002 | P0 | Image at 8 MiB and one byte above; video above 50 MiB; converted output at rejection threshold; 12 versus 13 gallery items. | Boundaries enforced server-side and in UI; rejected file/count does not partially save a catalog update. Source byte limits and converted-output limit are tested as distinct rules. | P: B-CAT/B-MEDIA/E-CATALOG; some video size tests use reduced mocked limits, real-size UI check covers >50 MiB |
+| MED-003 | P1 | Upload controlled video with visible progression/audio; HEVC/10-bit fixture; decode returned MP4/poster. | H.264-compatible output and valid poster; full intended duration/audio preserved within documented conversion behavior; original discarded per policy. | P: B-MEDIA/E-CATALOG cover conversion/decode; visual/audio fidelity on real devices in USR-003/OPS-003 |
+| MED-004 | P0 | Request full MP4, explicit range, suffix range, open-ended range, invalid/out-of-bounds range. Seek in browser. | Correct 200/206/416 behavior, Content-Range/length, and functional seeking; no truncated successful playback. | A locally: B-MEDIA/E-CATALOG; installed proxy check in OPS-003 |
+| MED-005 | P1 | Force decode failure, conversion timeout, or an unavailable processor; retry a valid file. | Error is explicit; no incomplete published media; temporary state/lock released for subsequent upload. | A core: B-MEDIA; busy-conversion rejection and storage-unavailable branches should be extended |
+| MED-006 | P1 | First batch partially fails; retry failed files; reselect already uploaded successful files. | Successful media retained; only failed files retried; no duplicate successful uploads. | A: E-CATALOG |
+| MED-007 | P1 | Batch 1 fails, a different Batch 2 succeeds, inspect statuses, expand earlier history, then retry/dismiss old failures. | Current success clearly labeled; old failures are not current red alerts; unresolved old files remain discoverable and retryable. | P: E-MARKET covers separation/expansion; complete old-history retry/dismiss interactions manually or extend automation |
+| MED-008 | P1 | Video first, photo second; reorder; select photo as thumbnail/show first; save/reload; test video-only and legacy image-only records. | Editor accurately explains thumbnail versus first gallery item; order is predictable and preserved; poster fallback works; no duplicate authoritative cover state. | A: B-MEDIA/B-AUTH/U-CART/E-CATALOG |
+
+## 8. Admin end-user test catalog
+
+| ID | Priority | Workflow | Expected user experience | Coverage |
+| --- | --- | --- | --- | --- |
+| ADM-001 | P0 | Sign in, wrong token, session reload, sign out. Test desktop and phone. | Clear error on rejection; correct catalog on success; sign out removes access state; no token shown in content. | A core: E-CATALOG; expired/session-failure paths need continued coverage |
+| ADM-002 | P0 | Create Product and Accessory; inspect default Draft; enter separate country prices; save/reopen; publish/unpublish. | Status/price fields are independent; no unexpected publication; warnings identify missing market; saved state survives reload. | A: E-ROUND2 |
+| ADM-003 | P0 | Edit item A, attempt item/tab/New/back/sign-out navigation; cancel then confirm discard; force save failure and retry. | Cancel retains item/edits; confirmed discard is deliberate; failure retains input; success reflects actual saved item. No late load response resets selection. | P: E-CATALOG covers tab discard and failed-save retry; item/New/back/sign-out and rapid navigation need manual expansion |
+| ADM-004 | P0 | Perform exact Captured date sequence in section 10 on both forms and supported browsers. | Date remains intact before save and after reload; internal notes independent and private. | A core: E-ROUND2; physical segmented typing/calendar behavior M |
+| ADM-005 | P1 | Choose categories, inspect Benches alias cleanup, enter optional equipment weight and all accessory content fields. | Shared controlled list; no lost legacy category; optional blanks allowed; separate public/internal fields understandable. | A core: E-CATALOG/E-ROUND2 |
+| ADM-006 | P1 | Upload several images/video while trying to change tabs/save; observe processing and partial errors. | Busy state prevents conflicting actions; filenames/current batch are understandable; valid successes survive partial failure. | P: E-CATALOG; real large upload/slow-network operator experience M |
+| ADM-007 | P0 | On phone, repeatedly fill Media URL then tap Add through 12 items; focus/blur inputs around the Save bar and virtual keyboard. | Add does not miss taps because layout moved on blur; Save does not cover fields; max count enforced. | A emulated repeated-click regression: E-CATALOG; physical keyboard/safe-area behavior M |
+| ADM-008 | P1 | Open Home banner, edit text, upload an image, save, reopen, and inspect desktop/phone preview. | Independent editor restored; no product selector or price control; original text/image preserved; preview contains no automatic price. | A: E-CATALOG; long-text overflow/manual error recovery P |
+| ADM-009 | P1 | Trigger invalid names/prices/dates/package counts and server-side validation errors. | Clear, reachable error; focus/announcement helpful; invalid save never reported as success; values remain editable. | P: B-CAT/B-REG/E-CATALOG; field-specific accessibility/manual screen-reader check required |
+
+## 9. Customer end-user test catalog
+
+| ID | Priority | Workflow | Expected user experience | Coverage |
+| --- | --- | --- | --- | --- |
+| USR-001 | P0 | Arrive at home, browse products, open a product, visit Accessories, return to collection. | Navigation destinations are correct; no product-browsing CTA unexpectedly leads to contact; eligible content loads, errors/empty states are distinct. | P: E-CATALOG covers main flows and retry; back-position recovery and every CTA M |
+| USR-002 | P0 | Browse each market and missing-price fixture; inspect cards/detail/cart and price decimals. | Correct currency and configured amount; unavailable items absent; no cross-market substitution. | P: B-REG + E-MARKET; actual Canadian/US/other visitors in OPS-002 |
+| USR-003 | P1 | Browse multiple images/video, use thumbnails/swipe/arrows, enlarge/zoom, Escape/close, retry broken media, seek/play/pause. | Controls usable on mouse/keyboard/touch; no unwanted autoplay or hidden background audio; focus returns; vertical page scroll remains usable. | P: E-CATALOG covers core navigation/zoom/seek/error; physical gestures, audio, orientation and focus matrix M |
+| USR-004 | P1 | Open long accessory details with differing descriptions/use/features, blank specs, Pair/2, and compatibility limits. | Complete content readable, blank rows hidden, units unambiguous; important fit limitations remain visible. | A core: E-CATALOG; unusually long-content and screen-reader checks M |
+| USR-005 | P0 | Add a pair, change quantity 1 -> 2 -> 10, reload, remove, clear/cancel, and return to shopping. | Two pairs cost two unit prices, count persists, max 10 enforced, explicit removal/clear behavior, useful empty state. | A: U-CART/E-CATALOG |
+| USR-006 | P0 | Request quote from cart/product; enter contact data; fail a submission, retry, and submit successfully. | Selection context accurate, prices/units current where included, input retained on failure, pending action not repeatedly clickable, cart not cleared, no payment/delivery claim. | A core: B-AUTH/E-CATALOG; no claim of server-side exactly-once submission |
+| USR-007 | P1 | Inspect the homepage principle at 320, 390 and 1440 px. | Exact statement appears once in the introduction above Shop equipment; statement/CTA visible without overflow; mobile collection remains reachable within the defined scroll target. | A: E-CATALOG |
+| USR-008 | P1 | Inspect banner at 767/768 px; inspect Browse accessories shortcut at 1023/1024 px. | Banner hidden below 768, shown above without price; collection shortcut hidden at desktop, main Accessories navigation retained. | A: E-CATALOG |
+| USR-009 | P1 | Compare 320/390/768/1024/1440 layouts, large text, desktop keyboard, phone landscape and virtual keyboard. | No page overflow or covered controls; desktop grids/split panes retained; input labels remain visible; touch targets practical. | P: E-CATALOG checks widths/navigation; real keyboard/zoom/device matrix M |
+| USR-010 | P1 | Use keyboard-only, VoiceOver/TalkBack, reduced motion, and 200% text resizing. | Logical headings/focus, announced errors/results, accessible dialogs, no focus obscured by sticky areas; information not conveyed only by colour. | M, with limited existing role/focus assertions |
+
+## 10. Permanent Captured date diagnostic protocol
+
+The user reported the date clearing before Save and, on an accessory, after
+Save -> Reload. The issue was **not reproduced in the current automated tests**.
+Keep the report and test sequence; do not relabel it Fixed without evidence.
+
+| ID | Priority | Exact procedure | Required evidence / pass condition |
+| --- | --- | --- | --- |
+| DATE-001 | P0 | On a new Product, enter `2026-09-26`; verify display; focus Internal notes and type; inspect date before clicking Save. Repeat on Accessory. | DOM/input value remains `2026-09-26` after notes, blur, and rerender. Capture failures before any database investigation. |
+| DATE-002 | P0 | Save DATE-001; inspect outbound JSON and API response; reload/reopen same record; inspect stored record. | `provenance.capturedDate` equals the exact string at every stage; record ID matches; Internal notes preserved independently. |
+| DATE-003 | P0 | Repeat under Toronto and Auckland timezones; use calendar picker and typed date where physically supported; include rapid date/notes changes. | No blanking, timezone conversion, previous/next-day shift, or field overwrite. Current automation covers fill, blur, same-task events and both timezone contexts; physical segmented typing remains manual. |
+| DATE-004 | P0 | Verify a published, priced record's public list/detail/selection responses and page content. | No captured date, private notes, or source metadata leaks. API redaction, not merely UI hiding. |
+
+If it fails:
+
+1. Record build/patch, browser/OS/device, timezone/locale, record ID, input method,
+   and exact steps.
+2. Compare native input value with parent form state after each event.
+3. Check onChange/onBlur behavior and whether a sibling edit uses an old snapshot.
+4. Check remounts, asynchronous loads, record switching, reset/normalization logic.
+5. Inspect serialization, API validation, write result, and reload mapping in order.
+6. Reduce to a diagnostic form using the same component/event behavior.
+7. Add the failing path to automation before fixing when possible.
+
+Never assume this is a database problem solely because Save/Reload is mentioned.
+Also do not replace a missing reproduction with a speculative date conversion.
+
+## 11. Deployment and operational tests
+
+Run destructive/error-injection cases only in an isolated/staging environment.
+
+| ID | Priority | Procedure | Expected / evidence | Coverage |
+| --- | --- | --- | --- | --- |
+| OPS-001 | P0 | Record deployed commit/config version; validate proxy config; inspect service health; make normal public/API requests. | Correct release actually deployed; no 502/startup/import errors; dependencies/environment align. | M |
+| OPS-002 | P0 | With a licensed current country MMDB installed, use controlled CA/US/other egress. Attempt spoofed inbound forwarded/country headers through the real proxy. Test sequential different-country requests through any cache/CDN. | Server-derived market and prices correct; spoof does not choose market; missing-price hiding works; cache does not replay another market's JSON. Record database/provider version without credentials. | M; offline B-GEO/B-REG are supporting evidence only |
+| OPS-003 | P1 | Upload an approved short clip through staging proxy; play full duration with audio on real iPhone/Android; seek near start/middle/end. | Proxy permits size/processing duration; 206 seeking works; orientation and appearance acceptable; no hidden duplicate audio. | M |
+| OPS-004 | P0 | Save/edit fixture, restart services, deploy code without replacing writable data, and reopen it. | Prices, dates, status, text, media and private provenance survive. Static/upload routes do not expose private data directories. | M |
+| OPS-005 | P0 | Back up staging catalog/media (and GeoIP configuration separately as licensed); restore to isolated destination and compare. Exercise documented code rollback. | Known recovery point; consistent references and identity; rollback does not overwrite production catalog inadvertently. | M |
+| OPS-006 | P0 | Submit an explicitly approved synthetic inquiry to the configured mailbox; inspect message and Reply-To. | Inquiry saved; notification arrives in inbox/spam as checked; recipient and Reply-To correct; no secrets in logs. API "received" alone is not delivery proof. | M; B-AUTH mocks mail transport |
+| OPS-007 | P1 | Block browser storage, fail catalog/current-price requests, interrupt upload, and simulate staging disk-full/permission failure. | Explicit actionable failures, retained drafts/data where promised, no false success or stale-price confidence. | P: unit/browser recovery coverage; staging storage/process faults need more automation |
+| OPS-008 | P1 | Inspect CORS and public port exposure from an approved test host; test an unapproved browser origin. | Only intended origins can use browser APIs; API/service ports not public; CORS is not treated as admin authentication. | M |
+| OPS-009 | P2 | Record mobile/desktop performance on representative 12-media catalogs and slower networks. | No regression against measured baseline; media loading/layout stable. Targets remain LCP <=2.5s, INP <=200ms, CLS <=0.1 when meaningful field data exists. | M; do not claim field performance from a build result |
+
+## 12. Recent bugs/enhancements and permanent traceability
+
+| Change or report | Permanent cases | Notes |
+| --- | --- | --- |
+| Multiple images/videos on homepage product cards | MED-003/004/008, USR-003 | Retain legacy image-only support |
+| Clear admin save errors and failure retention | SYS-009, ADM-003/009 | A successful-looking notice must reflect the API result |
+| Accessory descriptions/features/finish/package fields | SYS-008, ADM-005, USR-004/005 | Do not collapse them back into Notes/use |
+| Private source tracking | SYS-010/011, DATE-004 | Check public JSON, including future nested fields |
+| Exact-cent input and display | SYS-003/004, USR-002/005 | No silent rounding or accidental conversion |
+| Mobile admin list/editor, desktop split layout | ADM-001/003/007, USR-009 | Both device classes are release targets |
+| Mobile Save-bar missed Add-media clicks | ADM-007, MED-006 | Repeat field focus/blur + Add; stable layout is essential |
+| Inquiry persistence and feedback | SYS-014/015, USR-006, OPS-006 | Receipt and email delivery are different assertions |
+| Business principle moved back to introduction | USR-007 | Preserve exact text and prominence |
+| Banner hidden on phones | USR-008, ADM-008 | Verify both sides of 768 px |
+| Duplicate desktop Browse accessories link hidden | USR-008 | Verify both sides of 1024 px and retained main navigation |
+| Independent Canada/US prices and geographic selection | SYS-003/004, GEO-001..006, USR-002/005/006, OPS-002 | Replaces the earlier symbol-only/single-price rules |
+| Missing-market item hiding and admin warning | SYS-004/005, GEO-005, ADM-002 | Absence of price differs from zero |
+| Captured date allegedly clearing | DATE-001..004 | Reported/not reproduced in current tested paths; no speculative fix claimed |
+| New Product Draft default and Accessory parity | SYS-005/006, ADM-002 | Preserve legacy behavior and existing lifecycle |
+| Bench/Benches cleanup | SYS-007, ADM-005 | No broad taxonomy redesign |
+| Optional equipment weight | SYS-008, ADM-005 | No inferred weights |
+| Current versus earlier upload batches | MED-006/007, ADM-006 | Preserve failed-only retry |
+| Restore standalone banner and remove pricing | SYS-013, ADM-008, USR-008 | Product-selector banner expectation is superseded, not current |
+
+Historical commit context: `334d320`, `c412178`, `1f5f58c`, `f142fb6`,
+`aa2861a`, and the pending Round 2 changes. Use the actual tested revision in each
+run report; these milestones are not substitutes for it.
+
+## 13. Commands and repeatable execution
+
+Run from the repository root in PowerShell unless stated otherwise.
+
+### 13.1 Prerequisites
+
+- Use the repository's supported Node/Python environments and installed manifests.
+- Backend dependencies must include the local GeoIP reader and FFmpeg provider.
+- E2E uses the repository-root `.venv` by default, or `STYL_TEST_PYTHON`.
+- Install the configured browsers when missing:
+
+```powershell
+Push-Location frontend
+npx playwright install chromium webkit
+Pop-Location
+```
+
+Do not install arbitrary packages to work around a failing assertion.
+
+### 13.2 Capture the candidate
+
+```powershell
+git rev-parse HEAD
+git status --short
+git diff --stat
+git diff --check
+```
+
+For a dirty candidate, record a reviewed patch identifier/hash and include
+untracked source/tests relevant to that build. A commit SHA alone does not identify
+uncommitted code. Protect patch artifacts from accidentally including secrets.
+
+### 13.3 Full local code regression
+
+Run each command, record its exit status, and stop/triage a failure before claiming
+a full pass:
+
+```powershell
+Push-Location backend
+..\.venv\Scripts\python.exe -m unittest discover -s tests
+Pop-Location
+
+npm --prefix frontend test
+npm --prefix frontend run lint
+npm --prefix frontend run test:e2e
+```
+
+The E2E runner already builds the production frontend and performs the Next.js
+TypeScript build check before starting it. For a build-only check:
+
+```powershell
+npm --prefix frontend run build
+```
+
+Type/lint/build are necessary checks, not replacements for API/browser tests.
+
+### 13.4 Targeted examples
+
+```powershell
+Push-Location frontend
+npm run test:e2e -- --grep "captured date survives"
+npm run test:e2e -- --grep "home banner|business principle|responsive navigation"
+npm run test:e2e -- --project=phone-webkit --grep "captured date survives"
+Pop-Location
+```
+
+Run selectors together when they cover the same change; avoid repeated full builds
+for unrelated one-off assertions. After a broad shared change, still run the
+complete configured suite before release.
+
+### 13.5 Failure handling
+
+- Read the assertion, response, error context, screenshot, and trace.
+- Identify whether the cause is product behavior, a fixture, a selector, a timing
+  assumption, or environment/startup.
+- Wait for actual application states/navigation, not fixed sleeps; do not force
+  clicks past disabled controls to make an end-user test pass.
+- Do not globally relax assertions or enable retries to conceal a regression.
+- If a test was wrong, explain and fix it, then rerun affected and downstream cases.
+- Windows/OneDrive generated-build-file locks are environment failures until
+  diagnosed. Inspect exact files/processes; do not erase source or kill unrelated
+  processes.
+- Preserve failure artifacts privately. Record the successful rerun after the fix;
+  do not erase the history of the failure from the report.
+
+## 14. Sign-off gates and run ledger
+
+### 14.1 Code handoff / push gate
+
+- Tested candidate is identifiable and unchanged since validation.
+- Applicable P0 system/user cases pass.
+- Backend, frontend unit, lint/type/build, and full configured browser suite pass
+  for a broad functional release.
+- New bugs/enhancements have cases and the coverage map is updated.
+- Warnings, manual gaps, and environmental limitations are explicitly documented.
+- No test credentials, database files, customer data, traces, or unapproved local
+  catalog files are staged.
+- A targeted pass is reported as targeted, not a full regression.
+
+### 14.2 Production release gate
+
+In addition to the code gate:
+
+- Applicable operational and physical-device P0/P1 checks pass or have an explicit
+  accountable exception; blocked GeoIP/mail/device checks are not silently waived.
+- Deployment configuration, backups, rollback, and country database are ready.
+- Missing market prices have been reviewed by the catalog owner.
+- The tested release matches the deployed commit/config.
+- Post-deploy smoke results are recorded separately.
+
+### 14.3 Result vocabulary
+
+Use **Pass / Fail / Blocked / Not run / Not applicable** per case and environment.
+
+- Blocked includes missing database, credentials, browser binary, inaccessible
+  staging service, or required physical device.
+- Not applicable requires a reason; it is not a convenient replacement for Not run.
+- Flaky is an issue classification, not a passing result.
+- A report being Not reproduced describes a bug investigation; the regression
+  case itself still has a recorded pass/fail result for the tested path.
+
+### Run record template
+
+```text
+Run ID:
+Date/time and tester:
+Purpose: targeted / full code / staging release / post-deploy
+Commit:
+Working-tree patch identifier (if any):
+Build/deployed revision:
+Config and GeoIP database version (no credentials):
+Node/Python/browser/OS/device versions:
+Viewports, timezone, locale:
+Fixtures and injected failures:
+Commands and exit statuses:
+Case IDs run:
+Pass / Fail / Blocked / Not run / Not applicable counts:
+Failures and linked issues:
+Fix/retest evidence:
+Warnings and accepted exceptions (owner/reason):
+Private artifact location:
+Cleanup result:
+Decision: code-ready / staging-approved / deployed-smoke-pass / blocked
+```
+
+Append a concise entry to [project history](project-history.md), referencing the
+run record and commit. Keep detailed artifacts outside committed docs when they
+contain form data, tokens, or private evidence.
+
+### Evidence available when this plan was written
+
+Latest full automated run: **R2-PUSH-2026-09-26**, recorded in
+[project history](project-history.md#pre-push-regression---r2-push-2026-09-26).
+The final price-free-banner candidate passed 59 backend tests, seven frontend
+unit tests, all 40 configured E2E executions, lint (five warnings, no errors),
+and production build/TypeScript checks. That entry identifies the tested source
+trees and accounts for manual/operational portions as blocked or not run.
+
+Earlier evidence, retained to distinguish what each run actually tested:
+
+- Before the latest banner reversal: 59 backend tests, seven frontend unit tests,
+  and 40 configured E2E executions passed for the Round 2 working build.
+- After restoring the standalone price-free banner: **four targeted backend
+  tests and six targeted browser executions passed**, along with the production
+  build and targeted lint (warnings only).
+- A full-suite pass was not performed as part of initially writing this document.
+  The earlier 40-test run used the then-current selected-product banner behavior;
+  do not describe it as a full certification of the later banner reversal.
+- Physical iOS/Android, live GeoIP/proxy, and mailbox delivery were not certified
+  by those local runs.
+
+Test counts are historical observations, not permanent target counts. As cases are
+added, report the runner's actual count and project matrix.
+
+## 15. Adding tests and managing future scope
+
+### New case template
+
+```text
+ID: <area>-<next unused number>
+Title:
+Requirement / bug / enhancement:
+Priority and level:
+Preconditions and fixture:
+Browser/device/market/timezone:
+Steps:
+Expected results at UI, API, and persistence layers:
+Negative/boundary cases:
+Privacy and cleanup requirements:
+Automation reference:
+Coverage: A / P / M / F
+Owner:
+Last run ID and outcome:
+```
+
+### Change checklist
+
+1. Identify impacted current cases.
+2. Add a failing regression case for a reproducible bug before the fix when possible.
+3. For an enhancement, test absence/invalid/boundary states as well as success.
+4. Update source mapping and, for new automated tests, include the case ID in the
+   test title or an adjacent mapping comment.
+5. Run the appropriate layers; keep successful API tests from masking broken UI.
+6. Update the run ledger and remaining gaps.
+7. Retire superseded cases only with the new requirement and replacement case IDs.
+
+### Prioritized coverage improvements
+
+1. Physical-device DATE/keyboard and media checks; capture the original date
+   reporter's exact browser/input method if it recurs.
+2. Staging real-MMDB/trusted-proxy/cross-country cache checks.
+3. Catalog storage-failure and reload/restart integration checks.
+4. Complete unsaved-navigation matrix and regional-price request failure in browser.
+5. Broader accessibility, real video audio/orientation fidelity, and performance.
+6. Additional image-content validation and media processor busy/storage-failure
+   tests, distinguishing current behavior from proposed stricter validation.
+
+### Future schema cases: not active gates yet
+
+| ID | Future requirement | Activation condition |
+| --- | --- | --- |
+| FUT-001 | Catalog-wide unique SKU, concurrent allocation, correction history, no reuse | SKU model implemented |
+| FUT-002 | Read-only visible Product ID and stable relationships across reclassification | Unified identity model implemented |
+| FUT-003 | Admin-configurable enums, retirement/defaults, reference-safe merges | Reference-data management implemented |
+| FUT-004 | Typed attributes, unit constraints, evidence/review invalidation | Attribute/review model implemented |
+| FUT-005 | Transactional migration/rollback to the approved storage design | Storage migration approved and implemented |
+
+Do not treat these as skipped current tests or use their absence to claim current
+functionality exists. Promote them into active SYS/ADM/USR cases when implemented.

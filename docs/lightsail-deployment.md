@@ -329,11 +329,15 @@ http://54.156.37.31 {
   encode zstd gzip
 
   handle /health {
-    reverse_proxy 127.0.0.1:8000
+    reverse_proxy 127.0.0.1:8000 {
+      header_up X-Forwarded-For {http.request.remote.host}
+    }
   }
 
   handle /api/* {
-    reverse_proxy 127.0.0.1:8000
+    reverse_proxy 127.0.0.1:8000 {
+      header_up X-Forwarded-For {http.request.remote.host}
+    }
   }
 
   handle {
@@ -577,6 +581,21 @@ Common failure checks:
   size with `sudo journalctl --disk-usage`. Do not delete production data casually.
 
 ## Deploy later updates
+
+For regional pricing, also follow [the local GeoIP setup](geoip-pricing.md).
+Provision a country database and configure `STYL_GEOIP_DATABASE`; without it,
+location remains unknown and USD is used. Apply the updated API service's trusted
+loopback proxy flags and the API reverse proxy's explicit client-IP overwrite to
+the installed systemd/Caddy configuration, preserving your actual domain and
+other settings. Validate Caddy, run `systemctl daemon-reload`, then restart the
+affected services. The normal application deploy script does not replace installed
+service or proxy configuration.
+
+Review both country prices in admin before rollout. Legacy single prices stay in
+their original currency; products with no price for a visitor's market are hidden.
+Existing custom Home banner text/image settings remain supported. The removed
+banner price label is ignored by the API and removed from saved configuration
+on the next admin save; catalog regional pricing is unaffected.
 
 Before each update, create a data backup and note the currently deployed commit:
 

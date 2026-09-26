@@ -54,6 +54,7 @@ export const productSpecificationFields = [
   { key: "modelSku", label: "Model / SKU", limit: 200, rows: 1 },
   { key: "dimensions", label: "Dimensions", limit: 500, rows: 2 },
   { key: "material", label: "Material", limit: 500, rows: 2 },
+  { key: "weight", label: "Weight", limit: 500, rows: 1 },
   { key: "colourOptions", label: "Colour / options", limit: 1000, rows: 2 },
   { key: "included", label: "What's included", limit: 4000, rows: 3 },
   { key: "warranty", label: "Warranty", limit: 4000, rows: 3 },

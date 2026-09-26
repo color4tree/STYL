@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
-import { formatCartSummary, readCart } from "@/lib/cart";
+import { formatCartSummary, readCart, reconcileCart, writeCart } from "@/lib/cart";
+import { fetchCatalogSelection } from "@/lib/catalogSelection";
 
 const emptyInquiry = { name: "", email: "", phone: "", company: "", message: "" };
 
@@ -13,19 +14,31 @@ export default function InquiryForm() {
   const [status, setStatus] = useState<{ error: boolean; text: string } | null>(null);
   const messageRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
-    void Promise.resolve().then(() => {
+    let active = true;
+    const controller = new AbortController();
+    void Promise.resolve().then(async () => {
       const params = new URLSearchParams(window.location.search);
       try {
+        let selection = "";
+        if (params.get("quote") === "cart") {
+          const { items } = await fetchCatalogSelection(controller.signal);
+          if (!active) return;
+          const previous = readCart();
+          const current = reconcileCart(previous, items);
+          if (JSON.stringify(previous) !== JSON.stringify(current)) writeCart(current);
+          selection = formatCartSummary(current);
+        }
         const message = params.get("quote") === "cart"
-          ? `${formatCartSummary(readCart())} Please share final pricing and delivery details.`
+          ? `${selection} Please share final pricing and delivery details.`
           : params.get("quote") === "product" && params.get("product")
             ? `I am interested in ${params.get("product")}. Please share options, pricing, and lead time.`
             : "";
-        if (message) setInquiry((current) => current.message ? current : { ...current, message });
+        if (active && message) setInquiry((current) => current.message ? current : { ...current, message });
       } catch (error) {
-        setStatus({ error: true, text: error instanceof Error ? error.message : "Unable to load your selection." });
+        if (active) setStatus({ error: true, text: error instanceof Error ? error.message : "Unable to load your selection." });
       }
     });
+    return () => { active = false; controller.abort(); };
   }, []);
   useEffect(() => { if (status?.error) messageRef.current?.focus(); }, [status]);
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {

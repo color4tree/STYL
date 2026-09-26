@@ -36,12 +36,22 @@ beforeEach(() => {
   };
 });
 
-test("prices consistently show two decimals without changing currency labels", () => {
+test("prices consistently show their currency and two decimals", () => {
   for (const currency of ["CAD", "USD"]) {
-    assert.equal(cart.formatPrice(19, currency), "$19.00");
-    assert.equal(cart.formatPrice(19.5, currency), "$19.50");
-    assert.equal(cart.formatPrice(19.95, currency), "$19.95");
+    assert.equal(cart.formatPrice(19, currency), `${currency} $19.00`);
+    assert.equal(cart.formatPrice(19.5, currency), `${currency} $19.50`);
+    assert.equal(cart.formatPrice(19.95, currency), `${currency} $19.95`);
   }
+});
+
+test("saved cart is repriced and unavailable regional items are removed", () => {
+  const saved = [
+    { id: 1, name: "Rack", price: 4000, currency: "USD", quantity: 2 },
+    { id: 2, name: "Canada unavailable", price: 19, currency: "USD", quantity: 1 },
+  ];
+  assert.deepEqual(cart.reconcileCart(saved, [{ id: 1, name: "Rack", price: 4005, currency: "CAD" }]), [
+    { id: 1, name: "Rack", price: 4005, currency: "CAD", quantity: 2 },
+  ]);
 });
 
 test("cart arithmetic uses cents and keeps currencies separate", () => {

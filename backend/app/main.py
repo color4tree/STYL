@@ -15,17 +15,18 @@ from email.message import EmailMessage
 from pathlib import Path
 from threading import Lock
 from collections.abc import Iterator
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import uuid4
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.media import VIDEO_FORMATS, upload_video, video_response
+from app.location import MarketContext, resolve_market
 
 APP_PATH = Path(__file__).resolve().parent
 CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
@@ -61,8 +62,9 @@ IMAGE_EXTENSIONS = {
 CATALOG_CATEGORIES = (
     "Strength", "Racks", "Multi trainers", "Benches", "Cardio", "Recovery",
     "Accessories", "General", "Bar", "Handle", "Strap", "Upper frame",
-    "Hardware", "Bench", "Storage", "Performance",
+    "Hardware", "Storage", "Performance",
 )
+CATEGORY_ALIASES = {"bench": "Benches"}
 
 UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -127,18 +129,32 @@ class ProvenancePayload(BaseModel):
         return value
 
 
+def validate_price_range(value: Decimal) -> Decimal:
+    numeric = float(value)
+    if not math.isfinite(numeric) or Decimal(str(numeric)) != value:
+        raise ValueError("Price is too large to preserve its decimal value.")
+    return value
+
+
+Price = Annotated[Decimal, Field(ge=0, decimal_places=2, allow_inf_nan=False), AfterValidator(validate_price_range)]
+
+
+class MarketPricesPayload(BaseModel):
+    CAD: Price | None = None
+    USD: Price | None = None
+
+
 class CatalogIdentityPayload(BaseModel):
     name: str = Field(max_length=200)
     category: str = Field(max_length=300)
-    price: Decimal = Field(ge=0, decimal_places=2, allow_inf_nan=False)
+    price: Price | None = None
+    prices: MarketPricesPayload | None = None
 
-    @field_validator("price")
-    @classmethod
-    def validate_price_range(cls, value: Decimal) -> Decimal:
-        numeric = float(value)
-        if not math.isfinite(numeric) or Decimal(str(numeric)) != value:
-            raise ValueError("Price is too large to preserve its decimal value.")
-        return value
+    @model_validator(mode="after")
+    def validate_prices_object(self) -> CatalogIdentityPayload:
+        if "prices" in self.model_fields_set and self.prices is None:
+            raise ValueError("Prices must be an object with CAD and/or USD values; use null for an unavailable market.")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -159,11 +175,12 @@ class ProductSpecificationsPayload(BaseModel):
     modelSku: str = Field(default="", max_length=200)
     dimensions: str = Field(default="", max_length=500)
     material: str = Field(default="", max_length=500)
+    weight: str = Field(default="", max_length=500)
     included: str = Field(default="", max_length=4000)
     colourOptions: str = Field(default="", max_length=1000)
     warranty: str = Field(default="", max_length=4000)
     stockStatus: Literal["", "In stock", "Out of stock", "Preorder", "Made to order"] = ""
-    publicationStatus: Literal["", "draft", "published"] = ""
+    publicationStatus: Literal["", "draft", "published"] = "draft"
 
 
 class ProductPayload(CatalogDetailsPayload, ProductSpecificationsPayload, CatalogIdentityPayload):
@@ -185,6 +202,7 @@ class AccessorySpecificationsPayload(BaseModel):
     sellingUnit: Literal["", "Each", "Pair", "Set"] = ""
     packageQuantity: int | None = Field(default=None, ge=1, strict=True)
     colourOptions: str = Field(default="", max_length=1000)
+    publicationStatus: Literal["", "draft", "published"] = "draft"
 
     @field_validator("features")
     @classmethod
@@ -204,20 +222,16 @@ class AccessoryPayload(CatalogDetailsPayload, AccessorySpecificationsPayload, Ca
 
 
 class HeroPayload(BaseModel):
+    model_config = {"extra": "forbid"}
     tag: str = Field(default="", max_length=40)
     number: str = Field(default="", max_length=10)
     eyebrow: str = Field(default="", max_length=60)
     title: str = Field(default="", max_length=80)
-    priceLabel: str = Field(default="", max_length=40)
     image: str = Field(default="", max_length=500)
 
 
 DEFAULT_HERO = HeroPayload(
-    tag="Signature",
-    number="01",
-    eyebrow="Pro Elite",
-    title="Series X",
-    priceLabel="$2,499",
+    tag="Signature", number="01", eyebrow="Pro Elite", title="Series X",
     image="/images/brand/frame-badge.jpg",
 )
 
@@ -388,22 +402,78 @@ def load_accessories() -> list[dict[str, object]]:
 def catalog_categories() -> list[str]:
     categories = {category.casefold(): category for category in CATALOG_CATEGORIES}
     for item in [*load_products(), *load_accessories()]:
-        category = " ".join(str(item.get("category") or "").split())
+        category = normalize_category(str(item.get("category") or ""))
         if category:
             categories.setdefault(category.casefold(), category)
     return sorted(categories.values(), key=str.casefold)
 
 
 def canonical_category(value: str) -> str:
-    normalized = " ".join(value.split())
+    normalized = normalize_category(value)
     for category in catalog_categories():
         if category.casefold() == normalized.casefold():
             return category
     raise HTTPException(status_code=422, detail="Choose an existing catalog category.")
 
 
-def public_catalog_item(item: dict[str, object]) -> dict[str, object]:
-    return {key: value for key, value in item.items() if key != "provenance"}
+def normalize_category(value: str) -> str:
+    normalized = " ".join(value.split())
+    return CATEGORY_ALIASES.get(normalized.casefold(), normalized)
+
+
+def stored_prices(item: dict[str, object]) -> dict[str, float | None]:
+    result: dict[str, float | None] = {"CAD": None, "USD": None}
+    existing = item.get("prices")
+    if isinstance(existing, dict):
+        for currency in result:
+            value = existing.get(currency)
+            if value is not None:
+                result[currency] = float(value)
+    elif item.get("price") is not None:
+        currency = str(item.get("currency") or "USD")
+        if currency in result:
+            result[currency] = float(item["price"])
+    return result
+
+
+def catalog_prices(request: ProductPayload | AccessoryPayload, previous: dict[str, object]) -> dict[str, object]:
+    prices = stored_prices(previous)
+    currency = request.currency if "currency" in request.model_fields_set else str(previous.get("currency") or request.currency)
+    if request.prices is not None:
+        for code in request.prices.model_fields_set:
+            value = getattr(request.prices, code)
+            prices[code] = float(value) if value is not None else None
+    elif "price" in request.model_fields_set:
+        prices[currency] = float(request.price) if request.price is not None else None
+    return {"prices": prices, "currency": currency, "price": prices.get(currency)}
+
+
+def admin_catalog_item(item: dict[str, object]) -> dict[str, object]:
+    prices = stored_prices(item)
+    return {
+        **item, "prices": prices,
+        "category": normalize_category(str(item.get("category") or "")),
+        "publicationStatus": item.get("publicationStatus") or "published",
+        "missingPriceMarkets": [code for code, amount in prices.items() if amount is None],
+    }
+
+
+def public_catalog_item(item: dict[str, object], market: MarketContext) -> dict[str, object]:
+    price = stored_prices(item)[market["currency"]]
+    return {
+        **{key: value for key, value in item.items() if key not in ("provenance", "prices", "missingPriceMarkets")},
+        "category": normalize_category(str(item.get("category") or "")),
+        "price": price, "currency": market["currency"],
+    }
+
+
+def visible_in_market(item: dict[str, object], market: MarketContext) -> bool:
+    return item.get("publicationStatus") != "draft" and stored_prices(item)[market["currency"]] is not None
+
+
+def request_market(request: Request, response: Response) -> MarketContext:
+    response.headers["Cache-Control"] = "private, no-store"
+    return resolve_market(request)
 
 
 def catalog_provenance(request: CatalogDetailsPayload, previous: dict[str, object]) -> dict[str, object]:
@@ -415,7 +485,8 @@ def catalog_provenance(request: CatalogDetailsPayload, previous: dict[str, objec
 def accessory_specifications(request: AccessoryPayload, previous: dict[str, object]) -> dict[str, object]:
     fields = {}
     for field in AccessorySpecificationsPayload.model_fields:
-        value = getattr(request, field) if field in request.model_fields_set else previous.get(field, getattr(request, field))
+        default = "published" if field == "publicationStatus" and previous else getattr(request, field)
+        value = getattr(request, field) if field in request.model_fields_set else previous.get(field, default)
         fields[field] = value.strip() if isinstance(value, str) else value
     return fields
 
@@ -428,8 +499,6 @@ def accessory_from_payload(accessory_id: int, request: AccessoryPayload, fallbac
         "dimensions": request.dimensions.strip(),
         "material": request.material.strip(),
         "weight": request.weight.strip(),
-        "price": float(request.price),
-        "currency": request.currency or "USD",
         "notes": request.notes.strip(),
         "image": request.image or fallback_image,
     }
@@ -476,7 +545,9 @@ def delete_catalog_images(item: dict[str, object]) -> None:
 
 def product_specifications(request: ProductPayload, previous: dict[str, object]) -> dict[str, object]:
     return {
-        field: getattr(request, field).strip() if field in request.model_fields_set else previous.get(field, "")
+        field: getattr(request, field).strip() if field in request.model_fields_set else previous.get(
+            field, ("published" if previous else "draft") if field == "publicationStatus" else "",
+        )
         for field in ProductSpecificationsPayload.model_fields
     }
 
@@ -509,13 +580,30 @@ def verify_admin() -> dict[str, str]:
 
 
 @app.get("/api/products")
-def get_products() -> dict[str, list[dict[str, object]]]:
-    return {"items": [public_catalog_item(product) for product in load_products() if product.get("publicationStatus") != "draft"]}
+def get_products(request: Request, response: Response) -> dict[str, object]:
+    market = request_market(request, response)
+    return {"items": [public_catalog_item(product, market) for product in load_products() if visible_in_market(product, market)], "market": market}
+
+
+@app.get("/api/market")
+def get_market(request: Request, response: Response) -> MarketContext:
+    return request_market(request, response)
+
+
+@app.get("/api/catalog/selection")
+def get_catalog_selection(request: Request, response: Response) -> dict[str, object]:
+    market = request_market(request, response)
+    items = [
+        {key: value for key, value in public_catalog_item(item, market).items()
+         if key in ("id", "name", "slug", "price", "currency", "sellingUnit", "packageQuantity")}
+        for item in [*load_products(), *load_accessories()] if visible_in_market(item, market)
+    ]
+    return {"items": items, "market": market}
 
 
 @app.get("/api/admin/products", dependencies=[Depends(require_admin)])
 def get_admin_products() -> dict[str, list[dict[str, object]]]:
-    return {"items": load_products()}
+    return {"items": [admin_catalog_item(item) for item in load_products()]}
 
 
 @app.get("/api/admin/categories", dependencies=[Depends(require_admin)])
@@ -524,17 +612,19 @@ def get_admin_categories() -> dict[str, list[str]]:
 
 
 @app.get("/api/products/{slug}")
-def get_product_by_slug(slug: str) -> dict[str, object]:
+def get_product_by_slug(slug: str, request: Request, response: Response) -> dict[str, object]:
+    market = request_market(request, response)
     for product in load_products():
-        if product.get("slug") == slug and product.get("publicationStatus") != "draft":
-            return {"item": public_catalog_item(product)}
+        if product.get("slug") == slug and visible_in_market(product, market):
+            return {"item": public_catalog_item(product, market), "market": market}
 
-    raise HTTPException(status_code=404, detail="Product not found")
+    raise HTTPException(status_code=404, detail="Product not found", headers={"Cache-Control": "private, no-store"})
 
 
 @app.get("/api/categories")
-def get_categories() -> dict[str, list[str]]:
-    categories = sorted({str(product.get("category", "")).strip() for product in load_products() if product.get("category") and product.get("publicationStatus") != "draft"})
+def get_categories(request: Request, response: Response) -> dict[str, list[str]]:
+    market = request_market(request, response)
+    categories = sorted({normalize_category(str(product.get("category", ""))) for product in load_products() if product.get("category") and visible_in_market(product, market)})
     return {"items": categories}
 
 
@@ -575,8 +665,6 @@ def create_product(request: ProductPayload) -> dict[str, object]:
             "slug": slug,
             "name": request.name.strip(),
             "category": canonical_category(request.category),
-            "price": float(request.price),
-            "currency": request.currency or "CAD",
             "shortDescription": request.shortDescription.strip(),
             "description": request.description.strip(),
             "featured": bool(request.featured),
@@ -584,11 +672,12 @@ def create_product(request: ProductPayload) -> dict[str, object]:
             "features": [feature.strip() for feature in request.features if feature and feature.strip()],
         }
         product.update(catalog_details(request, {}, "/images/pro-elite.svg"))
+        product.update(catalog_prices(request, {}))
         product.update(product_specifications(request, {}))
         product.update(catalog_provenance(request, {}))
         products.append(product)
         save_products(products)
-    return {"status": "created", "item": product}
+    return {"status": "created", "item": admin_catalog_item(product)}
 
 
 @app.put("/api/products/{product_id}", dependencies=[Depends(require_admin)])
@@ -601,8 +690,6 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                     "slug": request.slug or str(product.get("slug")) or slugify(request.name),
                     "name": request.name.strip(),
                     "category": canonical_category(request.category),
-                    "price": float(request.price),
-                    "currency": request.currency if "currency" in request.model_fields_set and request.currency else str(product.get("currency", "USD")),
                     "shortDescription": request.shortDescription.strip(),
                     "description": request.description.strip(),
                     "featured": bool(request.featured),
@@ -610,12 +697,13 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                     "features": [feature.strip() for feature in request.features if feature and feature.strip()],
                 }
                 updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
+                updated.update(catalog_prices(request, product))
                 updated.update(product_specifications(request, product))
                 updated.update(catalog_provenance(request, product))
                 products[index] = updated
                 save_products(products)
                 delete_catalog_images(product)
-                return {"status": "updated", "item": updated}
+                return {"status": "updated", "item": admin_catalog_item(updated)}
 
     raise HTTPException(status_code=404, detail="Product not found")
 
@@ -638,13 +726,14 @@ def delete_product(product_id: int) -> dict[str, str]:
 
 
 @app.get("/api/accessories")
-def get_accessories() -> dict[str, list[dict[str, object]]]:
-    return {"items": [public_catalog_item(item) for item in load_accessories()]}
+def get_accessories(request: Request, response: Response) -> dict[str, object]:
+    market = request_market(request, response)
+    return {"items": [public_catalog_item(item, market) for item in load_accessories() if visible_in_market(item, market)], "market": market}
 
 
 @app.get("/api/admin/accessories", dependencies=[Depends(require_admin)])
 def get_admin_accessories() -> dict[str, list[dict[str, object]]]:
-    return {"items": load_accessories()}
+    return {"items": [admin_catalog_item(item) for item in load_accessories()]}
 
 
 @app.post("/api/accessories", dependencies=[Depends(require_admin)])
@@ -661,11 +750,12 @@ def create_accessory(request: AccessoryPayload) -> dict[str, object]:
             "/images/accessories/straight-bar.svg",
         )
         created.update(catalog_details(request, {}, "/images/accessories/straight-bar.svg"))
+        created.update(catalog_prices(request, {}))
         created.update(accessory_specifications(request, {}))
         created.update(catalog_provenance(request, {}))
         accessories.append(created)
         write_json_list(ACCESSORIES_PATH, accessories)
-    return {"status": "created", "item": created}
+    return {"status": "created", "item": admin_catalog_item(created)}
 
 
 @app.put("/api/accessories/{accessory_id}", dependencies=[Depends(require_admin)])
@@ -679,12 +769,13 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
             if int(existing.get("id", 0)) == accessory_id:
                 updated = accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))
                 updated.update(catalog_details(request, existing, "/images/accessories/straight-bar.svg"))
+                updated.update(catalog_prices(request, existing))
                 updated.update(accessory_specifications(request, existing))
                 updated.update(catalog_provenance(request, existing))
                 accessories[index] = updated
                 write_json_list(ACCESSORIES_PATH, accessories)
                 delete_catalog_images(existing)
-                return {"status": "updated", "item": updated}
+                return {"status": "updated", "item": admin_catalog_item(updated)}
 
     raise HTTPException(status_code=404, detail="Accessory not found")
 
@@ -705,13 +796,24 @@ def delete_accessory(accessory_id: int) -> dict[str, str]:
 def load_hero() -> dict[str, object]:
     try:
         data = json.loads(HERO_PATH.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            data.pop("priceLabel", None)
         return HeroPayload(**data).model_dump()
-    except (FileNotFoundError, json.JSONDecodeError, TypeError, ValueError):
+    except FileNotFoundError:
+        return DEFAULT_HERO.model_dump()
+    except (json.JSONDecodeError, TypeError, ValueError):
+        logger.error("Invalid home banner configuration; using the default banner.")
         return DEFAULT_HERO.model_dump()
 
 
 @app.get("/api/hero")
-def get_hero() -> dict[str, object]:
+def get_hero(response: Response) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
+    return {"item": load_hero()}
+
+
+@app.get("/api/admin/hero", dependencies=[Depends(require_admin)])
+def get_admin_hero() -> dict[str, object]:
     return {"item": load_hero()}
 
 

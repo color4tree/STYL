@@ -6,6 +6,15 @@ Date: 2026-09-25
 
 Current implementation reference: `c412178`
 
+Round 2 implementation update (2026-09-26): separate Canada/CAD and US/USD prices,
+IP-based market selection, missing-market item hiding, new-item Draft defaults,
+and accessory Draft/Published parity are now authorized. The Home banner keeps
+its independent text/image configuration but removes price information; the
+proposed product-selector approach was withdrawn. These decisions
+supersede the historical single-price and currency/publication holds below.
+The broader unified schema/SKU/storage migration remains a target design;
+see [README](../README.md) for current implementation behavior.
+
 ## 1. Decisions and scope
 
 ### 1.1 Confirmed requirements
@@ -966,9 +975,9 @@ query-language strings.
 position, isActive. Targets are approved routes/collections, not arbitrary
 executable or credential-bearing URLs.
 
-`homeBanner`: existing text fields and price-label copy, media reference, version/
-audit fields. It remains promotional content, not a second source for a product's
-actual catalog price.
+`homeBanner`: tag, number, small heading, title, media reference, and version/audit
+fields. It remains independent promotional content with no price field or display,
+not a second source for a product's actual catalog price.
 
 Keep the existing full home collection with Featured products first.
 Do not add an attachment Featured toggle or change merchandising behavior merely

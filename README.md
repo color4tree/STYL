@@ -4,6 +4,9 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 
 ## Project structure
 
+- [Project history and handoff](docs/project-history.md) — implementation milestones, agreed decisions, verification results, and remaining work
+- [Living regression test plan](docs/regression-test-plan.md) — system and end-user cases, automation mapping, release gates, and an expandable run-record template
+- [STYL regression agent skill](.github/skills/styl-regression/SKILL.md) — full-regression workflow and automatic coverage-maintenance guidance for new features and fixes
 - [Product catalog and admin schema design](docs/catalog-and-admin-schema-design.md) — target data model, catalog-wide SKUs, configurable admin options, and migration plan (design draft, not yet implemented)
 - [Accessory schema review](docs/accessory-schema-review.md) — proposal evaluation and rationale for the catalog design
 - [docs/STYL Portal Design.md](docs/STYL%20Portal%20Design.md) — product strategy, UX goals, and technical proposal
@@ -108,9 +111,18 @@ The project includes a lightweight admin page for editing product catalog data, 
 
 ## Product and accessory videos
 
-Products and accessories support CAD and USD only. New admin entries default to
-CAD; existing entries retain their saved currency. Storefront prices display
-only `$`, while cart totals remain grouped by currency without conversion.
+Products and accessories have separate Canada (CAD) and US (USD) prices.
+Canadian IP locations use CAD; the US, other countries, and unknown locations use
+USD. Storefront prices include the currency, such as `CAD $4,005.25`.
+Country lookup uses a [server-local GeoIP database](docs/geoip-pricing.md), never
+an external visitor-IP lookup service. Provision the database and trusted proxy
+configuration at deployment; without it, unknown/USD is used.
+
+An item with no price for the visitor's market is hidden from that market's
+catalog and detail access. Admin flags missing prices for review.
+Legacy single prices map only to their original currency; no amount is copied
+or converted into the other currency. Saved carts refresh current regional
+prices and remove unavailable items with a notice; quote text uses those prices.
 Home product cards use the same photo/video gallery as accessories and product
 detail pages, managed through the shared admin media editor.
 
@@ -119,8 +131,12 @@ detail pages, managed through the shared admin media editor.
 Product and accessory prices accept nonnegative values with up to two decimal
 places. Admin previews, catalog prices, and cart amounts show two decimal places.
 The cart calculates line amounts and totals in cents without combining currencies.
-Plain dollar amounts in the home banner also display two decimals; other
-promotional banner text is preserved.
+The Home banner is an independent text-and-image panel, with editable tag, number,
+small heading, title, and an uploaded image or image URL. It has no price field,
+price display, or catalog-product selector. Legacy banner `priceLabel` values are
+ignored on read and removed on the next admin save; the original text and image
+remain usable. The banner stays hidden below 768 CSS px. Regional product prices
+continue to appear in the catalog, product details, and cart.
 
 The full home collection remains visible; Featured items appear first. Accessories
 support a short description, full description, features, finish/colour, included
@@ -130,8 +146,11 @@ selling unit remain unspecified; editors must confirm units rather than infer th
 from product names. Expanded accessory details keep long information readable.
 
 Categories use the authenticated catalog category list, including existing legacy
-values. New taxonomy entries require an intentional catalog-maintenance change;
-near-duplicate case/spacing is normalized. Internal source/provenance information
+values. `Bench` maps to `Benches` in both catalogs; existing records remain valid
+and normalize when saved. New taxonomy entries require an intentional
+catalog-maintenance change; near-duplicate case/spacing is normalized.
+Product/equipment weight is optional text, matching accessory weight.
+Internal source/provenance information
 is available only in authenticated admin responses and is omitted from public
 catalog responses. Do not put private migration notes into public use descriptions.
 
@@ -139,7 +158,21 @@ Mobile navigation, larger touch controls, compact catalog-to-editor transitions,
 unsaved-change protection, and safe-area-aware actions complement the desktop
 navigation, catalog grids, and split-pane admin editor. Inquiry fields retain input
 after failure and show submission status; the cart is not cleared by an inquiry.
-No payment is collected. Draft/publication behavior is unchanged.
+No payment is collected. New products and accessories default to Draft. Accessories
+use the same Draft/Published control and public filtering as products. Existing
+records without a status remain published; omitted status on an update preserves
+the previous state.
+
+Captured date stays a private, date-only `YYYY-MM-DD` string. The reported
+`2026-09-26` clearing problem was not reproduced in the current code: tests cover
+date entry, moving to notes, rerenders, same-task input events, submitted JSON,
+saved data, and reload in Chromium and WebKit with Toronto and Auckland timezones.
+No timezone conversion or speculative date fix was added. Physical-device/browser
+differences still require investigation if the issue persists.
+
+Upload feedback identifies the current numbered batch. Unresolved older failures
+are shown separately under a collapsed "Earlier upload attempts" section; current
+success is not presented as a current failure. Failed-only retries are preserved.
 
 Run frontend regression tests with `npm --prefix frontend test`, lint with
 `npm --prefix frontend run lint`, and build with `npm --prefix frontend run build`.
@@ -149,7 +182,20 @@ keyboard, audio/video playback, seeking, and physical touch behavior.
 
 ### Repeatable end-to-end tests
 
-From `frontend`, run `npx playwright install chromium` once, then
+For Copilot/Agent Skills clients, the repository includes the
+[`styl-regression` skill](.github/skills/styl-regression/SKILL.md) and
+[project Copilot instructions](.github/copilot-instructions.md).
+Ask "run regression" to request the full active plan, or invoke
+`/styl-regression` in clients that expose skills as slash commands. New features
+and fixes must add/update plan cases and executable tests. Reload skill discovery
+or start a new chat if newly added project customizations are not yet listed.
+The skill is an agent workflow, not a background job or a CI guarantee.
+
+Use the [living regression test plan](docs/regression-test-plan.md) to select
+system/user cases, record the exact tested revision, and distinguish a local code
+pass from production and physical-device verification.
+
+From `frontend`, run `npx playwright install chromium webkit` once, then
 `npm run test:e2e`. The suite builds and starts the production frontend on
 `127.0.0.1:3102` and a real API on `127.0.0.1:8102`. Both ports must be free; it
 deliberately refuses to reuse an existing server. Backend requirements must be
@@ -161,15 +207,19 @@ data. SMTP is disabled; inquiry persistence is verified without sending mail.
 Temporary catalog files are removed after the run. Failure screenshots and traces
 remain under the ignored `frontend/test-results/` directory.
 
-The browser checks cover desktop and phone-sized Chromium: authentication, accessory
+The browser checks cover desktop and phone-sized Chromium, with additional
+WebKit date/publication checks: authentication, accessory
 editing and reload, exact-cent prices, selling units, private provenance,
 save failures and unsaved-change guards, deletion, photo/video upload and reorder,
 real video seeking, failed-only upload retry, media limits, cart quantities,
 inquiry errors and storage, navigation, responsive layouts, prominent homepage
-business-principle placement, home banner updates,
+business-principle placement, custom price-free banners, regional prices and
+missing-price visibility, date persistence across timezones, upload batch history,
 and unavailable-media recovery. Controlled failure responses are injected only
 for recovery tests; successful operations use the real isolated API.
-Physical devices, Safari, production proxy configuration, and actual mailbox
+Canadian browser-price fixtures are mocked; GeoIP reader and regional API behavior
+are separately covered by offline tests. Live database accuracy is not certified
+by those tests. Physical devices, production Safari, proxy configuration, and actual mailbox
 delivery still require separate release verification.
 
 Galleries support up to 12 photos and videos combined. Photos retain the 8 MiB

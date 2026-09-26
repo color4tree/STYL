@@ -29,7 +29,7 @@ async function save(page: Page, name: string, endpoint: string, method = "POST")
 }
 
 async function createViaApi(request: APIRequestContext, endpoint: string, fields: Record<string, unknown>) {
-  const response = await request.post(`${api}/api/${endpoint}`, { headers, data: { name: unique("Fixture"), category: "Handle", price: 19.95, ...fields } });
+  const response = await request.post(`${api}/api/${endpoint}`, { headers, data: { name: unique("Fixture"), category: "Handle", prices: { CAD: 19.95, USD: 19.95 }, publicationStatus: "published", ...fields } });
   expect(response.status(), await response.text()).toBe(200);
   return (await response.json()).item;
 }
@@ -56,7 +56,9 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByLabel("Accessory name", { exact: true }).fill(name);
   await page.getByRole("combobox", { name: "Category", exact: true }).selectOption("Handle");
-  const price = page.getByRole("textbox", { name: "Retail price", exact: true });
+  const price = page.getByRole("textbox", { name: "Canada price (CAD)", exact: true });
+  await expect(page.getByRole("combobox", { name: "Publication status", exact: true })).toHaveValue("draft");
+  await page.getByRole("combobox", { name: "Publication status", exact: true }).selectOption("published");
   await price.fill("19.955");
   await page.getByRole("button", { name: "Create accessory", exact: true }).click();
   await expect(page.locator("main").getByRole("alert")).toContainText("two decimal places");
@@ -64,6 +66,7 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   await price.blur();
   await expect(price).toHaveValue("19.50");
   await price.fill("19.95");
+  await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("19.95");
   await page.getByRole("combobox", { name: "Selling unit", exact: true }).selectOption("Pair");
   await page.getByRole("spinbutton", { name: /Package quantity/ }).fill("2");
   await page.getByLabel("What's included / package contents", { exact: true }).fill("Two matching handles");
@@ -78,8 +81,7 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   await page.getByLabel("Captured date", { exact: true }).fill("2026-09-25");
   await page.getByLabel("Internal notes", { exact: true }).fill("PRIVATE-E2E-NOTE");
   const item = await save(page, "Create accessory", "accessories");
-  expect(item.price).toBe(19.95);
-  expect(item.currency).toBe("CAD");
+  expect(item.prices).toEqual({ CAD: 19.95, USD: 19.95 });
   await page.reload();
   await expect(page.getByRole("button", { name: "Accessories", exact: true })).toBeEnabled();
   await accessoryTab(page);
@@ -93,7 +95,7 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   expect((await publicResponse.json()).items.find((entry: { id: number }) => entry.id === item.id)).not.toHaveProperty("provenance");
   await page.goto("/accessories");
   const card = page.locator("article").filter({ hasText: name });
-  await expect(card).toContainText("$19.95 / pair");
+  await expect(card).toContainText("USD $19.95 / pair");
   await card.locator("summary").click();
   await expect(card).toContainText("Full description distinct from public use.");
   await expect(card).toContainText("Cable exercise use.");
@@ -142,7 +144,10 @@ test("product media upload, reorder, cover, real video conversion/seek, featured
   await page.getByRole("button", { name: "New", exact: true }).click();
   await page.getByLabel("Product name", { exact: true }).fill(name);
   await page.getByRole("combobox", { name: "Category", exact: true }).selectOption("Racks");
-  await page.getByRole("textbox", { name: "Retail price", exact: true }).fill("299.99");
+  await expect(page.getByRole("combobox", { name: "Publication status", exact: true })).toHaveValue("draft");
+  await page.getByRole("combobox", { name: "Publication status", exact: true }).selectOption("published");
+  await page.getByRole("textbox", { name: "Canada price (CAD)", exact: true }).fill("399.99");
+  await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("299.99");
   await page.getByLabel("Show first in the home collection", { exact: true }).check();
   await page.locator('input[type="file"]').setInputFiles([
     { name: "first.png", mimeType: "image/png", buffer: png },
@@ -327,22 +332,47 @@ test("home banner is hidden on phones and preserved on tablet and desktop", asyn
   }
 });
 
-test("home banner save persists and public numeric price uses two decimals", async ({ page, request }) => {
-  const original = (await (await request.get(`${api}/api/hero`)).json()).item;
+test("home banner custom content and upload persist without any price information", async ({ page, request }) => {
+  const original = (await (await request.get(`${api}/api/admin/hero`, { headers })).json()).item;
   await signIn(page);
   await page.getByRole("button", { name: "Home banner", exact: true }).click();
   await expect(page.getByRole("button", { name: /Save/ })).toBeEnabled();
-  await page.getByLabel("Price text", { exact: true }).fill("$19.5");
-  await expect(page.getByText("$19.50", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Price text", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Featured product", exact: true })).toHaveCount(0);
+  const title = unique("Custom banner");
+  await page.getByLabel("Title", { exact: true }).fill(title);
+  await page.getByLabel("Small heading", { exact: true }).fill("Your training space");
+  await page.getByLabel("Top-left tag", { exact: true }).fill("Signature");
+  const uploadedResponse = page.waitForResponse((value) => value.url().endsWith("/api/uploads/product-image") && value.request().method() === "POST");
+  await page.getByLabel("Banner photo", { exact: true }).setInputFiles({ name: "banner.png", mimeType: "image/png", buffer: png });
+  const uploaded = await uploadedResponse;
+  expect(uploaded.status()).toBe(200);
+  const image = (await uploaded.json()).image;
+  await expect(page.getByLabel("Banner image URL or path", { exact: true })).toHaveValue(image);
   const response = page.waitForResponse((value) => value.url().endsWith("/api/hero") && value.request().method() === "PUT");
   await page.getByRole("button", { name: /Save/ }).click();
-  expect((await response).status()).toBe(200);
+  const saved = await response;
+  expect(saved.status()).toBe(200);
+  const savedItem = (await saved.json()).item;
+  expect(savedItem.title).toBe(title);
+  expect(savedItem.image).toBe(image);
+  expect(savedItem).not.toHaveProperty("price");
+  expect(savedItem).not.toHaveProperty("priceLabel");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Home banner", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Home banner", exact: true }).click();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(title);
+  await expect(page.getByLabel("Banner image URL or path", { exact: true })).toHaveValue(image);
   await page.goto("/");
   const banner = page.locator('aside[aria-label="Home banner"]');
   if (page.viewportSize()!.width < 768) await expect(banner).toBeHidden();
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(banner).toBeVisible();
-  await expect(banner).toContainText("$19.50");
+  await expect(banner).toContainText(title);
+  await expect(banner).toContainText("Your training space");
+  await expect(banner).not.toContainText(/\$|\bCAD\b|\bUSD\b/);
+  await expect(banner.locator("img")).toHaveAttribute("src", `${api}${image}`);
+  await expect(page.locator("#products article").first()).toContainText("USD $");
   const restore = await request.put(`${api}/api/hero`, { headers, data: original });
   expect(restore.status()).toBe(200);
 });

@@ -28,7 +28,7 @@ class CatalogContractTests(unittest.TestCase):
             self.addCleanup(replacement.stop)
         self.client = TestClient(main.app)
         self.headers = {"Authorization": "Bearer catalog-test-token"}
-        self.payload = {"name": "Test item", "category": "Handle", "price": 19.95}
+        self.payload = {"name": "Test item", "category": "Handle", "price": 19.95, "currency": "USD", "publicationStatus": "published"}
 
     def create(self, endpoint: str, **fields: object) -> dict:
         response = self.client.post(f"/api/{endpoint}", headers=self.headers, json={**self.payload, **fields})

@@ -6,6 +6,12 @@ Reviewed: 2026-09-25
 
 Implementation baseline: `c412178` on `main`
 
+Subsequent implementation note (2026-09-26): the customer authorized regional
+CAD/USD prices and Draft defaults/accessory publication parity in Round 2.
+Those new requirements supersede the historical holds recorded in this review.
+See the [current behavior documentation](../README.md); the rest of this document
+remains the original schema comparison, not blanket implementation approval.
+
 Proposal: `STYL_Schema.docx`, titled **STYL Accessory + Attribute Schema v1**,
 provided from the user's Downloads folder.
 

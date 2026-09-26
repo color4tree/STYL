@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
-import { fetchAdminAccessories, fetchCatalogCategories, type Accessory } from "@/lib/accessories";
+import { fetchAdminAccessories, fetchCatalogCategories, type AdminAccessory as Accessory } from "@/lib/accessories";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility } from "@/lib/catalogDetails";
-import { AdminNotice, AdminSaveBar, PriceInput, ProvenanceEditor, inputClass, parsePrice, priceError, type AdminMessage } from "./AdminFields";
+import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, inputClass, parseMarketPrices, priceError, type AdminMessage } from "./AdminFields";
+import { getMarketPrices, priceInputs } from "@/lib/pricing";
 
 type AccessoryForm = Omit<Accessory, "id">;
 
@@ -17,7 +18,9 @@ const emptyAccessory: AccessoryForm = {
   dimensions: "",
   material: "",
   weight: "",
-  price: 0,
+  price: null,
+  prices: { CAD: null, USD: null },
+  publicationStatus: "draft",
   currency: "CAD",
   notes: "",
   shortDescription: "",
@@ -40,6 +43,8 @@ function toFormState(item: Accessory): AccessoryForm {
     material: item.material,
     weight: item.weight,
     price: item.price,
+    prices: getMarketPrices(item),
+    publicationStatus: item.publicationStatus || "published",
     currency: item.currency,
     notes: item.notes,
     shortDescription: item.shortDescription ?? "",
@@ -62,7 +67,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<AccessoryForm>(emptyAccessory);
   const [baseline, setBaseline] = useState(JSON.stringify(emptyAccessory));
-  const [priceText, setPriceText] = useState("0.00");
+  const [priceText, setPriceText] = useState(priceInputs(emptyAccessory.prices));
   const [showEditor, setShowEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,13 +75,13 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   const [message, setMessage] = useState<AdminMessage | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const dirty = JSON.stringify(form) !== baseline || priceText !== form.price.toFixed(2);
+  const dirty = JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices));
   useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
 
   const loadForm = (next: AccessoryForm) => {
     setForm(next);
     setBaseline(JSON.stringify(next));
-    setPriceText(next.price.toFixed(2));
+    setPriceText(priceInputs(next.prices));
   };
 
   useEffect(() => {
@@ -139,8 +144,8 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   };
 
   const saveAccessory = async () => {
-    const price = parsePrice(priceText);
-    if (price === null) {
+    const prices = parseMarketPrices(priceText);
+    if (prices === null) {
       setMessage({ type: "error", text: priceError });
       return;
     }
@@ -153,7 +158,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
       return;
     }
 
-    setPriceText(price.toFixed(2));
+    setPriceText(priceInputs(prices));
     onBusyChange(true);
     setSaving(true);
     setMessage(null);
@@ -166,7 +171,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
           Authorization: `Bearer ${adminToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ...form, name: form.name.trim(), category: form.category.trim(), price, features: form.features?.map((feature) => feature.trim()).filter(Boolean), image: form.image || null }),
+        body: JSON.stringify({ ...form, name: form.name.trim(), category: form.category.trim(), prices, features: form.features?.map((feature) => feature.trim()).filter(Boolean), image: form.image || null }),
       });
 
       const data = await res.json();
@@ -253,8 +258,9 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{item.name}</div>
                   <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                    {item.category} · ${item.price.toFixed(2)} {item.currency}
+                    {item.category} · {item.publicationStatus === "draft" ? "Draft" : "Published"}
                   </div>
+                  <MarketPriceSummary prices={getMarketPrices(item)} />
                 </div>
               </div>
             </button>
@@ -280,13 +286,13 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
             </select>
           </label>
 
-          <PriceInput id="accessory-price" value={priceText} onChange={setPriceText} />
+          <MarketPriceInputs prefix="accessory-price" value={priceText} onChange={setPriceText} />
 
           <label className="block text-sm font-medium">
-            Currency
-            <select value={form.currency} onChange={(event) => updateField("currency", event.target.value)} className={inputClass}>
-              <option value="CAD">CAD</option>
-              <option value="USD">USD</option>
+            Publication status
+            <select value={form.publicationStatus || "published"} onChange={(event) => updateField("publicationStatus", event.target.value === "draft" ? "draft" : "published")} className={inputClass}>
+              <option value="draft">Draft</option>
+              <option value="published">Published</option>
             </select>
           </label>
 

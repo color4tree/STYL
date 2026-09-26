@@ -16,7 +16,7 @@ export default function AccessoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [quantities, setQuantities] = useState<Record<number, number>>({});
-  const { cart, add, error: cartError, notice } = useCart();
+  const { cart, add, loading: cartLoading, error: cartError, notice } = useCart();
   useEffect(() => {
     let active = true;
     fetchAccessories().then((items) => { if (active) { setAccessories(items); setError(null); } })
@@ -43,7 +43,7 @@ export default function AccessoriesPage() {
                 ].filter(([, value]) => value?.trim());
                 const features = item.features?.filter((feature) => feature.trim()) ?? [];
                 const hasDetails = specs.length || features.length || item.description?.trim() || item.notes?.trim();
-                return <article key={item.id} className="soft-panel min-w-0 rounded-3xl p-4 lg:p-5">
+                return <article id={`accessory-${item.id}`} key={item.id} className="soft-panel min-w-0 scroll-mt-24 rounded-3xl p-4 lg:p-5">
                   <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} compact />
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm text-[var(--muted)]">{item.category}</span>
@@ -68,7 +68,7 @@ export default function AccessoriesPage() {
                         <span className="min-w-6 text-center">{quantity}</span>
                         <button type="button" aria-label={`Increase quantity for ${item.name}`} disabled={quantity >= remaining} onClick={() => setQuantities({ ...quantities, [item.id]: quantity + 1 })} className="h-11 w-11 rounded-full disabled:opacity-40">+</button>
                       </div>
-                      <button type="button" disabled={remaining <= 0} onClick={() => { if (add(item, quantity)) setQuantities({ ...quantities, [item.id]: 1 }); }} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{remaining <= 0 ? "Maximum 10 in cart" : "Add to cart"}</button>
+                      <button type="button" disabled={remaining <= 0 || cartLoading || Boolean(cartError)} onClick={() => { if (add(item, quantity)) setQuantities({ ...quantities, [item.id]: 1 }); }} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{remaining <= 0 ? "Maximum 10 in cart" : "Add to cart"}</button>
                     </div>
                   </div>
                 </article>;

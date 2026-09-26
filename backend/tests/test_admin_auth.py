@@ -175,7 +175,7 @@ class AdminAuthenticationTests(unittest.TestCase):
         product = created.json()["item"]
         self.assertEqual(product["currency"], "CAD")
         for field in main.ProductSpecificationsPayload.model_fields:
-            self.assertEqual(product[field], "")
+            self.assertEqual(product[field], "draft" if field == "publicationStatus" else "")
         details = {
             "modelSku": " STYL-R1 ", "dimensions": " 210 x 120 x 120 cm ",
             "material": " Steel ", "included": " Rack\nJ-hooks ", "colourOptions": " Black / red ",
@@ -196,11 +196,11 @@ class AdminAuthenticationTests(unittest.TestCase):
         cleared = self.client.put(url, json={**payload, **{key: "" for key in details}}, headers=headers)
         self.assertEqual(cleared.status_code, 200)
         for field in details:
-            self.assertEqual(cleared.json()["item"][field], "")
+            self.assertEqual(cleared.json()["item"][field], "published" if field == "publicationStatus" else "")
 
     def test_drafts_are_private_and_can_be_published(self) -> None:
         headers = {"Authorization": "Bearer test-admin-token"}
-        payload = {"name": "Private draft", "category": "Draft only category", "price": 1, "publicationStatus": "draft"}
+        payload = {"name": "Private draft", "category": "Draft only category", "price": 1, "currency": "USD", "publicationStatus": "draft"}
         product = self.client.post("/api/products", json=payload, headers=headers).json()["item"]
         self.assertEqual(self.client.get("/api/admin/products").status_code, 401)
         self.assertEqual(self.client.get("/api/admin/products", headers={"Authorization": "Bearer wrong"}).status_code, 401)
@@ -275,8 +275,7 @@ class AdminAuthenticationTests(unittest.TestCase):
 
     def test_hero_defaults_and_admin_update(self) -> None:
         self.assertEqual(self.client.get("/api/hero").json()["item"]["title"], "Series X")
-
-        payload = {"tag": "New", "number": "02", "eyebrow": "Multi", "title": "Trainer", "priceLabel": "$3,999", "image": ""}
+        payload = {"tag": "New", "number": "02", "eyebrow": "Multi", "title": "Trainer", "image": ""}
         unauthorized = self.client.put("/api/hero", json=payload)
         authorized = self.client.put(
             "/api/hero",
@@ -289,6 +288,9 @@ class AdminAuthenticationTests(unittest.TestCase):
         saved = self.client.get("/api/hero").json()["item"]
         self.assertEqual(saved["title"], "Trainer")
         self.assertEqual(saved["image"], main.DEFAULT_HERO.image)
+        self.assertNotIn("price", saved)
+        self.assertNotIn("priceLabel", saved)
+        self.assertEqual(self.client.get("/api/admin/hero").status_code, 401)
 
 
     def test_catalog_photos_and_compatibility_round_trip(self) -> None:
@@ -296,7 +298,7 @@ class AdminAuthenticationTests(unittest.TestCase):
         for endpoint in ("products", "accessories"):
             with self.subTest(endpoint=endpoint):
                 payload = {
-                    "name": "Gallery test", "category": "Test", "price": 10,
+                    "name": "Gallery test", "category": "Test", "price": 10, "currency": "USD", "publicationStatus": "published",
                     "shortDescription": "Test", "description": "Test",
                     "photos": ["/images/front.jpg", "/images/side.jpg"],
                     "compatibility": {"uprightSize": "75 x 75 mm", "holeDiameter": "1 inch", "holeSpacing": "50 mm", "models": "Confirmed rack", "limitations": "Not confirmed for 3 x 3 inch"},
@@ -355,7 +357,7 @@ class AdminAuthenticationTests(unittest.TestCase):
             response = self.client.post("/api/uploads/product-image", headers=headers, files={"image": (name, b"test image", "image/jpeg")})
             self.assertEqual(response.status_code, 200)
             photos.append(response.json()["image"])
-        payload = {"name": "Uploaded gallery", "category": "Test", "price": 1, "shortDescription": "Test", "description": "Test", "photos": photos}
+        payload = {"name": "Uploaded gallery", "category": "Test", "price": 1, "currency": "USD", "publicationStatus": "published", "shortDescription": "Test", "description": "Test", "photos": photos}
         product = self.client.post("/api/products", json=payload, headers=headers).json()["item"]
         accessory = self.client.post("/api/accessories", json={**payload, "photos": [photos[0]]}, headers=headers).json()["item"]
         self.client.put("/api/hero", json={"image": photos[1]}, headers=headers)
@@ -365,7 +367,9 @@ class AdminAuthenticationTests(unittest.TestCase):
         paths = [main.UPLOAD_PATH / Path(photo).name for photo in photos]
         self.assertTrue(all(path.exists() for path in paths))
         self.client.delete(f"/api/products/{product['id']}", headers=headers)
-        self.assertTrue(all(path.exists() for path in paths))
+        self.assertTrue(paths[0].exists())
+        self.assertTrue(paths[1].exists())
+        self.assertEqual(self.client.get("/api/hero").json()["item"]["image"], photos[1])
         self.client.delete(f"/api/accessories/{accessory['id']}", headers=headers)
         self.assertFalse(paths[0].exists())
         self.assertTrue(paths[1].exists())

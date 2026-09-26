@@ -8,6 +8,27 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Round 2 update (2026-09-26)
+
+This update supersedes the earlier currency/publication holds below:
+
+- Independent Canada/CAD and US/USD prices; Canadian IP locations use CAD,
+  other/unknown locations use USD. Display explicit currency plus two decimals.
+- Hide items in markets without a price and flag missing prices in admin.
+- New Product and Accessory entries default to Draft; preserve the established
+  Product lifecycle and add the same controls/filtering to Accessories.
+- Home banner retains the original independent text/image editor and layout,
+  but has no price field or price display. The product-selector approach was
+  withdrawn on 2026-09-26. Mobile hiding stays unchanged; catalog prices remain.
+- Normalize the obvious Bench/Benches duplicate without redesigning taxonomy.
+- Optional equipment weight, date persistence regression checks, and separately
+  labeled current/earlier upload batches are included.
+
+The date-clearing report was not reproduced in current Chromium/WebKit tests.
+The exact date remains a private date-only string through notes editing,
+serialization, persistence, and reload. This is not a claim about all physical
+devices or a claim that a database-only fix was made.
+
 ### Approved scope update (2026-09-25)
 
 The customer approved implementation of the non-publication pre-launch checklist
@@ -26,7 +47,7 @@ must remain optimized rather than adopting stretched phone layouts.
 - Keep the customer-value business principle prominent in the homepage
   introduction as a compact callout on both desktop and mobile (placement
   confirmed on 2026-09-25). Do not duplicate it in the About section.
-- Hide the promotional Home banner image/title/price card below 768 CSS px.
+- Hide the promotional Home banner image/title card below 768 CSS px.
   Keep the introduction, business principle, and shopping actions visible.
   Tablet/desktop banner display and the admin banner editor remain available.
 

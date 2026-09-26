@@ -9,7 +9,7 @@ import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
 
 export default function CartPage() {
-  const { cart: items, update, remove, clear, error, notice } = useCart();
+  const { cart: items, loading, retry, update, remove, clear, error, notice } = useCart();
   const [confirmClear, setConfirmClear] = useState(false);
   const totals = getCartTotals(items);
   return <>
@@ -20,7 +20,8 @@ export default function CartPage() {
         <Link href="/#products" className="inline-flex min-h-11 items-center underline">Continue shopping</Link>
       </div>
       <CartFeedback error={error} notice={notice} />
-      {!items.length && !error ? <section className="soft-panel rounded-3xl p-6">
+      {error ? <button type="button" onClick={retry} className="mb-4 min-h-11 rounded-full border px-5">Retry current prices</button> : null}
+      {loading ? <p role="status">Checking prices and availability for your location...</p> : !items.length && !error ? <section className="soft-panel rounded-3xl p-6">
         <h2 className="text-xl font-semibold">Your cart is empty.</h2>
         <div className="mt-4 flex flex-wrap gap-3"><Link href="/#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 text-white">Shop equipment</Link><Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border px-5">Browse accessories</Link></div>
       </section> : <>
@@ -50,14 +51,14 @@ export default function CartPage() {
             <h2 className="text-xl font-semibold">Summary</h2>
             <div className="mt-5 space-y-3">{totals.map(([currency, total]) => <div key={currency} className="flex flex-wrap justify-between gap-3 text-lg"><span>Total</span><span>{formatPrice(total, currency)}</span></div>)}</div>
             <p className="mt-3 text-sm text-white/80">Shipping and final pricing confirmed with your quote.</p>
-            {items.length ? <Link href="/?quote=cart#contact" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-4 text-center font-medium text-[var(--ink)]">Request a quote</Link> : null}
+            {items.length && !error ? <Link href="/?quote=cart#contact" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-4 text-center font-medium text-[var(--ink)]">Request a quote</Link> : null}
           </aside>
         </div>
         <div className="mt-8">
           {confirmClear ? <div className="flex flex-wrap items-center gap-3"><p>Remove all selected items?</p><button type="button" className="min-h-11 rounded-full bg-red-700 px-4 text-white" onClick={() => { if (clear()) setConfirmClear(false); }}>Confirm clear cart</button><button type="button" className="min-h-11 px-4" onClick={() => setConfirmClear(false)}>Cancel</button></div>
             : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => setConfirmClear(true)}>Clear cart</button>}
         </div>
-        {items.length ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="text-sm">{getCartCount(items)} sale units selected</span><Link href="/?quote=cart#contact" className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--ink)] px-5 font-medium text-white">Request a quote</Link></div> : null}
+        {items.length && !error ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="text-sm">{getCartCount(items)} sale units selected</span><Link href="/?quote=cart#contact" className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--ink)] px-5 font-medium text-white">Request a quote</Link></div> : null}
       </>}
     </main>
   </>;

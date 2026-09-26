@@ -19,7 +19,9 @@ export default function PhotoEditor({ photos, onChange, adminToken, disabled, on
 }) {
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState<string | null>(null);
-  const [failures, setFailures] = useState<{ file: File; message: string }[]>([]);
+  const [failures, setFailures] = useState<{ file: File; message: string; batch: number }[]>([]);
+  const [batch, setBatch] = useState(0);
+  const batchNumber = useRef(0);
   const [progress, setProgress] = useState<{ completed: number; total: number } | null>(null);
   const uploading = useRef(false);
   const uploaded = useRef(new Map<string, string>());
@@ -41,7 +43,9 @@ export default function PhotoEditor({ photos, onChange, adminToken, disabled, on
     onBusyChange(true);
     setMessage("Uploading media...");
     const next = [...photos];
-    const failed: { file: File; message: string }[] = [];
+    const currentBatch = ++batchNumber.current;
+    setBatch(currentBatch);
+    const failed: { file: File; message: string; batch: number }[] = [];
     const attempted = new Set(files.map(fileKey));
     setFailures((previous) => previous.filter(({ file }) => !attempted.has(fileKey(file))));
     try {
@@ -65,13 +69,13 @@ export default function PhotoEditor({ photos, onChange, adminToken, disabled, on
           if (!next.includes(path)) next.push(path);
           onChange([...next]);
         } catch (error) {
-          failed.push({ file, message: error instanceof Error ? error.message : "Upload failed." });
+          failed.push({ file, message: error instanceof Error ? error.message : "Upload failed.", batch: currentBatch });
         } finally {
           setProgress({ completed: index + 1, total: files.length });
         }
       }
       setFailures((previous) => [...previous, ...failed]);
-      setMessage(`${files.length - failed.length} of ${files.length} files uploaded. ${failed.length ? `${failed.length} failed; successful uploads remain in the gallery. ` : ""}Save the item to keep your changes.`);
+      setMessage(`Batch ${currentBatch}: ${files.length - failed.length} of ${files.length} files uploaded. ${failed.length ? `${failed.length} failed; successful uploads remain in the gallery. ` : ""}Save the item to keep your changes.`);
     } finally {
       uploading.current = false;
       setProgress(null);
@@ -148,7 +152,15 @@ export default function PhotoEditor({ photos, onChange, adminToken, disabled, on
       <p role="status" aria-atomic="true" className="mt-3 break-words text-sm text-[var(--muted)]">{message}</p>
       {progress ? <div className="mt-2 text-sm"><progress aria-label="Files processed (upload and conversion)" value={progress.completed} max={progress.total} className="w-full" /><p>{progress.completed} of {progress.total} files processed. Video conversion may take several minutes.</p></div> : null}
       {failures.length ? <div className="mt-3 text-sm">
-        <ul role="alert" aria-label="Failed uploads" className="list-inside list-disc break-words text-red-700">{failures.map(({ file, message }) => <li key={fileKey(file)}>{file.name}: {message}</li>)}</ul>
+        {failures.some((failure) => failure.batch === batch) ? <div>
+          <p className="font-medium text-red-800">Failures in current batch {batch}</p>
+          <ul role="alert" aria-label="Failed uploads" className="list-inside list-disc break-words text-red-700">{failures.filter((failure) => failure.batch === batch).map(({ file, message }) => <li key={fileKey(file)}>{file.name}: {message}</li>)}</ul>
+        </div> : null}
+        {failures.some((failure) => failure.batch !== batch) ? <details className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+          <summary>Earlier upload attempts ({failures.filter((failure) => failure.batch !== batch).length} unresolved files)</summary>
+          <p className="mt-2">These are from earlier attempts, not the current batch.</p>
+          <ul className="mt-2 list-inside list-disc break-words">{failures.filter((failure) => failure.batch !== batch).map(({ file, message, batch: failedBatch }) => <li key={fileKey(file)}>Batch {failedBatch}, {file.name}: {message}</li>)}</ul>
+        </details> : null}
         <button type="button" onClick={() => void uploadFiles(failures.map(({ file }) => file))} className="mt-2 min-h-11 rounded-md border border-[var(--line)] bg-white px-3">Retry failed files only ({failures.length})</button>
         <button type="button" onClick={() => setFailures([])} className="ml-2 mt-2 min-h-11 rounded-md px-3 underline">Dismiss failures</button>
         <p className="mt-1 text-xs text-[var(--muted)]">Retries restart failed uploads; successful files are not uploaded again. Fix unsupported or oversized files, then select them again.</p>

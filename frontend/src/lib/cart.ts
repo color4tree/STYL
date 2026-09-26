@@ -19,7 +19,17 @@ function currencyCode(currency?: string) {
 }
 
 export function formatPrice(price: number, currency?: string) {
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode(currency), currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price);
+  const code = currencyCode(currency);
+  return `${code} ${new Intl.NumberFormat("en-CA", { style: "currency", currency: code, currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price)}`;
+}
+
+export type CatalogSelection = Omit<CartItem, "quantity">;
+
+export function reconcileCart(items: CartItem[], catalog: CatalogSelection[]): CartItem[] {
+  return items.flatMap((item) => {
+    const current = catalog.find((entry) => entry.id === item.id);
+    return current ? [{ ...current, quantity: item.quantity }] : [];
+  });
 }
 
 export function lineAmount(price: number, quantity: number): number {
@@ -126,6 +136,6 @@ export function formatCartSummary(items: CartItem[] = readCart()) {
     return "No items selected yet.";
   }
 
-  const summary = items.map((item) => `${item.name} x ${quantityLabel(item.quantity, item.sellingUnit)}${item.packageQuantity ? ` (${item.packageQuantity} pieces per sale unit)` : ""}`).join(", ");
+  const summary = items.map((item) => `${item.name} x ${quantityLabel(item.quantity, item.sellingUnit)}${item.packageQuantity ? ` (${item.packageQuantity} pieces per sale unit)` : ""} at ${formatPrice(item.price, item.currency)} per sale unit`).join(", ");
   return `Interested in: ${summary}.`;
 }

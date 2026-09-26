@@ -1,5 +1,6 @@
 import { API_BASE } from "@/lib/api";
 import type { CatalogDetails, Provenance, SellingUnit } from "@/lib/catalogDetails";
+import type { MarketPrices } from "@/lib/pricing";
 
 export type Accessory = CatalogDetails & {
   id: number;
@@ -22,7 +23,14 @@ export type Accessory = CatalogDetails & {
   provenance?: Provenance;
 };
 
-export async function fetchAdminAccessories(token: string): Promise<Accessory[]> {
+export type AdminAccessory = Omit<Accessory, "price"> & {
+  price: number | null;
+  prices: MarketPrices;
+  publicationStatus?: "" | "draft" | "published";
+  missingPriceMarkets?: string[];
+};
+
+export async function fetchAdminAccessories(token: string): Promise<AdminAccessory[]> {
   const res = await fetch(`${API_BASE}/api/admin/accessories`, {
     headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
   });
@@ -45,7 +53,7 @@ export async function fetchCatalogCategories(token: string): Promise<string[]> {
 }
 
 export async function fetchAccessories(): Promise<Accessory[]> {
-  const res = await fetch(`${API_BASE}/api/accessories`);
+  const res = await fetch(`${API_BASE}/api/accessories`, { cache: "no-store" });
   if (!res.ok) {
     throw new Error("Unable to fetch accessories");
   }

@@ -10,7 +10,8 @@ import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications, type Provenance } from "@/lib/catalogDetails";
 import { fetchCatalogCategories } from "@/lib/accessories";
-import { AdminNotice, AdminSaveBar, PriceInput, ProvenanceEditor, parsePrice, priceError, type AdminMessage } from "./AdminFields";
+import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, parseMarketPrices, priceError, type AdminMessage } from "./AdminFields";
+import { getMarketPrices, priceInputs, type MarketPrices } from "@/lib/pricing";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
 type Product = CatalogDetails & ProductSpecifications & {
@@ -18,7 +19,8 @@ type Product = CatalogDetails & ProductSpecifications & {
   slug: string;
   name: string;
   category: string;
-  price: number;
+  price: number | null;
+  prices: MarketPrices;
   currency: string;
   shortDescription: string;
   description: string;
@@ -40,8 +42,10 @@ const emptyProduct: Omit<Product, "id" | "slug"> = {
   ...getProductSpecifications({}),
   name: "",
   category: "",
-  price: 0,
+  price: null,
+  prices: { CAD: null, USD: null },
   currency: "CAD",
+  publicationStatus: "draft",
   shortDescription: "",
   description: "",
   featured: false,
@@ -79,6 +83,7 @@ function toFormState(product: Product): Omit<Product, "id" | "slug"> {
     name: product.name,
     category: product.category,
     price: product.price,
+    prices: getMarketPrices(product),
     currency: product.currency,
     shortDescription: product.shortDescription ?? "",
     description: product.description ?? "",
@@ -99,7 +104,7 @@ export default function AdminPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<Omit<Product, "id" | "slug">>(emptyProduct);
   const [baseline, setBaseline] = useState(JSON.stringify(emptyProduct));
-  const [priceText, setPriceText] = useState("0.00");
+  const [priceText, setPriceText] = useState(priceInputs(emptyProduct.prices));
   const [categories, setCategories] = useState<string[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -110,14 +115,14 @@ export default function AdminPage() {
   const [message, setMessage] = useState<AdminMessage | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || priceText !== form.price.toFixed(2) : childDirty;
+  const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) : childDirty;
   const busy = saving || uploading || accessoryBusy;
   const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
 
   const loadForm = (next: Omit<Product, "id" | "slug">) => {
     setForm(next);
     setBaseline(JSON.stringify(next));
-    setPriceText(next.price.toFixed(2));
+    setPriceText(priceInputs(next.prices));
   };
 
   const verifyAccess = async (token = adminToken) => {
@@ -232,8 +237,8 @@ export default function AdminPage() {
   };
 
   const saveProduct = async () => {
-    const price = parsePrice(priceText);
-    if (price === null) {
+    const prices = parseMarketPrices(priceText);
+    if (prices === null) {
       setMessage({ type: "error", text: priceError });
       return;
     }
@@ -246,7 +251,7 @@ export default function AdminPage() {
       return;
     }
 
-    setPriceText(price.toFixed(2));
+    setPriceText(priceInputs(prices));
     setSaving(true);
     setMessage(null);
 
@@ -255,7 +260,7 @@ export default function AdminPage() {
         ...form,
         name: form.name.trim(),
         category: form.category.trim(),
-        price,
+        prices,
         features: form.features.map((feature) => feature.trim()).filter(Boolean),
       };
 
@@ -437,7 +442,7 @@ export default function AdminPage() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{product.name}</div>
                       <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">{product.category}</div>
-                      <div className="mt-1 text-xs text-[var(--muted)]">${product.price.toFixed(2)} {product.currency}</div>
+                      <MarketPriceSummary prices={getMarketPrices(product)} />
                       <div className="mt-1 text-xs text-[var(--muted)]">{product.publicationStatus === "draft" ? "Draft" : "Published"}</div>
                     </div>
                   </div>
@@ -479,19 +484,7 @@ export default function AdminPage() {
                 </select>
               </label>
 
-              <PriceInput id="product-price" value={priceText} onChange={setPriceText} />
-
-              <label className="block text-sm font-medium">
-                Currency
-                <select
-                  value={form.currency}
-                  onChange={(event) => updateField("currency", event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
-                >
-                  <option value="CAD">CAD</option>
-                  <option value="USD">USD</option>
-                </select>
-              </label>
+              <MarketPriceInputs prefix="product-price" value={priceText} onChange={setPriceText} />
 
               <label className="block text-sm font-medium">
                 Publication status
