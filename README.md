@@ -4,6 +4,8 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 
 ## Project structure
 
+- [Product catalog and admin schema design](docs/catalog-and-admin-schema-design.md) — target data model, catalog-wide SKUs, configurable admin options, and migration plan (design draft, not yet implemented)
+- [Accessory schema review](docs/accessory-schema-review.md) — proposal evaluation and rationale for the catalog design
 - [docs/STYL Portal Design.md](docs/STYL%20Portal%20Design.md) — product strategy, UX goals, and technical proposal
 - [docs/business-trademark-summary.zh-CN.md](docs/business-trademark-summary.zh-CN.md) — business, trademark, and operating context
 - [frontend](frontend) — Next.js frontend for marketing site and product showcase
