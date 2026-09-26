@@ -90,7 +90,7 @@ export default function Home() {
         <section id="products" className="container scroll-mt-24 py-8 lg:py-12">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3 lg:mb-10">
             <div><p className="text-sm text-[var(--muted)]">Equipment collection</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] lg:text-5xl">Precision-built for real routines.</h2></div>
-            <Link href="/accessories" className="inline-flex min-h-11 items-center text-sm font-medium underline">Browse accessories</Link>
+            <Link href="/accessories" className="inline-flex min-h-11 items-center text-sm font-medium underline lg:hidden">Browse accessories</Link>
           </div>
           <CartFeedback error={error} notice={notice} />
           {loading ? <p role="status" className="rounded-2xl bg-white/60 p-8">Loading equipment...</p>

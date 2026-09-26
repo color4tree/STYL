@@ -252,11 +252,18 @@ test("quote form retains failed input, prevents duplicate active requests and st
 test("responsive navigation, desktop grids, narrow widths and cart quantity limits", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.locator("#products article").first()).toBeVisible();
-  for (const width of [320, 390, 768, 1024, 1440]) {
+  const browseAccessories = page.locator('#products a[href="/accessories"]');
+  for (const width of [320, 390, 768, 1023, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (width >= 1024) await expect(page.getByRole("navigation", { name: "Main navigation", exact: true })).toBeVisible();
-    else {
+    if (width >= 1024) {
+      const navigation = page.getByRole("navigation", { name: "Main navigation", exact: true });
+      await expect(navigation).toBeVisible();
+      await expect(navigation.getByRole("link", { name: "Accessories", exact: true })).toBeVisible();
+      await expect(browseAccessories).toBeHidden();
+    } else {
+      await expect(browseAccessories).toBeVisible();
+      await expect(browseAccessories).toHaveAttribute("href", "/accessories");
       await page.getByRole("button", { name: "Menu", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "Site navigation" })).toBeVisible();
       await page.getByRole("button", { name: "Close", exact: true }).click();

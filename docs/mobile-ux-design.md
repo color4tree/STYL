@@ -219,7 +219,9 @@ Recommended order:
 1. Compact header.
 2. Short value proposition, business principle, and **Shop equipment**. Show the
    promotional Home banner card only at widths of 768 CSS px and above.
-3. Product collection, with an obvious **Browse accessories** link.
+3. Product collection, with a **Browse accessories** link below 1024 CSS px.
+   Hide this duplicate collection link on desktop, where the main Accessories
+   navigation remains visible.
 4. Concise trust/engineering content.
 5. Compact selection summary when the cart is nonempty.
 6. Quote form and concise contact information.
