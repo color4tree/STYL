@@ -26,6 +26,9 @@ must remain optimized rather than adopting stretched phone layouts.
 - Keep the customer-value business principle prominent in the homepage
   introduction as a compact callout on both desktop and mobile (placement
   confirmed on 2026-09-25). Do not duplicate it in the About section.
+- Hide the promotional Home banner image/title/price card below 768 CSS px.
+  Keep the introduction, business principle, and shopping actions visible.
+  Tablet/desktop banner display and the admin banner editor remain available.
 
 The original proposal below remains the design reference. Sections proposing
 currency changes, new routes, analytics, image-derivative infrastructure, or
@@ -214,7 +217,8 @@ At high zoom or short landscape heights, fall back to an in-flow action.
 Recommended order:
 
 1. Compact header.
-2. Short value proposition, one purposeful image, and **Shop equipment**.
+2. Short value proposition, business principle, and **Shop equipment**. Show the
+   promotional Home banner card only at widths of 768 CSS px and above.
 3. Product collection, with an obvious **Browse accessories** link.
 4. Concise trust/engineering content.
 5. Compact selection summary when the cart is nonempty.

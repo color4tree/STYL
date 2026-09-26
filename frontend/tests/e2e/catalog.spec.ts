@@ -302,17 +302,40 @@ test("business principle is prominent in the introduction without delaying mobil
   }
 });
 
+test("home banner is hidden on phones and preserved on tablet and desktop", async ({ page }) => {
+  await page.goto("/");
+  const introduction = page.locator("main > section").first();
+  const banner = introduction.locator('aside[aria-label="Home banner"]');
+  for (const width of [320, 390, 767, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    if (width < 768) {
+      await expect(banner).toBeHidden();
+    } else {
+      await expect(banner).toBeVisible();
+    }
+    await expect(introduction.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(introduction.locator("blockquote")).toBeVisible();
+    await expect(introduction.getByRole("link", { name: "Shop equipment", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test("home banner save persists and public numeric price uses two decimals", async ({ page, request }) => {
   const original = (await (await request.get(`${api}/api/hero`)).json()).item;
   await signIn(page);
   await page.getByRole("button", { name: "Home banner", exact: true }).click();
   await expect(page.getByRole("button", { name: /Save/ })).toBeEnabled();
   await page.getByLabel("Price text", { exact: true }).fill("$19.5");
+  await expect(page.getByText("$19.50", { exact: true })).toBeVisible();
   const response = page.waitForResponse((value) => value.url().endsWith("/api/hero") && value.request().method() === "PUT");
   await page.getByRole("button", { name: /Save/ }).click();
   expect((await response).status()).toBe(200);
   await page.goto("/");
-  await expect(page.locator("main section").first()).toContainText("$19.50");
+  const banner = page.locator('aside[aria-label="Home banner"]');
+  if (page.viewportSize()!.width < 768) await expect(banner).toBeHidden();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(banner).toBeVisible();
+  await expect(banner).toContainText("$19.50");
   const restore = await request.put(`${api}/api/hero`, { headers, data: original });
   expect(restore.status()).toBe(200);
 });

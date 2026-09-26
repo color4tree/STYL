@@ -77,14 +77,14 @@ export default function Home() {
               <Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium">Accessories</Link>
             </div>
           </div>
-          <div className="rounded-3xl bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-4 text-white lg:p-7">
+          <aside aria-label="Home banner" className="hidden rounded-3xl bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-4 text-white md:block lg:p-7">
             <div className="flex items-center justify-between text-sm text-white/80"><span>{hero.tag}</span><span>{hero.number}</span></div>
             <img src={resolveProductImage(hero.image)} alt={`${hero.eyebrow} ${hero.title}`.trim() || "STYL equipment"} fetchPriority="high" className="mt-3 h-32 w-full rounded-xl bg-white/10 object-cover sm:h-48 lg:mt-8 lg:h-64" />
             <div className="mt-3 flex flex-wrap items-end justify-between gap-2">
               <div><p className="text-sm text-white/80">{hero.eyebrow}</p><p className="text-2xl font-semibold">{hero.title}</p></div>
               <span className="text-lg font-medium">{formatHeroPriceLabel(hero.priceLabel)}</span>
             </div>
-          </div>
+          </aside>
         </section>
 
         <section id="products" className="container scroll-mt-24 py-8 lg:py-12">
