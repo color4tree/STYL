@@ -66,6 +66,12 @@ export default function Home() {
             <p className="mt-4 max-w-lg text-base leading-7 text-[var(--muted)] lg:mt-6 lg:text-lg lg:leading-8">
               Premium fitness equipment designed for modern living. Precise, dependable, and built for your training space.
             </p>
+            <blockquote className="mt-5 max-w-xl border-l-2 border-[var(--accent-strong)] pl-4">
+              <p className="text-sm font-medium text-[var(--muted)]">Our business principle</p>
+              <p className="mt-2 text-base font-medium leading-6 lg:text-lg lg:leading-7">
+                Maximize customer value first, then capture a fair share of the value created.
+              </p>
+            </blockquote>
             <div className="mt-5 flex flex-wrap gap-3 lg:mt-8">
               <a href="#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 py-3 font-medium text-white">Shop equipment</a>
               <Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium">Accessories</Link>
@@ -113,7 +119,6 @@ export default function Home() {
             <div className="space-y-5 leading-7 text-white/80">
               <p>STYL exists for people who want better routines without sacrificing the aesthetic of their space. Our equipment is engineered to be dependable, calm, and beautifully integrated into real homes and workspaces.</p>
               <p>We combine premium materials, disciplined design, and a refined user experience.</p>
-              <blockquote className="border-l-2 border-white/60 pl-4"><p className="text-sm font-medium text-white">Our business principle</p><p className="mt-2">Maximize customer value first, then capture a fair share of the value created.</p></blockquote>
             </div>
           </div>
         </section>

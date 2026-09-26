@@ -279,6 +279,29 @@ test("responsive navigation, desktop grids, narrow widths and cart quantity limi
   await expect(page.getByRole("heading", { name: "Your cart is empty." })).toBeVisible();
 });
 
+test("business principle is prominent in the introduction without delaying mobile shopping", async ({ page }) => {
+  await page.goto("/");
+  const statement = "Maximize customer value first, then capture a fair share of the value created.";
+  const introduction = page.locator("main > section").first();
+  const principle = introduction.locator("blockquote");
+  await expect(page.getByText(statement, { exact: true })).toHaveCount(1);
+  await expect(principle).toContainText(statement);
+  await expect(page.locator("#about blockquote")).toHaveCount(0);
+  await expect(page.locator("#products article h3").first()).toBeVisible();
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect(principle).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("link", { name: "Shop equipment", exact: true })).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width === 390) {
+      const firstProduct = await page.locator("#products article h3").first().boundingBox();
+      expect(firstProduct).not.toBeNull();
+      expect(firstProduct!.y + firstProduct!.height).toBeLessThanOrEqual(844 * 2);
+    }
+  }
+});
+
 test("home banner save persists and public numeric price uses two decimals", async ({ page, request }) => {
   const original = (await (await request.get(`${api}/api/hero`)).json()).item;
   await signIn(page);

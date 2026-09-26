@@ -23,6 +23,9 @@ must remain optimized rather than adopting stretched phone layouts.
 - Keep every product in the home collection; Featured means show first.
 - Start accessory long-form content with inline expansion, not a new route.
 - Add private source tracking without exposing it in public API responses.
+- Keep the customer-value business principle prominent in the homepage
+  introduction as a compact callout on both desktop and mobile (placement
+  confirmed on 2026-09-25). Do not duplicate it in the About section.
 
 The original proposal below remains the design reference. Sections proposing
 currency changes, new routes, analytics, image-derivative infrastructure, or
@@ -223,8 +226,9 @@ initial viewport. The collection heading and first product identity should be
 reachable within one viewport-height scroll. Validate with real copy and media;
 do not meet the target by truncating essential content or shrinking text.
 
-Move the business principle and expanded brand-detail presentation below the
-collection. Keep the content accessible rather than deleting it. Reduce the
+Keep the business principle in a compact callout below the introductory copy and
+above Shop equipment. Move the expanded brand-detail presentation below the
+collection, keeping that content accessible rather than deleting it. Reduce the
 four-card brand sequence to a short preview with an explicit expand action.
 
 Do not show a full empty cart panel to a first-time visitor. For a nonempty cart,

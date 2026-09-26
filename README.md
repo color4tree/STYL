@@ -159,11 +159,12 @@ data. SMTP is disabled; inquiry persistence is verified without sending mail.
 Temporary catalog files are removed after the run. Failure screenshots and traces
 remain under the ignored `frontend/test-results/` directory.
 
-The 20 checks cover desktop and phone-sized Chromium: authentication, accessory
+The browser checks cover desktop and phone-sized Chromium: authentication, accessory
 editing and reload, exact-cent prices, selling units, private provenance,
 save failures and unsaved-change guards, deletion, photo/video upload and reorder,
 real video seeking, failed-only upload retry, media limits, cart quantities,
-inquiry errors and storage, navigation, responsive layouts, home banner updates,
+inquiry errors and storage, navigation, responsive layouts, prominent homepage
+business-principle placement, home banner updates,
 and unavailable-media recovery. Controlled failure responses are injected only
 for recovery tests; successful operations use the real isolated API.
 Physical devices, Safari, production proxy configuration, and actual mailbox
