@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import re
 import secrets
 import smtplib
 import ssl
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from email.message import EmailMessage
 from pathlib import Path
 from threading import Lock
@@ -21,7 +23,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.media import VIDEO_FORMATS, upload_video, video_response
 
@@ -56,6 +58,11 @@ IMAGE_EXTENSIONS = {
     "image/png": ".png",
     "image/webp": ".webp",
 }
+CATALOG_CATEGORIES = (
+    "Strength", "Racks", "Multi trainers", "Benches", "Cardio", "Recovery",
+    "Accessories", "General", "Bar", "Handle", "Strap", "Upper frame",
+    "Hardware", "Bench", "Storage", "Performance",
+)
 
 UPLOAD_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -91,9 +98,61 @@ class CompatibilityPayload(BaseModel):
     limitations: str = Field(default="", max_length=2000)
 
 
+class ProvenancePayload(BaseModel):
+    sourceType: str = Field(default="", max_length=200)
+    marketplaceUrl: str = Field(default="", max_length=2000)
+    listingId: str = Field(default="", max_length=300)
+    capturedDate: str = Field(default="", max_length=10)
+    notes: str = Field(default="", max_length=10000)
+
+    @field_validator("*")
+    @classmethod
+    def trim_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("marketplaceUrl")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if value:
+            parsed = urlsplit(value)
+            if parsed.scheme not in ("http", "https") or not parsed.netloc:
+                raise ValueError("Source URL must be an HTTP or HTTPS URL.")
+        return value
+
+    @field_validator("capturedDate")
+    @classmethod
+    def validate_date(cls, value: str) -> str:
+        if value and date.fromisoformat(value).isoformat() != value:
+            raise ValueError("Use a valid date in YYYY-MM-DD format.")
+        return value
+
+
+class CatalogIdentityPayload(BaseModel):
+    name: str = Field(max_length=200)
+    category: str = Field(max_length=300)
+    price: Decimal = Field(ge=0, decimal_places=2, allow_inf_nan=False)
+
+    @field_validator("price")
+    @classmethod
+    def validate_price_range(cls, value: Decimal) -> Decimal:
+        numeric = float(value)
+        if not math.isfinite(numeric) or Decimal(str(numeric)) != value:
+            raise ValueError("Price is too large to preserve its decimal value.")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Name is required.")
+        return value
+
+
 class CatalogDetailsPayload(BaseModel):
     photos: list[str] | None = Field(default=None, max_length=12)
     compatibility: CompatibilityPayload | None = None
+    provenance: ProvenancePayload | None = None
 
 
 class ProductSpecificationsPayload(BaseModel):
@@ -107,12 +166,9 @@ class ProductSpecificationsPayload(BaseModel):
     publicationStatus: Literal["", "draft", "published"] = ""
 
 
-class ProductPayload(CatalogDetailsPayload, ProductSpecificationsPayload):
+class ProductPayload(CatalogDetailsPayload, ProductSpecificationsPayload, CatalogIdentityPayload):
     id: int | None = None
     slug: str | None = None
-    name: str
-    category: str
-    price: float
     currency: Literal["CAD", "USD"] = "CAD"
     shortDescription: str = ""
     description: str = ""
@@ -121,13 +177,27 @@ class ProductPayload(CatalogDetailsPayload, ProductSpecificationsPayload):
     features: list[str] = Field(default_factory=list)
 
 
-class AccessoryPayload(CatalogDetailsPayload):
-    name: str
-    category: str
+class AccessorySpecificationsPayload(BaseModel):
+    shortDescription: str = Field(default="", max_length=1000)
+    description: str = Field(default="", max_length=10000)
+    features: list[str] = Field(default_factory=list, max_length=50)
+    included: str = Field(default="", max_length=4000)
+    sellingUnit: Literal["", "Each", "Pair", "Set"] = ""
+    packageQuantity: int | None = Field(default=None, ge=1, strict=True)
+    colourOptions: str = Field(default="", max_length=1000)
+
+    @field_validator("features")
+    @classmethod
+    def validate_features(cls, values: list[str]) -> list[str]:
+        if any(len(value) > 1000 for value in values):
+            raise ValueError("Each feature must be 1000 characters or fewer.")
+        return [value.strip() for value in values if value.strip()]
+
+
+class AccessoryPayload(CatalogDetailsPayload, AccessorySpecificationsPayload, CatalogIdentityPayload):
     dimensions: str = ""
     material: str = ""
     weight: str = ""
-    price: float = Field(ge=0)
     currency: Literal["CAD", "USD"] = "CAD"
     notes: str = ""
     image: str | None = None
@@ -315,11 +385,46 @@ def load_accessories() -> list[dict[str, object]]:
     return data if isinstance(data, list) else seed_accessories()
 
 
+def catalog_categories() -> list[str]:
+    categories = {category.casefold(): category for category in CATALOG_CATEGORIES}
+    for item in [*load_products(), *load_accessories()]:
+        category = " ".join(str(item.get("category") or "").split())
+        if category:
+            categories.setdefault(category.casefold(), category)
+    return sorted(categories.values(), key=str.casefold)
+
+
+def canonical_category(value: str) -> str:
+    normalized = " ".join(value.split())
+    for category in catalog_categories():
+        if category.casefold() == normalized.casefold():
+            return category
+    raise HTTPException(status_code=422, detail="Choose an existing catalog category.")
+
+
+def public_catalog_item(item: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in item.items() if key != "provenance"}
+
+
+def catalog_provenance(request: CatalogDetailsPayload, previous: dict[str, object]) -> dict[str, object]:
+    if "provenance" not in request.model_fields_set:
+        return {"provenance": previous["provenance"]} if "provenance" in previous else {}
+    return {"provenance": request.provenance.model_dump() if request.provenance else ProvenancePayload().model_dump()}
+
+
+def accessory_specifications(request: AccessoryPayload, previous: dict[str, object]) -> dict[str, object]:
+    fields = {}
+    for field in AccessorySpecificationsPayload.model_fields:
+        value = getattr(request, field) if field in request.model_fields_set else previous.get(field, getattr(request, field))
+        fields[field] = value.strip() if isinstance(value, str) else value
+    return fields
+
+
 def accessory_from_payload(accessory_id: int, request: AccessoryPayload, fallback_image: str) -> dict[str, object]:
     return {
         "id": accessory_id,
         "name": request.name.strip(),
-        "category": request.category.strip() or "General",
+        "category": canonical_category(request.category),
         "dimensions": request.dimensions.strip(),
         "material": request.material.strip(),
         "weight": request.weight.strip(),
@@ -405,7 +510,7 @@ def verify_admin() -> dict[str, str]:
 
 @app.get("/api/products")
 def get_products() -> dict[str, list[dict[str, object]]]:
-    return {"items": [product for product in load_products() if product.get("publicationStatus") != "draft"]}
+    return {"items": [public_catalog_item(product) for product in load_products() if product.get("publicationStatus") != "draft"]}
 
 
 @app.get("/api/admin/products", dependencies=[Depends(require_admin)])
@@ -413,11 +518,16 @@ def get_admin_products() -> dict[str, list[dict[str, object]]]:
     return {"items": load_products()}
 
 
+@app.get("/api/admin/categories", dependencies=[Depends(require_admin)])
+def get_admin_categories() -> dict[str, list[str]]:
+    return {"items": catalog_categories()}
+
+
 @app.get("/api/products/{slug}")
 def get_product_by_slug(slug: str) -> dict[str, object]:
     for product in load_products():
         if product.get("slug") == slug and product.get("publicationStatus") != "draft":
-            return {"item": product}
+            return {"item": public_catalog_item(product)}
 
     raise HTTPException(status_code=404, detail="Product not found")
 
@@ -464,7 +574,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
             "id": next_id,
             "slug": slug,
             "name": request.name.strip(),
-            "category": request.category.strip() or "General",
+            "category": canonical_category(request.category),
             "price": float(request.price),
             "currency": request.currency or "CAD",
             "shortDescription": request.shortDescription.strip(),
@@ -475,6 +585,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
         }
         product.update(catalog_details(request, {}, "/images/pro-elite.svg"))
         product.update(product_specifications(request, {}))
+        product.update(catalog_provenance(request, {}))
         products.append(product)
         save_products(products)
     return {"status": "created", "item": product}
@@ -489,7 +600,7 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                     "id": product_id,
                     "slug": request.slug or str(product.get("slug")) or slugify(request.name),
                     "name": request.name.strip(),
-                    "category": request.category.strip() or "General",
+                    "category": canonical_category(request.category),
                     "price": float(request.price),
                     "currency": request.currency if "currency" in request.model_fields_set and request.currency else str(product.get("currency", "USD")),
                     "shortDescription": request.shortDescription.strip(),
@@ -500,6 +611,7 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                 }
                 updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
                 updated.update(product_specifications(request, product))
+                updated.update(catalog_provenance(request, product))
                 products[index] = updated
                 save_products(products)
                 delete_catalog_images(product)
@@ -527,6 +639,11 @@ def delete_product(product_id: int) -> dict[str, str]:
 
 @app.get("/api/accessories")
 def get_accessories() -> dict[str, list[dict[str, object]]]:
+    return {"items": [public_catalog_item(item) for item in load_accessories()]}
+
+
+@app.get("/api/admin/accessories", dependencies=[Depends(require_admin)])
+def get_admin_accessories() -> dict[str, list[dict[str, object]]]:
     return {"items": load_accessories()}
 
 
@@ -544,6 +661,8 @@ def create_accessory(request: AccessoryPayload) -> dict[str, object]:
             "/images/accessories/straight-bar.svg",
         )
         created.update(catalog_details(request, {}, "/images/accessories/straight-bar.svg"))
+        created.update(accessory_specifications(request, {}))
+        created.update(catalog_provenance(request, {}))
         accessories.append(created)
         write_json_list(ACCESSORIES_PATH, accessories)
     return {"status": "created", "item": created}
@@ -560,6 +679,8 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
             if int(existing.get("id", 0)) == accessory_id:
                 updated = accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))
                 updated.update(catalog_details(request, existing, "/images/accessories/straight-bar.svg"))
+                updated.update(accessory_specifications(request, existing))
+                updated.update(catalog_provenance(request, existing))
                 accessories[index] = updated
                 write_json_list(ACCESSORIES_PATH, accessories)
                 delete_catalog_images(existing)

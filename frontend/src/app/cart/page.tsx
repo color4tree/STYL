@@ -1,145 +1,64 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { clearCart, formatPrice, getCartTotals, MAX_ITEM_QUANTITY, readCart, removeProductFromCart, updateCartQuantity, type CartItem } from "@/lib/cart";
-import BrandLogo from "@/components/BrandLogo";
+import { useState } from "react";
+import { formatPrice, getCartCount, getCartTotals, lineAmount, MAX_ITEM_QUANTITY } from "@/lib/cart";
+import { quantityLabel } from "@/lib/catalogDetails";
+import { useCart } from "@/lib/useCart";
+import StoreHeader from "@/components/StoreHeader";
+import CartFeedback from "@/components/CartFeedback";
 
 export default function CartPage() {
-  const [items, setItems] = useState<CartItem[]>([]);
-
-  useEffect(() => {
-    setItems(readCart());
-  }, []);
-
-  const totals = useMemo(
-    () => getCartTotals(items),
-    [items],
-  );
-
-  const updateQuantity = (id: number, delta: number) => {
-    setItems(updateCartQuantity(id, delta));
-  };
-
-  const removeItem = (id: number) => {
-    setItems(removeProductFromCart(id));
-  };
-
-  const handleClearCart = () => {
-    setItems(clearCart());
-  };
-
-  return (
-    <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-5xl">
-        <Link href="/" aria-label="STYL home" className="mb-8 inline-flex">
-          <BrandLogo markClassName="h-8 w-auto" />
-        </Link>
-        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Cart</div>
-            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">Your selected equipment</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleClearCart}
-              className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--ink)]"
-            >
-              Clear cart
-            </button>
-            <Link href="/" className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium">
-              Continue shopping
-            </Link>
-          </div>
-        </div>
-
-        {items.length === 0 ? (
-          <section className="rounded-[28px] border border-[var(--line)] bg-white/70 p-8">
-            <p className="text-lg text-[var(--muted)]">Your cart is empty.</p>
-            <Link href="/" className="mt-6 inline-flex rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white">
-              Explore collection
-            </Link>
-          </section>
-        ) : (
-          <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
-            <section className="space-y-4">
-              {items.map((item) => (
-                <div key={item.id} className="flex flex-col gap-4 rounded-[24px] border border-[var(--line)] bg-white/70 p-5 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-xl font-semibold">{item.name}</div>
-                    <div className="mt-2 text-sm text-[var(--muted)]">Unit price: {formatPrice(item.price, item.currency)}</div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-4 sm:justify-end">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, -1)}
-                        className="h-9 w-9 rounded-full border border-[var(--line)] bg-white text-lg"
-                        aria-label={`Decrease quantity for ${item.name}`}
-                      >
-                        −
-                      </button>
-                      <span className="min-w-8 text-center text-sm font-medium">{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, 1)}
-                        disabled={item.quantity >= MAX_ITEM_QUANTITY}
-                        className="h-9 w-9 rounded-full border border-[var(--line)] bg-white text-lg disabled:opacity-40"
-                        aria-label={`Increase quantity for ${item.name}`}
-                      >
-                        +
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="min-w-24 text-right font-semibold">
-                        {formatPrice(item.price * item.quantity, item.currency)}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.id)}
-                        className="text-sm font-medium text-[var(--muted)] underline-offset-4 hover:underline"
-                      >
-                        Remove
-                      </button>
-                    </div>
+  const { cart: items, update, remove, clear, error, notice } = useCart();
+  const [confirmClear, setConfirmClear] = useState(false);
+  const totals = getCartTotals(items);
+  return <>
+    <StoreHeader cartCount={getCartCount(items)} />
+    <main className="container py-8 pb-32 text-[var(--ink)] lg:py-12">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div><h1 className="text-3xl font-semibold tracking-tight lg:text-5xl">Your selection</h1><p className="mt-3 max-w-2xl leading-7 text-[var(--muted)]">Review your equipment and request a quote. No payment is collected here.</p></div>
+        <Link href="/#products" className="inline-flex min-h-11 items-center underline">Continue shopping</Link>
+      </div>
+      <CartFeedback error={error} notice={notice} />
+      {!items.length && !error ? <section className="soft-panel rounded-3xl p-6">
+        <h2 className="text-xl font-semibold">Your cart is empty.</h2>
+        <div className="mt-4 flex flex-wrap gap-3"><Link href="/#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 text-white">Shop equipment</Link><Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border px-5">Browse accessories</Link></div>
+      </section> : <>
+        <div className="grid items-start gap-8 lg:grid-cols-[1.3fr_0.7fr]">
+          <section aria-label="Selected items" className="space-y-4">
+            {items.map((item) => <article key={item.id} className="soft-panel min-w-0 rounded-2xl p-4 lg:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1"><h2 className="break-words text-xl font-semibold">{item.slug ? <Link href={`/products/${item.slug}`} className="hover:underline">{item.name}</Link> : item.name}</h2>
+                  <p className="mt-2 text-sm text-[var(--muted)]">Unit price: {formatPrice(item.price, item.currency)}{item.sellingUnit ? ` / ${item.sellingUnit.toLowerCase()}` : ""}</p>
+                  {item.packageQuantity ? <p className="mt-1 text-sm text-[var(--muted)]">{item.packageQuantity} pieces per sale unit</p> : null}
+                </div>
+                <p className="font-semibold">{formatPrice(lineAmount(item.price, item.quantity), item.currency)}</p>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div><span className="mb-2 block text-sm">Quantity: {quantityLabel(item.quantity, item.sellingUnit)}</span>
+                  <div className="inline-flex items-center rounded-full border border-[var(--line)] bg-white">
+                    <button type="button" disabled={item.quantity <= 1} onClick={() => update(item.id, -1)} aria-label={`Decrease quantity for ${item.name}`} className="h-11 w-11 rounded-full disabled:opacity-40">−</button>
+                    <span className="min-w-8 text-center">{item.quantity}</span>
+                    <button type="button" disabled={item.quantity >= MAX_ITEM_QUANTITY} onClick={() => update(item.id, 1)} aria-label={`Increase quantity for ${item.name}`} className="h-11 w-11 rounded-full disabled:opacity-40">+</button>
                   </div>
                 </div>
-              ))}
-            </section>
-
-            <aside className="rounded-[28px] border border-[var(--line)] bg-[var(--ink)] p-6 text-white">
-              <div className="text-xs uppercase tracking-[0.24em] text-white/60">Summary</div>
-              <div className="mt-6 space-y-2 text-lg">
-                {totals.map(([currency, total]) => (
-                  <div key={currency} className="flex flex-wrap items-center justify-between gap-2">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(total, currency)}</span>
-                  </div>
-                ))}
+                <button type="button" onClick={() => remove(item.id)} aria-label={`Remove ${item.name}`} className="min-h-11 px-3 text-sm underline">Remove</button>
               </div>
-              <div className="mt-3 flex items-center justify-between text-sm text-white/70">
-                <span>Shipping</span>
-                <span>Calculated later</span>
-              </div>
-              <div className="mt-8 border-t border-white/15 pt-5 text-xl font-semibold">
-                {totals.map(([currency, total]) => (
-                  <div key={currency} className="flex flex-wrap items-center justify-between gap-2">
-                    <span>Total</span>
-                    <span>{formatPrice(total, currency)}</span>
-                  </div>
-                ))}
-              </div>
-
-              <Link href="/?quote=cart#contact" className="mt-8 inline-flex w-full items-center justify-center rounded-full bg-white px-4 py-3 text-sm font-medium text-[var(--ink)]">
-                Request a quote
-              </Link>
-            </aside>
-          </div>
-        )}
-      </div>
+            </article>)}
+          </section>
+          <aside className="rounded-3xl bg-[var(--ink)] p-6 text-white lg:sticky lg:top-28">
+            <h2 className="text-xl font-semibold">Summary</h2>
+            <div className="mt-5 space-y-3">{totals.map(([currency, total]) => <div key={currency} className="flex flex-wrap justify-between gap-3 text-lg"><span>Total</span><span>{formatPrice(total, currency)}</span></div>)}</div>
+            <p className="mt-3 text-sm text-white/80">Shipping and final pricing confirmed with your quote.</p>
+            {items.length ? <Link href="/?quote=cart#contact" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-4 text-center font-medium text-[var(--ink)]">Request a quote</Link> : null}
+          </aside>
+        </div>
+        <div className="mt-8">
+          {confirmClear ? <div className="flex flex-wrap items-center gap-3"><p>Remove all selected items?</p><button type="button" className="min-h-11 rounded-full bg-red-700 px-4 text-white" onClick={() => { if (clear()) setConfirmClear(false); }}>Confirm clear cart</button><button type="button" className="min-h-11 px-4" onClick={() => setConfirmClear(false)}>Cancel</button></div>
+            : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => setConfirmClear(true)}>Clear cart</button>}
+        </div>
+        {items.length ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="text-sm">{getCartCount(items)} sale units selected</span><Link href="/?quote=cart#contact" className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--ink)] px-5 font-medium text-white">Request a quote</Link></div> : null}
+      </>}
     </main>
-  );
+  </>;
 }

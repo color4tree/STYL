@@ -8,7 +8,10 @@ import HeroManager from "./HeroManager";
 import BrandLogo from "@/components/BrandLogo";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
-import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
+import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications, type Provenance } from "@/lib/catalogDetails";
+import { fetchCatalogCategories } from "@/lib/accessories";
+import { AdminNotice, AdminSaveBar, PriceInput, ProvenanceEditor, parsePrice, priceError, type AdminMessage } from "./AdminFields";
+import { useUnsavedChanges } from "./useUnsavedChanges";
 
 type Product = CatalogDetails & ProductSpecifications & {
   id: number;
@@ -22,6 +25,7 @@ type Product = CatalogDetails & ProductSpecifications & {
   featured: boolean;
   image: string;
   features: string[];
+  provenance?: Provenance;
 };
 
 type AdminTab = "products" | "accessories" | "banner";
@@ -83,6 +87,7 @@ function toFormState(product: Product): Omit<Product, "id" | "slug"> {
     photos: getCatalogPhotos(product),
     compatibility: product.compatibility ?? emptyCompatibility,
     features: product.features?.length > 0 ? product.features : [""],
+    provenance: product.provenance,
   };
 }
 
@@ -93,13 +98,27 @@ export default function AdminPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [form, setForm] = useState<Omit<Product, "id" | "slug">>(emptyProduct);
+  const [baseline, setBaseline] = useState(JSON.stringify(emptyProduct));
+  const [priceText, setPriceText] = useState("0.00");
+  const [categories, setCategories] = useState<string[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [accessoryBusy, setAccessoryBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [childDirty, setChildDirty] = useState(false);
+  const [message, setMessage] = useState<AdminMessage | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || priceText !== form.price.toFixed(2) : childDirty;
+  const busy = saving || uploading || accessoryBusy;
+  const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
+
+  const loadForm = (next: Omit<Product, "id" | "slug">) => {
+    setForm(next);
+    setBaseline(JSON.stringify(next));
+    setPriceText(next.price.toFixed(2));
+  };
 
   const verifyAccess = async (token = adminToken) => {
     setCheckingAccess(true);
@@ -107,55 +126,68 @@ export default function AdminPage() {
 
     try {
       await verifyAdminToken(token);
-      const items = await fetchProducts(token);
+      const [items, supportedCategories] = await Promise.all([fetchProducts(token), fetchCatalogCategories(token)]);
+      setCategories(supportedCategories);
       setProducts(items);
       setSelectedId(items[0]?.id ?? null);
-      setForm(items[0] ? toFormState(items[0]) : emptyProduct);
+      loadForm(items[0] ? toFormState(items[0]) : emptyProduct);
       window.sessionStorage.setItem("styl-admin-token", token);
       setAdminToken(token);
       setAuthenticated(true);
     } catch (error) {
       window.sessionStorage.removeItem("styl-admin-token");
       setAuthenticated(false);
-      setMessage(error instanceof Error ? error.message : "Unable to verify admin access.");
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to verify admin access." });
     } finally {
       setCheckingAccess(false);
     }
   };
 
   const signOut = () => {
+    if (!confirmLeave()) return;
     window.sessionStorage.removeItem("styl-admin-token");
     setAdminToken("");
     setAuthenticated(false);
     setMessage(null);
+    loadForm(emptyProduct);
+    setChildDirty(false);
+    setActiveTab("products");
+    setShowEditor(false);
   };
 
   useEffect(() => {
+    let active = true;
     async function initialize() {
       const savedToken = window.sessionStorage.getItem("styl-admin-token");
       if (savedToken) {
         try {
           await verifyAdminToken(savedToken);
-          const items = await fetchProducts(savedToken);
+          const [items, supportedCategories] = await Promise.all([fetchProducts(savedToken), fetchCatalogCategories(savedToken)]);
+          if (!active) return;
+          setCategories(supportedCategories);
           setProducts(items);
           setSelectedId(items[0]?.id ?? null);
-          setForm(items[0] ? toFormState(items[0]) : emptyProduct);
+          loadForm(items[0] ? toFormState(items[0]) : emptyProduct);
           setAdminToken(savedToken);
           setAuthenticated(true);
         } catch (error) {
+          if (!active) return;
           window.sessionStorage.removeItem("styl-admin-token");
-          setMessage(error instanceof Error ? error.message : "Unable to verify admin access.");
+          setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to verify admin access." });
         }
       }
+      if (!active) return;
       setLoading(false);
       setCheckingAccess(false);
     }
 
     initialize();
+    return () => { active = false; };
   }, []);
 
   const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setMessage((current) => current?.type === "success" ? null : current);
   };
 
   const updateFeature = (index: number, value: string) => {
@@ -182,24 +214,39 @@ export default function AdminPage() {
   };
 
   const selectProduct = (product: Product) => {
+    if (!confirmLeave()) return;
     setSelectedId(product.id);
-    setForm(toFormState(product));
+    loadForm(toFormState(product));
+    setShowEditor(true);
+    setMessage(null);
     setConfirmingDelete(false);
   };
 
   const resetForm = () => {
-    setForm(emptyProduct);
+    if (!confirmLeave()) return;
+    loadForm(emptyProduct);
+    setShowEditor(true);
     setSelectedId(null);
     setMessage(null);
     setConfirmingDelete(false);
   };
 
   const saveProduct = async () => {
+    const price = parsePrice(priceText);
+    if (price === null) {
+      setMessage({ type: "error", text: priceError });
+      return;
+    }
     if (!form.name.trim() || !form.category.trim()) {
-      setMessage("Name and category are required.");
+      setMessage({ type: "error", text: "Name and category are required." });
+      return;
+    }
+    if (!categories.includes(form.category)) {
+      setMessage({ type: "error", text: "Select a supported category from the list." });
       return;
     }
 
+    setPriceText(price.toFixed(2));
     setSaving(true);
     setMessage(null);
 
@@ -208,7 +255,7 @@ export default function AdminPage() {
         ...form,
         name: form.name.trim(),
         category: form.category.trim(),
-        price: Number(form.price || 0),
+        price,
         features: form.features.map((feature) => feature.trim()).filter(Boolean),
       };
 
@@ -239,10 +286,10 @@ export default function AdminPage() {
       });
 
       setSelectedId(saved.id);
-      setForm(toFormState(saved));
-      setMessage("Product saved successfully.");
+      loadForm(toFormState(saved));
+      setMessage({ type: "success", text: "Product saved successfully." });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to save product.");
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to save product." });
     } finally {
       setSaving(false);
     }
@@ -270,20 +317,18 @@ export default function AdminPage() {
       setProducts(remaining);
       if (remaining.length > 0) {
         setSelectedId(remaining[0].id);
-        setForm(toFormState(remaining[0]));
+        loadForm(toFormState(remaining[0]));
       } else {
         setSelectedId(null);
-        setForm(emptyProduct);
+        loadForm(emptyProduct);
       }
-      setMessage(`"${product.name}" deleted.`);
+      setMessage({ type: "success", text: `"${product.name}" deleted.` });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to delete product.");
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to delete product." });
     } finally {
       setSaving(false);
     }
   };
-
-  const categories = [...new Set(["Strength", "Racks", "Multi trainers", "Benches", "Cardio", "Recovery", "Accessories", "General", ...products.map((product) => product.category)])].filter(Boolean);
 
   if (loading || checkingAccess) {
     return <main className="min-h-screen bg-[var(--bg)] px-4 py-16 text-[var(--ink)]">Loading admin catalog...</main>;
@@ -316,7 +361,7 @@ export default function AdminPage() {
           <button type="submit" className="mt-5 w-full rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white">
             Sign in
           </button>
-          {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
+          <AdminNotice message={message} />
         </form>
       </main>
     );
@@ -324,7 +369,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
-      <fieldset disabled={saving || uploading || accessoryBusy} className="mx-auto min-w-0 max-w-7xl">
+      <fieldset disabled={busy} className="mx-auto min-w-0 max-w-7xl">
         <header className="mb-8 flex flex-col justify-between gap-4 border-b border-[var(--line)] pb-6 md:flex-row md:items-end">
           <div>
             <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
@@ -332,12 +377,20 @@ export default function AdminPage() {
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">
               {adminTabs.find((tab) => tab.id === activeTab)?.heading}
             </h1>
-            <div className="mt-4 inline-flex rounded-full border border-[var(--line)] bg-white p-1 text-sm font-medium">
+            <div className="mt-4 inline-flex flex-wrap rounded-2xl border border-[var(--line)] bg-white p-1 text-sm font-medium">
               {adminTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => {
+                    if (tab.id === activeTab || !confirmLeave()) return;
+                    const selected = products.find((product) => product.id === selectedId);
+                    loadForm(selected ? toFormState(selected) : emptyProduct);
+                    setMessage(null);
+                    setChildDirty(false);
+                    setActiveTab(tab.id);
+                  }}
+                  aria-pressed={activeTab === tab.id}
                   className={`rounded-full px-4 py-1.5 ${activeTab === tab.id ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
                 >
                   {tab.label}
@@ -356,12 +409,14 @@ export default function AdminPage() {
         </header>
 
         {activeTab === "banner" ? (
-          <HeroManager adminToken={adminToken} />
+          <HeroManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} />
         ) : activeTab === "accessories" ? (
-          <AccessoryManager adminToken={adminToken} onBusyChange={setAccessoryBusy} />
+          <AccessoryManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} confirmLeave={confirmLeave} />
         ) : (
+        <>
+        <AdminNotice message={message} />
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-          <aside className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4">
+          <aside className={`${showEditor ? "hidden lg:block" : ""} rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Catalog</h2>
               <button type="button" onClick={resetForm} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-medium">
@@ -382,6 +437,7 @@ export default function AdminPage() {
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{product.name}</div>
                       <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">{product.category}</div>
+                      <div className="mt-1 text-xs text-[var(--muted)]">${product.price.toFixed(2)} {product.currency}</div>
                       <div className="mt-1 text-xs text-[var(--muted)]">{product.publicationStatus === "draft" ? "Draft" : "Published"}</div>
                     </div>
                   </div>
@@ -390,8 +446,16 @@ export default function AdminPage() {
             </div>
           </aside>
 
-          <section className="rounded-[28px] border border-[var(--line)] bg-white/80 p-6">
-            <div className="grid gap-5 md:grid-cols-2">
+          <section className={`${showEditor ? "" : "hidden lg:block"} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4 sm:p-6`}>
+            <button type="button" onClick={() => {
+              if (!confirmLeave()) return;
+              const selected = products.find((product) => product.id === selectedId);
+              loadForm(selected ? toFormState(selected) : emptyProduct);
+              setShowEditor(false);
+              setMessage(null);
+            }} className="mb-5 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to products</button>
+            <fieldset className="grid min-w-0 gap-5 md:grid-cols-2">
+              <legend className="mb-4 text-lg font-semibold">Product essentials &amp; details</legend>
               <label className="block text-sm font-medium">
                 Product name
                 <input
@@ -410,19 +474,12 @@ export default function AdminPage() {
                   className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
                 >
                   <option value="">Select category</option>
+                  {form.category && !categories.includes(form.category) ? <option value={form.category}>{form.category} (existing)</option> : null}
                   {categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
               </label>
 
-              <label className="block text-sm font-medium">
-                Price
-                <input
-                  type="number"
-                  value={form.price}
-                  onChange={(event) => updateField("price", Number(event.target.value))}
-                  className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
-                />
-              </label>
+              <PriceInput id="product-price" value={priceText} onChange={setPriceText} />
 
               <label className="block text-sm font-medium">
                 Currency
@@ -466,6 +523,8 @@ export default function AdminPage() {
               <PhotoEditor key={selectedId ?? "new"} photos={getCatalogPhotos(form)} adminToken={adminToken} disabled={saving || uploading} onBusyChange={setUploading} onChange={(photos) => setForm((current) => ({ ...current, photos, image: getCatalogCover(photos) }))} />
               <CompatibilityEditor value={form.compatibility} onChange={(value) => updateField("compatibility", value)} />
 
+              <fieldset className="grid min-w-0 gap-5 border-t border-[var(--line)] pt-5 md:col-span-2 md:grid-cols-2">
+                <legend className="text-lg font-semibold">Customer-facing descriptions</legend>
               <label className="block text-sm font-medium md:col-span-2">
                 Short description
                 <input
@@ -498,12 +557,13 @@ export default function AdminPage() {
                   {form.features.map((feature, index) => (
                     <div key={index} className="flex gap-3">
                       <input
+                        aria-label={`Feature ${index + 1}`}
                         value={feature}
                         onChange={(event) => updateFeature(index, event.target.value)}
                         className="w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
                         placeholder="Feature description"
                       />
-                      <button type="button" onClick={() => removeFeature(index)} className="rounded-full border border-[var(--line)] px-3 py-2 text-sm">
+                      <button type="button" aria-label={`Remove feature ${index + 1}`} onClick={() => removeFeature(index)} className="rounded-full border border-[var(--line)] px-3 py-2 text-sm">
                         Remove
                       </button>
                     </div>
@@ -518,14 +578,19 @@ export default function AdminPage() {
                   onChange={(event) => updateField("featured", event.target.checked)}
                   className="h-4 w-4"
                 />
-                Feature this product on the home page
+                Show first in the home collection
               </label>
-            </div>
+              </fieldset>
+              <ProvenanceEditor value={form.provenance} onChange={(value) => updateField("provenance", value)} />
+            </fieldset>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <AdminSaveBar>
               <button type="button" onClick={saveProduct} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
                 {saving ? "Saving..." : selectedId ? "Save changes" : "Create product"}
               </button>
+              {dirty ? <span className="text-sm text-[var(--muted)]">Unsaved changes</span> : null}
+            </AdminSaveBar>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
               {selectedId && !confirmingDelete ? (
                 <button
                   type="button"
@@ -560,9 +625,9 @@ export default function AdminPage() {
               </Link>
             </div>
 
-            {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
           </section>
         </div>
+        </>
         )}
       </fieldset>
     </main>

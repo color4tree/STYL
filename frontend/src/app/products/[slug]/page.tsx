@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { addProductToCart, formatPrice, getCartCount, readCart } from "@/lib/cart";
+import { formatPrice, getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
+import { useCart } from "@/lib/useCart";
 import { API_BASE } from "@/lib/api";
-import BrandLogo from "@/components/BrandLogo";
+import StoreHeader from "@/components/StoreHeader";
+import CartFeedback from "@/components/CartFeedback";
 import PhotoGallery from "@/components/PhotoGallery";
 import { CompatibilityDetails } from "@/components/Compatibility";
 import { getCatalogPhotos, productSpecificationFields, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
@@ -22,14 +24,16 @@ type Product = CatalogDetails & ProductSpecifications & {
   image?: string;
   features?: string[];
 };
-const CART_KEY = "styl-cart";
 
 export default function ProductDetailPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug;
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
-  const [cartCount, setCartCount] = useState(0);
+  const { cart, add, error, notice } = useCart();
+  const action = useRef<HTMLDivElement>(null);
+  const [actionVisible, setActionVisible] = useState(true);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (!slug) return;
@@ -52,22 +56,13 @@ export default function ProductDetailPage() {
     };
 
     loadProduct();
-  }, [slug]);
+  }, [slug, retry]);
 
   useEffect(() => {
-    setCartCount(getCartCount(readCart()));
-  }, []);
-
-  const addToCart = () => {
-    if (!product) return;
-
-    const next = addProductToCart(product);
-    setCartCount(getCartCount(next));
-  };
-
-  const priceLabel = useMemo(() => {
-    if (!product) return "";
-    return formatPrice(product.price, product.currency);
+    if (!action.current) return;
+    const observer = new IntersectionObserver(([entry]) => setActionVisible(entry.isIntersecting));
+    observer.observe(action.current);
+    return () => observer.disconnect();
   }, [product]);
 
   if (loading) {
@@ -83,6 +78,7 @@ export default function ProductDetailPage() {
       <main className="min-h-screen bg-[var(--bg)] px-4 py-20 text-[var(--ink)]">
         <div className="mx-auto max-w-4xl">
           <h1 className="text-3xl font-semibold">Product not found</h1>
+          <button type="button" className="mt-4 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button>
           <Link href="/" className="mt-6 inline-block rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white">
             Return home
           </Link>
@@ -96,34 +92,44 @@ export default function ProductDetailPage() {
   const features = product.features?.filter((feature) => feature.trim()) ?? [];
   const shortDescription = product.shortDescription?.trim();
   const description = product.description?.trim();
+  const priceLabel = formatPrice(product.price, product.currency);
+  const atLimit = (cart.find((item) => item.id === product.id)?.quantity ?? 0) >= MAX_ITEM_QUANTITY;
 
   return (
-    <main className="min-h-screen bg-[var(--bg)] px-4 py-12 text-[var(--ink)] sm:px-6 lg:px-8">
+    <>
+    <StoreHeader cartCount={getCartCount(cart)} />
+    <main className="min-h-screen bg-[var(--bg)] px-4 py-6 pb-32 text-[var(--ink)] sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-6xl">
-        <Link href="/" aria-label="STYL home" className="mb-8 inline-flex">
-          <BrandLogo markClassName="h-8 w-auto" />
-        </Link>
-        <div className="mb-8 flex items-center justify-between gap-4">
-          <Link href="/" className="text-sm font-medium text-[var(--muted)]">
+        <div className="mb-4">
+          <Link href="/#products" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--muted)]">
             ← Back to collection
           </Link>
-          <Link href="/cart" className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium">
-            Cart ({cartCount})
-          </Link>
         </div>
+        <CartFeedback error={error} notice={notice} />
 
-        <section className={`grid gap-10 rounded-[32px] border border-[var(--line)] bg-white/70 p-6 md:p-8 ${photos.length ? "md:grid-cols-[1.1fr_0.9fr]" : ""}`}>
-          {photos.length ? <PhotoGallery key={product.id} photos={photos} name={product.name} /> : null}
+        <section className={`grid gap-6 rounded-3xl border border-[var(--line)] bg-white/70 p-4 lg:gap-10 lg:p-8 ${photos.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+          <div className={photos.length ? "lg:col-start-2 lg:row-start-1" : ""}>
+            <div className="text-sm text-[var(--muted)]">{product.category}</div>
+            <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight lg:text-5xl">{product.name}</h1>
+            <div className="mt-4 text-2xl font-semibold">{priceLabel}</div>
+            {product.stockStatus?.trim() ? <p className="mt-3 text-sm font-medium">{product.stockStatus}</p> : null}
+          </div>
+          {photos.length ? <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1"><PhotoGallery key={product.id} photos={photos} name={product.name} /></div> : null}
 
           <div className="min-w-0 break-words">
-            <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">{product.category}</div>
-            <h1 className="mt-4 text-4xl font-semibold tracking-[-0.06em] md:text-5xl">{product.name}</h1>
-            <div className="mt-5 text-3xl font-semibold">{priceLabel}</div>
-            {product.stockStatus?.trim() ? <p className="mt-3 text-sm font-medium">{product.stockStatus}</p> : null}
-            {shortDescription ? <p className="mt-6 whitespace-pre-line text-lg leading-8 text-[var(--muted)]">{shortDescription}</p> : null}
+            {shortDescription ? <p className="whitespace-pre-line text-base leading-7 text-[var(--muted)] lg:text-lg lg:leading-8">{shortDescription}</p> : null}
+            <div ref={action} className="my-5 flex flex-wrap gap-3">
+              <button type="button" disabled={atLimit} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50">
+                {atLimit ? "Maximum 10 in cart" : "Add to cart"}
+              </button>
+              <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}#contact`} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">
+                Request quote
+              </Link>
+            </div>
+            <CompatibilityDetails value={product.compatibility} />
             {specifications.length ? (
-              <section className="my-5 border-t border-[var(--line)] pt-4">
-                <h2 className="text-base font-semibold">Specifications</h2>
+              <details className="my-5 border-t border-[var(--line)] pt-4" open>
+                <summary className="min-h-11 text-base font-semibold">Specifications</summary>
                 <dl className="mt-3 space-y-3 text-sm">
                   {specifications.map((field) => (
                     <div key={field.key}>
@@ -132,18 +138,8 @@ export default function ProductDetailPage() {
                     </div>
                   ))}
                 </dl>
-              </section>
+              </details>
             ) : null}
-            <CompatibilityDetails value={product.compatibility} />
-
-            <div className="mt-8 flex flex-wrap gap-4">
-              <button type="button" onClick={addToCart} className="rounded-full bg-[var(--ink)] px-6 py-3 text-sm font-medium text-white">
-                Add to cart
-              </button>
-              <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}#contact`} className="rounded-full border border-[var(--ink)] bg-transparent px-6 py-3 text-sm font-medium text-[var(--ink)]">
-                Request quote
-              </Link>
-            </div>
           </div>
         </section>
 
@@ -166,6 +162,8 @@ export default function ProductDetailPage() {
           </div>
         ) : null}
       </div>
+      {!actionVisible ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="font-semibold">{priceLabel}</span><button type="button" disabled={atLimit} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button></div> : null}
     </main>
+    </>
   );
 }

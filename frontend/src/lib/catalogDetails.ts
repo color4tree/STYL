@@ -12,6 +12,29 @@ export type CatalogDetails = {
   compatibility?: Compatibility;
 };
 
+export type Provenance = {
+  sourceType: string;
+  marketplaceUrl: string;
+  listingId: string;
+  capturedDate: string;
+  notes: string;
+};
+
+export const emptyProvenance: Provenance = {
+  sourceType: "", marketplaceUrl: "", listingId: "", capturedDate: "", notes: "",
+};
+
+export type SellingUnit = "" | "Each" | "Pair" | "Set";
+
+export function saleUnitLabel(unit?: SellingUnit): string {
+  return unit === "Each" ? "item" : unit?.toLowerCase() ?? "";
+}
+
+export function quantityLabel(quantity: number, unit?: SellingUnit): string {
+  const label = saleUnitLabel(unit);
+  return label ? `${quantity} ${label}${quantity === 1 ? "" : "s"}` : String(quantity);
+}
+
 export const MAX_PHOTOS = 12;
 export const MAX_VIDEO_SIZE = 50 * 1024 * 1024;
 

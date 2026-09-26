@@ -112,6 +112,63 @@ only `$`, while cart totals remain grouped by currency without conversion.
 Home product cards use the same photo/video gallery as accessories and product
 detail pages, managed through the shared admin media editor.
 
+## Catalog editing and responsive experience
+
+Product and accessory prices accept nonnegative values with up to two decimal
+places. Admin previews, catalog prices, and cart amounts show two decimal places.
+The cart calculates line amounts and totals in cents without combining currencies.
+Plain dollar amounts in the home banner also display two decimals; other
+promotional banner text is preserved.
+
+The full home collection remains visible; Featured items appear first. Accessories
+support a short description, full description, features, finish/colour, included
+contents, selling unit (Each / Pair / Set), and package quantity. Quantity counts
+sale units, not individual pieces inside a pair or set. Existing entries without a
+selling unit remain unspecified; editors must confirm units rather than infer them
+from product names. Expanded accessory details keep long information readable.
+
+Categories use the authenticated catalog category list, including existing legacy
+values. New taxonomy entries require an intentional catalog-maintenance change;
+near-duplicate case/spacing is normalized. Internal source/provenance information
+is available only in authenticated admin responses and is omitted from public
+catalog responses. Do not put private migration notes into public use descriptions.
+
+Mobile navigation, larger touch controls, compact catalog-to-editor transitions,
+unsaved-change protection, and safe-area-aware actions complement the desktop
+navigation, catalog grids, and split-pane admin editor. Inquiry fields retain input
+after failure and show submission status; the cart is not cleared by an inquiry.
+No payment is collected. Draft/publication behavior is unchanged.
+
+Run frontend regression tests with `npm --prefix frontend test`, lint with
+`npm --prefix frontend run lint`, and build with `npm --prefix frontend run build`.
+From `backend`, run the existing unittest suite using its configured environment.
+Real iPhone Safari and Android Chrome remain required release checks for native
+keyboard, audio/video playback, seeking, and physical touch behavior.
+
+### Repeatable end-to-end tests
+
+From `frontend`, run `npx playwright install chromium` once, then
+`npm run test:e2e`. The suite builds and starts the production frontend on
+`127.0.0.1:3102` and a real API on `127.0.0.1:8102`. Both ports must be free; it
+deliberately refuses to reuse an existing server. Backend requirements must be
+installed in the repository-root `.venv`, or set `STYL_TEST_PYTHON` to the desired
+Python executable.
+
+Tests use a newly generated temporary catalog and admin token, never production
+data. SMTP is disabled; inquiry persistence is verified without sending mail.
+Temporary catalog files are removed after the run. Failure screenshots and traces
+remain under the ignored `frontend/test-results/` directory.
+
+The 20 checks cover desktop and phone-sized Chromium: authentication, accessory
+editing and reload, exact-cent prices, selling units, private provenance,
+save failures and unsaved-change guards, deletion, photo/video upload and reorder,
+real video seeking, failed-only upload retry, media limits, cart quantities,
+inquiry errors and storage, navigation, responsive layouts, home banner updates,
+and unavailable-media recovery. Controlled failure responses are injected only
+for recovery tests; successful operations use the real isolated API.
+Physical devices, Safari, production proxy configuration, and actual mailbox
+delivery still require separate release verification.
+
 Galleries support up to 12 photos and videos combined. Photos retain the 8 MiB
 per-file limit. Uploaded videos are limited to 50 MiB (52,428,800 bytes), checked
 by both the admin UI and API. Supported containers: MP4, iPhone MOV, M4V, WebM,

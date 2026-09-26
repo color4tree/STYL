@@ -31,6 +31,33 @@ a {
   text-decoration: none;
 }
 
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+
+input, textarea, select {
+  max-width: 100%;
+}
+
+button, summary, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+summary { cursor: pointer; }
+
+.safe-action {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 button,
 input,
 textarea {

@@ -25,6 +25,9 @@ class AdminAuthenticationTests(unittest.TestCase):
         main.UPLOAD_PATH = Path(self.temporary_directory.name) / "uploads"
         main.UPLOAD_PATH.mkdir()
         main.ADMIN_TOKEN = "test-admin-token"
+        categories = patch.object(main, "CATALOG_CATEGORIES", (*main.CATALOG_CATEGORIES, "Test", "Draft only category"))
+        categories.start()
+        self.addCleanup(categories.stop)
         self.client = TestClient(main.app)
 
     def tearDown(self) -> None:

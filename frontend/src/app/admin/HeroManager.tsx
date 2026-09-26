@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { type ChangeEvent, useEffect, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
-import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
+import { defaultHero, fetchHero, formatHeroPriceLabel, type Hero } from "@/lib/hero";
+import { AdminNotice, AdminSaveBar, type AdminMessage } from "./AdminFields";
 
 const inputClass = "mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3";
 
@@ -15,22 +16,28 @@ const textFields: { key: Exclude<keyof Hero, "image">; label: string; maxLength:
   { key: "priceLabel", label: "Price text", maxLength: 40 },
 ];
 
-export default function HeroManager({ adminToken }: { adminToken: string }) {
+export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }: { adminToken: string; onBusyChange: (busy: boolean) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [form, setForm] = useState<Hero>(defaultHero);
+  const [baseline, setBaseline] = useState(JSON.stringify(defaultHero));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<AdminMessage | null>(null);
+  const dirty = JSON.stringify(form) !== baseline;
+
+  useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
+  useEffect(() => { onBusyChange(loading || saving || uploading); return () => onBusyChange(false); }, [loading, saving, uploading, onBusyChange]);
 
   useEffect(() => {
     fetchHero()
-      .then(setForm)
-      .catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load home banner."))
+      .then((item) => { setForm(item); setBaseline(JSON.stringify(item)); })
+      .catch((error) => setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to load home banner." }))
       .finally(() => setLoading(false));
   }, []);
 
   const updateField = <K extends keyof Hero>(key: K, value: Hero[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
+    setMessage((current) => current?.type === "success" ? null : current);
   };
 
   const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -38,6 +45,7 @@ export default function HeroManager({ adminToken }: { adminToken: string }) {
     event.target.value = "";
     if (!image) return;
 
+    onBusyChange(true);
     setUploading(true);
     setMessage(null);
 
@@ -55,15 +63,16 @@ export default function HeroManager({ adminToken }: { adminToken: string }) {
       }
 
       updateField("image", data.image as string);
-      setMessage("Photo uploaded. Save changes to publish it.");
+      setMessage({ type: "success", text: "Photo uploaded. Save changes to publish it." });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to upload image.");
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to upload image." });
     } finally {
       setUploading(false);
     }
   };
 
   const saveHero = async () => {
+    onBusyChange(true);
     setSaving(true);
     setMessage(null);
 
@@ -82,9 +91,10 @@ export default function HeroManager({ adminToken }: { adminToken: string }) {
       }
 
       setForm(data.item as Hero);
-      setMessage("Home banner saved successfully.");
+      setBaseline(JSON.stringify(data.item));
+      setMessage({ type: "success", text: "Home banner saved successfully." });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to save home banner.");
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to save home banner." });
     } finally {
       setSaving(false);
     }
@@ -95,7 +105,9 @@ export default function HeroManager({ adminToken }: { adminToken: string }) {
   }
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+    <>
+    <AdminNotice message={message} />
+    <fieldset disabled={saving || uploading} className="grid min-w-0 gap-8 lg:grid-cols-[0.8fr_1.2fr]">
       <aside className="rounded-[28px] border border-[var(--line)] bg-white/80 p-4">
         <h2 className="mb-4 text-lg font-semibold">Preview</h2>
         <div className="rounded-[28px] bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-6 text-white">
@@ -110,7 +122,7 @@ export default function HeroManager({ adminToken }: { adminToken: string }) {
                 <div className="text-xs uppercase tracking-[0.22em] text-white/60">{form.eyebrow}</div>
                 <div className="mt-2 text-2xl font-semibold">{form.title}</div>
               </div>
-              <div className="text-xl font-medium">{form.priceLabel}</div>
+              <div className="text-xl font-medium">{formatHeroPriceLabel(form.priceLabel)}</div>
             </div>
           </div>
         </div>
@@ -156,17 +168,20 @@ export default function HeroManager({ adminToken }: { adminToken: string }) {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <button type="button" onClick={saveHero} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+        <AdminSaveBar>
+          <button type="button" onClick={saveHero} disabled={saving || uploading} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
             {saving ? "Saving..." : "Save changes"}
           </button>
+          {dirty ? <span className="text-sm text-[var(--muted)]">Unsaved changes</span> : null}
+        </AdminSaveBar>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <Link href="/" className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium text-[var(--ink)]">
             View home page
           </Link>
         </div>
 
-        {message ? <p className="mt-4 text-sm text-[var(--muted)]">{message}</p> : null}
       </section>
-    </div>
+    </fieldset>
+    </>
   );
 }

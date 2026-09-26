@@ -1,3 +1,5 @@
+import { quantityLabel, type SellingUnit } from "./catalogDetails";
+
 export type CartItem = {
   id: number;
   name: string;
@@ -5,6 +7,8 @@ export type CartItem = {
   currency?: string;
   quantity: number;
   slug?: string;
+  sellingUnit?: SellingUnit;
+  packageQuantity?: number | null;
 };
 
 export const CART_KEY = "styl-cart";
@@ -15,16 +19,20 @@ function currencyCode(currency?: string) {
 }
 
 export function formatPrice(price: number, currency?: string) {
-  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode(currency), currencyDisplay: "narrowSymbol" }).format(price);
+  return new Intl.NumberFormat("en-CA", { style: "currency", currency: currencyCode(currency), currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(price);
+}
+
+export function lineAmount(price: number, quantity: number): number {
+  return Math.round(price * 100) * quantity / 100;
 }
 
 export function getCartTotals(items: CartItem[]): [string, number][] {
   const totals = new Map<string, number>();
   for (const item of items) {
     const currency = currencyCode(item.currency);
-    totals.set(currency, (totals.get(currency) ?? 0) + item.price * item.quantity);
+    totals.set(currency, (totals.get(currency) ?? 0) + Math.round(item.price * 100) * item.quantity);
   }
-  return [...totals];
+  return [...totals].map(([currency, cents]) => [currency, cents / 100]);
 }
 
 export function readCart(): CartItem[] {
@@ -39,10 +47,15 @@ export function readCart(): CartItem[] {
     }
 
     const parsed = JSON.parse(raw) as CartItem[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed) || !parsed.every((item) =>
+      item && Number.isInteger(item.id) && typeof item.name === "string" &&
+      Number.isFinite(item.price) && item.price >= 0 &&
+      Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= MAX_ITEM_QUANTITY
+    )) throw new Error("Saved cart is invalid.");
+    return parsed;
   } catch (error) {
     console.error("Unable to read cart", error);
-    return [];
+    throw new Error("Unable to load your saved cart. Please allow browser storage or clear the cart to start again.");
   }
 }
 
@@ -52,6 +65,7 @@ export function writeCart(items: CartItem[]) {
   }
 
   window.localStorage.setItem(CART_KEY, JSON.stringify(items));
+  window.dispatchEvent(new Event("styl-cart-change"));
 }
 
 export function getCartCount(items: CartItem[] = readCart()) {
@@ -59,19 +73,24 @@ export function getCartCount(items: CartItem[] = readCart()) {
 }
 
 export function addProductToCart(
-  product: { id: number; name: string; price: number; slug?: string; currency?: string },
+  product: { id: number; name: string; price: number; slug?: string; currency?: string; sellingUnit?: SellingUnit; packageQuantity?: number | null },
   quantity = 1,
 ) {
+  if (!Number.isInteger(quantity) || quantity < 1) throw new Error("Choose a valid quantity.");
   const existing = readCart();
+  const selection = {
+    id: product.id, name: product.name, price: product.price, slug: product.slug,
+    currency: product.currency, sellingUnit: product.sellingUnit, packageQuantity: product.packageQuantity,
+  };
   const index = existing.findIndex((item) => item.id === product.id);
 
   const next = index >= 0
     ? existing.map((item) =>
         item.id === product.id
-          ? { ...item, ...product, quantity: Math.min(MAX_ITEM_QUANTITY, item.quantity + quantity) }
+          ? { ...item, ...selection, quantity: Math.min(MAX_ITEM_QUANTITY, item.quantity + quantity) }
           : item,
       )
-    : [...existing, { ...product, quantity: Math.min(MAX_ITEM_QUANTITY, quantity) }];
+    : [...existing, { ...selection, quantity: Math.min(MAX_ITEM_QUANTITY, quantity) }];
 
   writeCart(next);
   return next;
@@ -107,6 +126,6 @@ export function formatCartSummary(items: CartItem[] = readCart()) {
     return "No items selected yet.";
   }
 
-  const summary = items.map((item) => `${item.name} x${item.quantity}`).join(", ");
+  const summary = items.map((item) => `${item.name} x ${quantityLabel(item.quantity, item.sellingUnit)}${item.packageQuantity ? ` (${item.packageQuantity} pieces per sale unit)` : ""}`).join(", ");
   return `Interested in: ${summary}.`;
 }
