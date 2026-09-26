@@ -584,7 +584,7 @@ Common failure checks:
 
 For regional pricing, also follow [the local GeoIP setup](geoip-pricing.md).
 Provision a country database and configure `STYL_GEOIP_DATABASE`; without it,
-location remains unknown and USD is used. Apply the updated API service's trusted
+location remains unknown and CAD is used. Apply the updated API service's trusted
 loopback proxy flags and the API reverse proxy's explicit client-IP overwrite to
 the installed systemd/Caddy configuration, preserving your actual domain and
 other settings. Validate Caddy, run `systemctl daemon-reload`, then restart the

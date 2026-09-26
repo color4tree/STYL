@@ -2,6 +2,86 @@
 
 Last recorded: 2026-09-26
 
+## CAD fallback and direct mobile catalog navigation - 2026-09-26
+
+New approved behavior: unresolved visitor location now defaults to CAD, while
+countryCode remains null and locationStatus remains unknown. Identified Canada
+uses CAD; identified US/other countries still use USD. This supersedes the earlier
+unknown/USD rule recorded below. Missing CAD prices still hide items; no price
+conversion or data copying is performed.
+
+Added a Products / Accessories row directly below the logo/cart/menu row below
+1024 CSS px. Both catalog destinations can be reached without opening Menu.
+Desktop full navigation is unchanged. Mobile anchor offsets account for the
+taller header.
+
+Regression cases GEO-007 and USR-011 added. A new API test first failed on the old
+USD fallback, then passed after the change. Validation: 60 backend tests, seven
+frontend unit tests, and all 44 configured E2E executions passed; production
+build/TypeScript passed; lint had no errors and five image warnings. The first
+browser run exposed an ambiguous test heading selector (hidden dialog headings
+also matched); it was corrected, then the full browser suite passed. This is
+automated-code verification, not physical-device/live GeoIP sign-off.
+
+The test harness uses explicit synthetic dual-market prices only in disposable
+fixtures; the real local catalog was not modified. After restarting the local API,
+`/api/market` returned unknown/CAD. The local legacy catalog has no CAD prices, so
+its public lists are empty under the agreed missing-price rule. The new navigation
+was also visually checked at 390 px with no horizontal overflow.
+
+Changes are local, not committed, pushed, or deployed. The live server still needs
+database provisioning and the new release before its fallback changes.
+
+## Live GeoIP configuration confirmed missing - 2026-09-26
+
+After the earlier connection failures, the user shared an authenticated Ubuntu-1
+Lightsail SSH terminal. Read-only checks confirmed:
+
+- No `STYL_GEOIP_DATABASE` setting in the expected service environment file or
+  the running `styl-api` process environment.
+- The expected `/var/lib/styl/geoip` directory and country database file are absent.
+- Service logs explicitly report: `GeoIP unavailable: STYL_GEOIP_DATABASE is not
+  set; using unknown location and USD.`
+- The server checkout is at `6eef5b0`.
+- Installed service/proxy configuration lacks the repository's explicit
+  proxy-header flags and forwarded-IP overwrite. This difference alone does not
+  prove forwarding is broken, since defaults may already forward/trust loopback;
+  validate the actual chain after database provisioning.
+
+The missing configuration is a confirmed production defect in geographic pricing
+readiness, explaining unknown/USD fallback even for Canadian visitors. No
+database was installed, no production file changed, and no service restarted.
+The Vancouver visitor's own response and live country accuracy still need
+verification after provisioning a licensed country MMDB and configuring the service.
+GEO-002/OPS-002 remain incomplete, not passed.
+
+## Targeted GeoIP investigation and local startup - 2026-09-26
+
+Reported: a Vancouver visitor saw USD. The user supplied their own US-network
+`/api/market` response showing null country, unknown status, and USD. That proves
+fallback for that request, not a correctly detected US country or the Vancouver
+visitor's exact response.
+
+Local inspection at `6eef5b0` found no listeners on the frontend/API ports and no
+`STYL_GEOIP_DATABASE` environment setting. Started the local API and frontend with
+ignored VS Code tasks without terminating unrelated processes. Verified API health,
+HTTP 200 on the site, four visible local product cards, and no visible catalog
+error. Browser access worked at `http://127.0.0.1:3000`; the integrated browser's
+`localhost` navigation failed, while an HTTP probe to localhost succeeded.
+
+A synthetic public-client lookup made no external network request and produced
+the explicit warning that the GeoIP database setting is absent. Loopback
+unknown/USD is expected separately. All 24 tests in `tests.test_location` and
+`tests.test_regional_catalog` passed; their fixtures do not verify a live database.
+
+No application pricing change was made and no production issue is claimed fixed.
+Direct production probes failed at TLS, and authenticated server access was not
+available. Production configuration, real database accuracy, and the affected
+visitor's response remain unverified (GEO-002/OPS-002). See the
+[GeoIP troubleshooting steps](geoip-pricing.md#troubleshooting-a-canadian-visitor-seeing-usd).
+Local task definitions and the generated local admin credential are ignored by
+Git; local catalog data was not edited.
+
 Regression reference: [Living regression test plan](regression-test-plan.md).
 Use its stable case IDs, system/user coverage map, and run-record template for
 future changes. Record targeted versus full-suite results separately.

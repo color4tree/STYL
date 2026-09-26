@@ -65,7 +65,7 @@ These rules supersede earlier requirements when they conflict:
 | Area | Current expected behavior |
 | --- | --- |
 | Country prices | Independent Canada/CAD and US/USD values for products and accessories; no currency conversion or copying between markets |
-| Visitor market | Canadian IP location uses CAD; US, other countries, and unknown locations use USD |
+| Visitor market | Canadian and unknown locations use CAD; identified US/other non-Canadian locations use USD |
 | Missing price | Hide the item for that market, including product detail access and cart eligibility; flag missing markets in admin |
 | Price display | Catalog/detail/cart values include currency and exactly two decimals, e.g. `CAD $4,005.25` |
 | Legacy pricing | Preserve the original price only in its original currency; the other market remains unset |
@@ -83,6 +83,7 @@ These rules supersede earlier requirements when they conflict:
 | Upload feedback | Current batch results are distinct from unresolved earlier failures; failed-only retry does not resend successful files |
 | Commerce | Cart is a selection for a quote, not a paid order; quantity counts sale units and remains capped at 10 per item |
 | Layout | Mobile and desktop both remain optimized; mobile changes must not remove desktop functionality |
+| Mobile catalog navigation | Products and Accessories appear directly in the shared mobile header below 1024 px, without opening Menu; desktop full navigation is unchanged |
 
 Exact business principle:
 
@@ -175,8 +176,8 @@ Use unique test names and noncustomer data. Reference examples:
 | --- | --- |
 | F-EQUIPMENT | Published equipment; CAD 4005.25; USD 4000.95; weight `35.5 kg`; main image plus second image and short video |
 | F-PAIR | Published attachment/accessory; CAD 29.95; USD 19.95; Pair; package quantity 2; distinct descriptions, use text, and features |
-| F-MISSING-CA | CAD unset; USD 19.95; published; hidden in Canada |
-| F-MISSING-US | CAD 29.95; USD unset; published; hidden for US/other/unknown |
+| F-MISSING-CA | CAD unset; USD 19.95; published; hidden for Canada and unknown locations |
+| F-MISSING-US | CAD 29.95; USD unset; published; hidden for identified US/other non-Canadian locations |
 | F-NO-PRICES | Both prices unset; admin warnings; not public in any market |
 | F-ZERO | Price 0.00 in a selected market; must not be mistaken for missing |
 | F-DRAFT | Both market prices supplied, Draft; privacy tests independent of price hiding |
@@ -189,6 +190,14 @@ Use a synthetic regional fixture for deterministic UI tests. Separately verify
 real GeoIP with controlled known-country egress against the installed database.
 Do not equate injecting a country header or mocking a JSON response with real
 IP-to-country detection.
+
+For GEO-002/GEO-005 and OPS-002 investigations, capture `/api/market` from the
+affected visitor's exact host/network. `unknown` plus CAD is fallback, not evidence
+of a detected Canadian location; unknown/USD identifies the earlier fallback
+policy and should prompt a deployed-version check. A local loopback request or a second investigator's
+response does not establish what the affected visitor received. Follow the
+[GeoIP diagnostic procedure](geoip-pricing.md#troubleshooting-a-canadian-visitor-seeing-usd)
+without exposing credentials or raw visitor IPs.
 
 ### 5.3 Safety and cleanup
 
@@ -254,12 +263,13 @@ Examples of impact selection:
 
 | ID | Priority | Steps / input | Expected result | Coverage |
 | --- | --- | --- | --- | --- |
-| GEO-001 | P0 | Resolve controlled CA, US, other-country, unknown, private/local, IPv6, and IPv4-mapped addresses. | CA -> CAD; other/unknown -> USD; nonpublic/invalid addresses do not become guessed countries. Registration country is not visitor location. | A: B-GEO with mocked MMDB |
+| GEO-001 | P0 | Resolve controlled CA, US, other-country, unknown, private/local, IPv6, and IPv4-mapped addresses. | CA/unknown -> CAD; identified other countries -> USD; nonpublic/invalid addresses do not become guessed countries. Registration country is not visitor location. | A: B-GEO with mocked MMDB |
 | GEO-002 | P0 | Supply untrusted country/forwarded headers to the application; verify actual installed reverse proxy overwrites incoming forwarded IP. | Application does not trust user country headers. Only approved loopback proxy forwarding influences client address. | P: B-GEO checks resolver; real Caddy/Uvicorn chain requires OPS-002 |
-| GEO-003 | P0 | Unset database; missing/unreadable/corrupt file; remove/replace a loaded file; concurrent lookup during replacement. | Unknown/USD fallback, concise diagnostics without IP/secret exposure, no stale country result, safe reader refresh. | A: B-GEO; live update procedure remains operational |
+| GEO-003 | P0 | Unset database; missing/unreadable/corrupt file; remove/replace a loaded file; concurrent lookup during replacement. | Unknown/CAD fallback, concise diagnostics without IP/secret exposure, no stale country result, safe reader refresh. | A: B-GEO; live update procedure remains operational |
 | GEO-004 | P0 | For F-EQUIPMENT, request public list/detail/selection under CA, US, other, unknown markets. Inspect cache headers. | Exact configured regional price/currency returned; no cross-country shared-cache leakage; location-dependent responses are private/no-store. | A: B-REG; Canadian browser rendering separately E-MARKET |
 | GEO-005 | P0 | View F-MISSING-CA/US/NONE/ZERO under each market, including direct product URL and saved cart. | Missing-market item not exposed; admin warning accurate; no fallback to the other price; zero-price item is not hidden merely for being zero. | A core: B-REG/U-CART/E-MARKET/E-ROUND2; physical/live geography needs OPS-002 |
 | GEO-006 | P1 | Change market between visits and revisit a saved cart/quote; inject a failed current-price request. | Current available items repriced without conversion, unavailable items removed with notice, quantities preserved; failure does not pretend stale prices are current. | P: U-CART/E-MARKET cover reconciliation; extend browser network-failure scenario |
+| GEO-007 | P0 | With no resolvable country, query market/list/detail/selection and add a dual-price item to cart; include a USD-only item. | Country remains null/unknown while CAD prices are used end to end; missing CAD items stay hidden; USD is not copied/relabeled. Known US/other-country tests still return USD. | A: B-REG `test_unknown_location_uses_cad_without_relabeling_usd_prices`, B-GEO, E-MARKET `GEO-007` |
 
 ### 7.3 Media processing
 
@@ -302,6 +312,7 @@ Examples of impact selection:
 | USR-008 | P1 | Inspect banner at 767/768 px; inspect Browse accessories shortcut at 1023/1024 px. | Banner hidden below 768, shown above without price; collection shortcut hidden at desktop, main Accessories navigation retained. | A: E-CATALOG |
 | USR-009 | P1 | Compare 320/390/768/1024/1440 layouts, large text, desktop keyboard, phone landscape and virtual keyboard. | No page overflow or covered controls; desktop grids/split panes retained; input labels remain visible; touch targets practical. | P: E-CATALOG checks widths/navigation; real keyboard/zoom/device matrix M |
 | USR-010 | P1 | Use keyboard-only, VoiceOver/TalkBack, reduced motion, and 200% text resizing. | Logical headings/focus, announced errors/results, accessible dialogs, no focus obscured by sticky areas; information not conveyed only by colour. | M, with limited existing role/focus assertions |
+| USR-011 | P1 | At 320/390/767/768/1023 px use the visible Products/Accessories header links to switch catalogs without opening Menu; test 1024/1440 px desktop navigation. | Mobile links are visible at the top, destinations are correct and headings not covered by the taller header; no overflow; desktop has only the original full navigation. | A: E-MARKET `USR-011`; physical-device touch remains manual |
 
 ## 10. Permanent Captured date diagnostic protocol
 
@@ -369,6 +380,8 @@ Run destructive/error-injection cases only in an isolated/staging environment.
 | Optional equipment weight | SYS-008, ADM-005 | No inferred weights |
 | Current versus earlier upload batches | MED-006/007, ADM-006 | Preserve failed-only retry |
 | Restore standalone banner and remove pricing | SYS-013, ADM-008, USR-008 | Product-selector banner expectation is superseded, not current |
+| Default unresolved visitor location to CAD | GEO-001/003/005/007 | Supersedes unknown/USD only; identified US/other-country selection remains USD |
+| Always-visible mobile Products / Accessories links | USR-001/008/009/011 | Shared header, not a replacement for desktop navigation; anchor offset preserves visible headings |
 
 Historical commit context: `334d320`, `c412178`, `1f5f58c`, `f142fb6`,
 `aa2861a`, and the pending Round 2 changes. Use the actual tested revision in each

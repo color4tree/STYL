@@ -27,6 +27,9 @@ class CatalogContractTests(unittest.TestCase):
             replacement.start()
             self.addCleanup(replacement.stop)
         self.client = TestClient(main.app)
+        market = patch.object(main, "resolve_market", return_value={"countryCode": "US", "currency": "USD", "locationStatus": "located"})
+        market.start()
+        self.addCleanup(market.stop)
         self.headers = {"Authorization": "Bearer catalog-test-token"}
         self.payload = {"name": "Test item", "category": "Handle", "price": 19.95, "currency": "USD", "publicationStatus": "published"}
 

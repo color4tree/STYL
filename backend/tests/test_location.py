@@ -13,7 +13,7 @@ import maxminddb
 from app import location
 
 
-UNKNOWN = {"countryCode": None, "currency": "USD", "locationStatus": "unknown"}
+UNKNOWN = {"countryCode": None, "currency": "CAD", "locationStatus": "unknown"}
 CANADA = {"countryCode": "CA", "currency": "CAD", "locationStatus": "located"}
 USA = {"countryCode": "US", "currency": "USD", "locationStatus": "located"}
 
@@ -58,7 +58,7 @@ class LocationTests(unittest.TestCase):
                 self.reader.get.return_value = {"country": {"iso_code": code}}
                 self.assertEqual(location.resolve_market(request()), expected)
 
-    def test_unlocated_and_malformed_records_use_unknown_usd(self) -> None:
+    def test_unlocated_and_malformed_records_use_unknown_cad(self) -> None:
         for record in (
             None, {}, [], {"country": None}, {"country": []},
             {"country": {}}, {"country": {"iso_code": None}},
@@ -123,6 +123,7 @@ class LocationTests(unittest.TestCase):
             self.assertEqual(location.resolve_market(request()), UNKNOWN)
         self.assertEqual(len(captured.output), 1)
         self.assertIn("STYL_GEOIP_DATABASE is not set", captured.output[0])
+        self.assertIn("unknown location and CAD", captured.output[0])
         self.assertNotIn("8.8.8.8", captured.output[0])
         self.mocks["open"].assert_not_called()
         os.environ["STYL_GEOIP_DATABASE"] = "country.mmdb"

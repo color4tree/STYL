@@ -80,7 +80,7 @@ export function MarketPriceInputs({ value, onChange, prefix }: { value: Record<M
     <legend className="mb-3 text-lg font-semibold">Country pricing</legend>
     <PriceInput id={`${prefix}-cad`} label="Canada price (CAD)" optional value={value.CAD} onChange={(CAD) => onChange({ ...value, CAD })} />
     <PriceInput id={`${prefix}-usd`} label="US price (USD)" optional value={value.USD} onChange={(USD) => onChange({ ...value, USD })} />
-    <p className="text-sm text-[var(--muted)] md:col-span-2">USD applies to the US and all countries other than Canada. A blank price hides this item in that market; zero is a valid price. No currency conversion is applied.</p>
+    <p className="text-sm text-[var(--muted)] md:col-span-2">CAD applies to Canada and unknown locations. USD applies to identified countries outside Canada. A blank price hides this item in that market; zero is a valid price. No currency conversion is applied.</p>
     {(!value.CAD || !value.USD) ? <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:col-span-2">Needs attention: {![value.CAD, value.USD].some(Boolean) ? "Canada and US" : !value.CAD ? "Canada" : "US / other countries"} price missing. This item will not appear in that market.</p> : null}
   </fieldset>;
 }

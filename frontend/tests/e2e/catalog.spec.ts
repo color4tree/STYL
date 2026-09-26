@@ -95,7 +95,7 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   expect((await publicResponse.json()).items.find((entry: { id: number }) => entry.id === item.id)).not.toHaveProperty("provenance");
   await page.goto("/accessories");
   const card = page.locator("article").filter({ hasText: name });
-  await expect(card).toContainText("USD $19.95 / pair");
+  await expect(card).toContainText("CAD $19.95 / pair");
   await card.locator("summary").click();
   await expect(card).toContainText("Full description distinct from public use.");
   await expect(card).toContainText("Cable exercise use.");
@@ -372,7 +372,7 @@ test("home banner custom content and upload persist without any price informatio
   await expect(banner).toContainText("Your training space");
   await expect(banner).not.toContainText(/\$|\bCAD\b|\bUSD\b/);
   await expect(banner.locator("img")).toHaveAttribute("src", `${api}${image}`);
-  await expect(page.locator("#products article").first()).toContainText("USD $");
+  await expect(page.locator("#products article").first()).toContainText("CAD $");
   const restore = await request.put(`${api}/api/hero`, { headers, data: original });
   expect(restore.status()).toBe(200);
 });

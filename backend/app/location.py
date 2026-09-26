@@ -33,7 +33,7 @@ class _CountryDatabase:
 
     def _warn(self, reason: str) -> None:
         if self._warning != reason:
-            logger.warning("GeoIP unavailable: %s; using unknown location and USD.", reason)
+            logger.warning("GeoIP unavailable: %s; using unknown location and CAD.", reason)
             self._warning = reason
 
     def _close_reader(self) -> None:
@@ -107,7 +107,7 @@ def resolve_market(request: Request) -> MarketContext:
     """Use only Uvicorn's client address, not application-level proxy headers."""
     unknown: MarketContext = {
         "countryCode": None,
-        "currency": "USD",
+        "currency": "CAD",
         "locationStatus": "unknown",
     }
     if request.client is None:

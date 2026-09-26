@@ -87,7 +87,7 @@ export default function Home() {
           </aside>
         </section>
 
-        <section id="products" className="container scroll-mt-24 py-8 lg:py-12">
+        <section id="products" className="container scroll-mt-32 py-8 lg:scroll-mt-24 lg:py-12">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3 lg:mb-10">
             <div><p className="text-sm text-[var(--muted)]">Equipment collection</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] lg:text-5xl">Precision-built for real routines.</h2></div>
             <Link href="/accessories" className="inline-flex min-h-11 items-center text-sm font-medium underline lg:hidden">Browse accessories</Link>
@@ -113,7 +113,7 @@ export default function Home() {
                 </div>}
         </section>
 
-        <section id="about" className="scroll-mt-24 bg-[#171717] py-10 text-white lg:my-10 lg:py-16">
+        <section id="about" className="scroll-mt-32 bg-[#171717] py-10 text-white lg:my-10 lg:scroll-mt-24 lg:py-16">
           <div className="container grid gap-6 lg:grid-cols-2 lg:gap-12">
             <div><p className="text-sm text-white/75">Why STYL</p><h2 className="mt-3 text-3xl font-semibold tracking-tight lg:text-5xl">Design for performance and everyday life.</h2></div>
             <div className="space-y-5 leading-7 text-white/80">
@@ -133,7 +133,7 @@ export default function Home() {
           <InquiryForm />
         </section>
 
-        <section id="gallery" className="container scroll-mt-24 pb-12">
+        <section id="gallery" className="container scroll-mt-32 pb-12 lg:scroll-mt-24">
           <details className="rounded-3xl border border-[var(--line)] bg-white/60 p-5 lg:p-7">
             <summary className="min-h-11 text-xl font-semibold">Explore our engineering details</summary>
             <p className="mt-3 text-[var(--muted)]">Our mark, engineered into every piece.</p>

@@ -28,6 +28,9 @@ class AdminAuthenticationTests(unittest.TestCase):
         categories = patch.object(main, "CATALOG_CATEGORIES", (*main.CATALOG_CATEGORIES, "Test", "Draft only category"))
         categories.start()
         self.addCleanup(categories.stop)
+        market = patch.object(main, "resolve_market", return_value={"countryCode": "US", "currency": "USD", "locationStatus": "located"})
+        market.start()
+        self.addCleanup(market.stop)
         self.client = TestClient(main.app)
 
     def tearDown(self) -> None:

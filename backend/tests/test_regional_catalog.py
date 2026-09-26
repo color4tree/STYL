@@ -29,7 +29,7 @@ class RegionalCatalogTests(unittest.TestCase):
 
     def market(self, country):
         return patch.object(main, "resolve_market", return_value={
-            "countryCode": country, "currency": "CAD" if country == "CA" else "USD",
+            "countryCode": country, "currency": "CAD" if country in ("CA", None) else "USD",
             "locationStatus": "located" if country else "unknown",
         })
 
@@ -38,10 +38,27 @@ class RegionalCatalogTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["item"]
 
+    def test_unknown_location_uses_cad_without_relabeling_usd_prices(self) -> None:
+        # GEO-007: unresolved location remains unknown but selects the CAD market.
+        market = self.client.get("/api/market")
+        self.assertEqual(market.json(), {"countryCode": None, "currency": "CAD", "locationStatus": "unknown"})
+        self.assertIn("no-store", market.headers["cache-control"])
+        for endpoint in ("products", "accessories"):
+            item = self.create(endpoint, publicationStatus="published")
+            usd_only = self.create(endpoint, name="USD only", prices={"CAD": None, "USD": 99}, publicationStatus="published")
+            public = self.client.get(f"/api/{endpoint}").json()["items"]
+            selected = next(row for row in public if row["id"] == item["id"])
+            self.assertEqual((selected["currency"], selected["price"]), ("CAD", 4005.25))
+            self.assertNotIn(usd_only["id"], [row["id"] for row in public])
+            selection = self.client.get("/api/catalog/selection").json()["items"]
+            self.assertNotIn(usd_only["id"], [row["id"] for row in selection])
+            if endpoint == "products":
+                self.assertEqual(self.client.get(f"/api/products/{usd_only['slug']}").status_code, 404)
+
     def test_country_prices_and_no_shared_cache_for_all_public_surfaces(self) -> None:
         for endpoint in ("products", "accessories"):
             item = self.create(endpoint, publicationStatus="published", provenance={"capturedDate": "2026-09-26", "notes": "private"})
-            for country, currency, expected in (("CA", "CAD", 4005.25), ("US", "USD", 4000.95), ("FR", "USD", 4000.95), (None, "USD", 4000.95)):
+            for country, currency, expected in (("CA", "CAD", 4005.25), ("US", "USD", 4000.95), ("FR", "USD", 4000.95), (None, "CAD", 4005.25)):
                 with self.subTest(endpoint=endpoint, country=country), self.market(country):
                     response = self.client.get(f"/api/{endpoint}")
                     self.assertIn("no-store", response.headers["cache-control"])

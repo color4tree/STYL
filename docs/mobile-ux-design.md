@@ -13,7 +13,8 @@ Scope: Responsive web experience, not a native app
 This update supersedes the earlier currency/publication holds below:
 
 - Independent Canada/CAD and US/USD prices; Canadian IP locations use CAD,
-  other/unknown locations use USD. Display explicit currency plus two decimals.
+  identified other-country locations use USD, and unknown locations default to
+  CAD (updated later on 2026-09-26). Display explicit currency plus two decimals.
 - Hide items in markets without a price and flag missing prices in admin.
 - New Product and Accessory entries default to Draft; preserve the established
   Product lifecycle and add the same controls/filtering to Accessories.
@@ -23,6 +24,10 @@ This update supersedes the earlier currency/publication holds below:
 - Normalize the obvious Bench/Benches duplicate without redesigning taxonomy.
 - Optional equipment weight, date persistence regression checks, and separately
   labeled current/earlier upload batches are included.
+- On mobile/tablet below the desktop navigation breakpoint, show Products and
+  Accessories directly in a second header row. Keep Menu for the other
+  destinations and retain desktop navigation. Anchor offsets account for the
+  taller header so destination headings remain visible.
 
 The date-clearing report was not reproduced in current Chromium/WebKit tests.
 The exact date remains a private date-only string through notes editing,

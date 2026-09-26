@@ -112,11 +112,13 @@ The project includes a lightweight admin page for editing product catalog data, 
 ## Product and accessory videos
 
 Products and accessories have separate Canada (CAD) and US (USD) prices.
-Canadian IP locations use CAD; the US, other countries, and unknown locations use
-USD. Storefront prices include the currency, such as `CAD $4,005.25`.
+Canadian IP locations and unknown locations use CAD. Identified US and other
+non-Canadian locations use USD. Storefront prices include the currency, such as
+`CAD $4,005.25`.
 Country lookup uses a [server-local GeoIP database](docs/geoip-pricing.md), never
 an external visitor-IP lookup service. Provision the database and trusted proxy
-configuration at deployment; without it, unknown/USD is used.
+configuration at deployment; without it, unknown/CAD is used. This fallback does
+not claim the visitor has been located in Canada.
 
 An item with no price for the visitor's market is hidden from that market's
 catalog and detail access. Admin flags missing prices for review.
@@ -154,7 +156,9 @@ Internal source/provenance information
 is available only in authenticated admin responses and is omitted from public
 catalog responses. Do not put private migration notes into public use descriptions.
 
-Mobile navigation, larger touch controls, compact catalog-to-editor transitions,
+Mobile includes a directly visible Products / Accessories navigation row below
+the logo/cart/menu row; switching catalogs does not require opening Menu.
+Desktop retains the existing full navigation. Larger touch controls, compact catalog-to-editor transitions,
 unsaved-change protection, and safe-area-aware actions complement the desktop
 navigation, catalog grids, and split-pane admin editor. Inquiry fields retain input
 after failure and show submission status; the cart is not cleared by an inquiry.

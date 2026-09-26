@@ -1,5 +1,59 @@
 import { test, expect } from "@playwright/test";
 
+test("GEO-007: unknown visitors see configured CAD prices across catalog, detail and cart", async ({ page, request }) => {
+  const api = "http://127.0.0.1:8102";
+  const headers = { Authorization: `Bearer ${process.env.STYL_E2E_TOKEN}` };
+  const market = await request.get(`${api}/api/market`);
+  expect(await market.json()).toEqual({ countryCode: null, currency: "CAD", locationStatus: "unknown" });
+  const name = `CAD fallback ${Date.now()}`;
+  const created = await request.post(`${api}/api/products`, {
+    headers, data: { name, category: "Racks", prices: { CAD: 4005.25, USD: 4000.95 }, publicationStatus: "published", photos: [] },
+  });
+  expect(created.status()).toBe(200);
+  const item = (await created.json()).item;
+  await page.goto("/");
+  await expect(page.locator("#products article").filter({ hasText: name })).toContainText("CAD $4,005.25");
+  await page.goto(`/products/${item.slug}`);
+  await expect(page.locator("main")).toContainText("CAD $4,005.25");
+  await page.getByRole("button", { name: "Add to cart", exact: true }).first().click();
+  await page.getByRole("link", { name: "Cart (1)", exact: true }).click();
+  await page.waitForURL("**/cart");
+  await expect(page.locator("article").filter({ hasText: name })).toContainText("CAD $4,005.25");
+  await expect(page.locator("main")).not.toContainText("USD $");
+});
+
+test("USR-011: mobile top links switch Products and Accessories without opening the menu", async ({ page }) => {
+  await page.goto("/");
+  const mobile = page.getByRole("navigation", { name: "Catalog navigation", exact: true });
+  for (const width of [320, 390, 767, 768, 1023]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect(mobile.getByRole("link", { name: "Products", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(mobile.getByRole("link", { name: "Accessories", exact: true })).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mobile.getByRole("link", { name: "Accessories", exact: true }).click();
+  await page.waitForURL("**/accessories");
+  await expect(page.getByRole("heading", { name: "Accessories", exact: true })).toBeVisible();
+  await mobile.getByRole("link", { name: "Products", exact: true }).click();
+  await page.waitForURL("**/#products");
+  await expect(page.locator("#products article").first()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Site navigation" })).not.toBeVisible();
+  await expect.poll(async () => {
+    const heading = await page.getByRole("heading", { name: "Precision-built for real routines.", exact: true }).boundingBox();
+    const header = await page.locator("header").boundingBox();
+    return heading && header ? heading.y - header.y - header.height : -1;
+  }).toBeGreaterThanOrEqual(0);
+  for (const width of [1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(mobile).toBeHidden();
+    const desktop = page.getByRole("navigation", { name: "Main navigation", exact: true });
+    await expect(desktop.getByRole("link", { name: "Products", exact: true })).toBeVisible();
+    await expect(desktop.getByRole("link", { name: "Accessories", exact: true })).toBeVisible();
+  }
+});
+
 test("Canadian display and saved-cart reprice use CAD without converting USD", async ({ page }) => {
   const item = { id: 9901, name: "Canada priced rack", slug: "canada-priced-rack", category: "Racks", price: 4005.25, currency: "CAD", image: "/images/pro-elite.svg" };
   const body = { items: [item], market: { countryCode: "CA", currency: "CAD", locationStatus: "located" } };

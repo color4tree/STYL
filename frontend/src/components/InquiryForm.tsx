@@ -68,7 +68,7 @@ export default function InquiryForm() {
     } finally { submitting.current = false; setPending(false); }
   };
   return (
-    <section id="contact" className="soft-panel scroll-mt-24 rounded-3xl p-5 md:p-8">
+    <section id="contact" className="soft-panel scroll-mt-32 rounded-3xl p-5 md:p-8 lg:scroll-mt-24">
       <h2 className="text-2xl font-semibold">Request a quote</h2>
       <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Tell us about your selection and training space. No payment is collected here.</p>
       <form onSubmit={submit} className="mt-5 space-y-4" aria-busy={pending}>

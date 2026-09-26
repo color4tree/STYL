@@ -21,7 +21,7 @@ for (const endpoint of ["products", "accessories"] as const) {
     await category.selectOption("Benches");
     const status = page.getByRole("combobox", { name: "Publication status", exact: true });
     await expect(status).toHaveValue("draft");
-    await page.getByRole("textbox", { name: "Canada price (CAD)", exact: true }).fill("4005.25");
+    await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("4000.95");
     await page.getByRole("textbox", { name: "Weight", exact: true }).fill("35.5 kg");
     const createdResponse = page.waitForResponse((response) => response.url() === `${api}/api/${endpoint}` && response.request().method() === "POST");
     await page.getByRole("button", { name: endpoint === "products" ? "Create product" : "Create accessory", exact: true }).click();
@@ -30,8 +30,8 @@ for (const endpoint of ["products", "accessories"] as const) {
     const item = (await created.json()).item;
     expect(item.publicationStatus).toBe("draft");
     expect(item.weight).toBe("35.5 kg");
-    expect(item.prices).toEqual({ CAD: 4005.25, USD: null });
-    await expect(page.getByRole("status").filter({ hasText: "Needs attention" })).toContainText("US / other countries");
+    expect(item.prices).toEqual({ CAD: null, USD: 4000.95 });
+    await expect(page.getByRole("status").filter({ hasText: "Needs attention" })).toContainText("Canada");
     await status.selectOption("published");
     let savedResponse = page.waitForResponse((response) => response.url() === `${api}/api/${endpoint}/${item.id}` && response.request().method() === "PUT");
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -39,12 +39,12 @@ for (const endpoint of ["products", "accessories"] as const) {
     let listed = (await (await request.get(`${api}/api/${endpoint}`)).json()).items;
     expect(listed.some((entry: { id: number }) => entry.id === item.id)).toBe(false);
     if (endpoint === "products") expect((await request.get(`${api}/api/products/${item.slug}`)).status()).toBe(404);
-    await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("4000.95");
+    await page.getByRole("textbox", { name: "Canada price (CAD)", exact: true }).fill("4005.25");
     savedResponse = page.waitForResponse((response) => response.url() === `${api}/api/${endpoint}/${item.id}` && response.request().method() === "PUT");
     await page.getByRole("button", { name: "Save changes", exact: true }).click();
     expect((await savedResponse).status()).toBe(200);
     listed = (await (await request.get(`${api}/api/${endpoint}`)).json()).items;
-    expect(listed.find((entry: { id: number }) => entry.id === item.id).price).toBe(4000.95);
+    expect(listed.find((entry: { id: number }) => entry.id === item.id).price).toBe(4005.25);
     await expect(page.getByRole("status").filter({ hasText: "Needs attention" })).toHaveCount(0);
     await status.selectOption("draft");
     savedResponse = page.waitForResponse((response) => response.url() === `${api}/api/${endpoint}/${item.id}` && response.request().method() === "PUT");

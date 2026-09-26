@@ -43,7 +43,7 @@ export default function AccessoriesPage() {
                 ].filter(([, value]) => value?.trim());
                 const features = item.features?.filter((feature) => feature.trim()) ?? [];
                 const hasDetails = specs.length || features.length || item.description?.trim() || item.notes?.trim();
-                return <article id={`accessory-${item.id}`} key={item.id} className="soft-panel min-w-0 scroll-mt-24 rounded-3xl p-4 lg:p-5">
+                return <article id={`accessory-${item.id}`} key={item.id} className="soft-panel min-w-0 scroll-mt-32 rounded-3xl p-4 lg:scroll-mt-24 lg:p-5">
                   <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} compact />
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm text-[var(--muted)]">{item.category}</span>

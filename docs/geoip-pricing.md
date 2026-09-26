@@ -10,7 +10,11 @@ The returned `MarketContext` contains:
 | --- | --- | --- | --- |
 | Canadian IP location | `"CA"` | `"CAD"` | `"located"` |
 | Any other located country | Country's two-letter code | `"USD"` | `"located"` |
-| Unknown/unavailable location | `null` | `"USD"` | `"unknown"` |
+| Unknown/unavailable location | `null` | `"CAD"` | `"unknown"` |
+
+The unknown-location fallback changed from USD to CAD on 2026-09-26 while database
+provisioning is pending. Located US/other-country pricing remains USD. A missing
+CAD price still hides an item; the USD amount is never relabeled or converted.
 
 Only `country.iso_code` is used. `registered_country` describes registration, not necessarily the user's location, so it is **not** a fallback. VPNs, proxies, mobile networks and database inaccuracies can misidentify a visitor's actual location. This is a display/pricing hint, not proof of residence, tax jurisdiction or eligibility.
 
@@ -28,7 +32,7 @@ The resolver stores no per-IP cache or history and logs no IPs or raw exception 
 4. On Windows, use an absolute local path such as `C:\ProgramData\STYL\GeoIP\GeoLite2-Country.mmdb` and an ACL granting read access to the API identity and write access only to the administrator/updater.
 5. Install the pinned backend requirements. Restart the service when first changing its environment setting (and reload systemd after changing the unit); routine database replacements do not require a restart.
 
-Leaving `STYL_GEOIP_DATABASE` unset or blank is supported: unknown location and USD are used. On the first public-IP lookup, absent, missing, unreadable or corrupt databases produce a concise server warning. Repeated failures of the same kind are suppressed rather than logged per visitor. Private/local requests skip database access altogether.
+Leaving `STYL_GEOIP_DATABASE` unset or blank is supported: unknown location and CAD are used. On the first public-IP lookup, absent, missing, unreadable or corrupt databases produce a concise server warning. Repeated failures of the same kind are suppressed rather than logged per visitor. Private/local requests skip database access altogether.
 
 ## Updates without restarting the API
 
@@ -38,9 +42,43 @@ Download/extract and validate a new database separately, apply the same ownershi
 
 For each public-IP lookup, the resolver checks the path, file identity, size and modification/change timestamps. A change closes the old reader and loads the new version for that request. Reads and refreshes share one lock per process, so a reader cannot close during a lookup. A single in-memory database snapshot avoids open-file replacement restrictions on Windows; memory consumption scales with database size, not traffic or visitor count. Use a country-only database to keep this small. There is no per-IP cache.
 
-A missing or broken replacement fails closed to unknown/USD; an old country's result is not served. A corrupt file version is not repeatedly reopened; replace/fix the file (changing its metadata) to retry. Updates preserving every observed identity/timestamp/size are not detectable. Each process has its own reader; the provided service runs one worker. This feature does not configure an update job or deploy/download a database for you.
+A missing or broken replacement falls back to unknown/CAD; an old country's result is not served. A corrupt file version is not repeatedly reopened; replace/fix the file (changing its metadata) to retry. Updates preserving every observed identity/timestamp/size are not detectable. Each process has its own reader; the provided service runs one worker. This feature does not configure an update job or deploy/download a database for you.
 
 ## Offline focused tests
 
 From `backend`, run `python -m unittest discover -s tests -p test_location.py`.
 Tests mock MMDB records and file metadata, including country results, unavailable files, replacement and concurrent access. No external database, network or provider account is required.
+
+## Troubleshooting a Canadian visitor seeing USD
+
+Open `/api/market` on the exact host used by the affected visitor, from that
+visitor's browser/network. It returns country/currency/status, not the visitor's
+IP. An investigator's response does not establish the affected visitor's result.
+
+| Response | Interpretation / next check |
+| --- | --- |
+| `countryCode: null`, `locationStatus: unknown`, `currency: CAD` | Current fallback, not confirmation of a Canadian location. Check the database configuration/file and forwarded client address. |
+| `countryCode: null`, `locationStatus: unknown`, `currency: USD` | Earlier fallback policy: verify which release is running before investigating pricing or assuming a US location. |
+| `countryCode: CA`, `currency: CAD` | Detection succeeded. Check the catalog response, selected market price, frontend API host, and caches if the page still displays USD. |
+| A non-CA country with `locationStatus: located` | Check the affected network's VPN/proxy/egress and database accuracy/freshness; physical location alone does not determine the IP record. |
+
+After making a request, an authorized server operator can inspect only relevant
+warnings without dumping credentials or full access logs:
+
+```bash
+sudo journalctl -u styl-api --since '10 minutes ago' --no-pager -o cat \
+  | grep 'GeoIP unavailable'
+```
+
+Warnings distinguish unset, unreadable, corrupt, and failed-lookup databases.
+Warnings are deduplicated, so an empty recent result does not prove configuration
+is correct; an earlier service log may contain the first warning. Check the
+effective service environment/path and file readability as the `styl` user, then
+verify the installed proxy trust chain against the guidance above. Do not paste
+the entire environment file or real visitor IPs into a public issue.
+
+Localhost requests are private/loopback addresses and intentionally return
+unknown/CAD even with a database installed. They cannot prove Canadian detection.
+Use offline test fixtures for code behavior and an actual configured server with
+controlled Canadian egress for live verification. Do not fix a missing database
+by guessing country from timezone/language or trusting arbitrary country headers.
