@@ -2,6 +2,40 @@
 
 Last recorded: 2026-09-27
 
+## Quote-position fix deployed - 2026-09-27
+
+With user approval, committed and pushed the tested frontend change as `7cce208`
+on `main`, then fast-forwarded Ubuntu-1 from `94c4e8a` to that revision. The
+backup branch remains at `91f3d3d`; local untracked banner data was not staged.
+
+The production data-backup service completed successfully. Preserved the prior
+frontend build and protected environment/Caddy/web-service configuration under
+`/var/backups/styl/quote-release-20260927T204500Z` (root-only directory).
+Built the candidate in a separate temporary directory using the existing,
+unchanged dependencies, with same-origin API requests. Production build and
+TypeScript checks passed. Replaced the frontend build and restarted only
+`styl-web` at approximately 20:48 UTC. The API process and Caddy stayed running.
+The server's existing deployment-script executable-mode changes were preserved.
+
+Targeted live verification, in addition to the predeployment 71-browser/seven-unit
+frontend results recorded below:
+
+- All 15 live quote landings passed: direct/cart/product and two repeated
+  same-page entries in desktop Chromium, phone Chromium, and phone WebKit.
+  Each measured a 16 px form-to-header gap and a fully visible Name field.
+  Cart/product message context was preserved; no browser runtime errors occurred.
+- Tests used fresh isolated browser storage and read-only production requests.
+  No inquiry was submitted, no email was sent, and no production record was edited.
+- HTTPS home/cart/accessories/admin pages, health, both catalog APIs, and market
+  endpoint returned 200. The web service started successfully.
+- Before/after checksums confirmed the environment, Caddy configuration, product
+  catalog, accessory catalog, and banner data were unchanged. The API retained
+  its predeployment process and start time, preserving the live SMTP setup.
+
+This is targeted deployment verification, not a new full backend/manual
+regression or physical-device certification. GeoIP provisioning and independent
+mailbox delivery checks remain separate outstanding work.
+
 ## Quote-form landing position corrected - 2026-09-27
 
 Reported: cart Request a quote navigated to the correct home/contact URL but left
@@ -38,8 +72,8 @@ Validation against base `91f3d3d` plus this local frontend patch:
 
 Regression plan and responsive design were updated. No backend/SMTP changes,
 live inquiry sends, production configuration changes, deployment, or backup-branch
-updates were performed. This fix is local and requires a later push/deployment
-before customers receive it.
+updates were performed during implementation. At that point the fix was local;
+the subsequent authorized deployment is recorded above.
 
 ## Multiple-recipient SMTP enabled - 2026-09-27
 
