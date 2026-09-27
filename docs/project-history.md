@@ -2,7 +2,7 @@
 
 Last recorded: 2026-09-27
 
-## Multiple-recipient SMTP preparation - 2026-09-27
+## Multiple-recipient SMTP enabled - 2026-09-27
 
 The user approved using a separately authenticated Gmail sender and delivering
 quote notifications to that mailbox plus the STYL business mailbox. Added the
@@ -17,9 +17,33 @@ configured production-build browser executions passed; lint has no errors and
 five image-optimization warnings. SMTP delivery is mocked in automated tests.
 The user entered the app password in a hidden server prompt, outside chat/history.
 A real STARTTLS Gmail authentication check succeeded and a root-only pending
-configuration was created. Deployment/activation and the authorized one-message
-inbox check are the next operational steps; authentication alone is not proof of
-mail delivery. No credential is included in this repository.
+configuration was created. No credential is included in this repository.
+
+With explicit user approval, pushed and deployed backend commit `94c4e8a` to
+Ubuntu-1. The server retained its unrelated executable-mode changes to deployment
+scripts. Backed up the previous environment and API source under
+`/etc/styl/smtp-backup-20260927T183705Z`, activated the root-only environment file
+(mode 0600), and restarted only `styl-api`. Caddy and the frontend stayed active.
+No dependency, frontend build, DNS, catalog-data, or backup-branch change was needed.
+
+Submitted exactly one authorized, clearly marked setup inquiry through the live
+website form. Inquiry `5cd25b322b224bcca7b647ecb1fb074e`, created at
+`2026-09-27T18:39:05.209585+00:00`, returned HTTP 200 and was persisted with
+`emailStatus: sent`; Gmail accepted the envelope containing both configured
+notification recipients. The user inspected the received message and confirmed
+that its Reply-To header contains one address, then confirmed the desired policy:
+Reply-To must remain the submitting customer, not the STYL mailbox.
+
+Receipt in every recipient inbox has not been independently confirmed; access to
+the STYL mailbox was unavailable. SMTP acceptance is not a guarantee of inbox
+delivery. OPS-006 therefore has live submission/SMTP evidence but remains partly
+unverified for per-mailbox arrival and spam-folder checks.
+
+Removed the one-time setup script and pending credential file; the credential
+exists only in protected live server configuration, not chat, Git, or local code.
+The clearly identified test inquiry remains as the delivery-verification record.
+Final public health and market requests returned 200; regional fallback stayed
+unknown/CAD. No further test messages were sent.
 
 ## Domain HTTPS enabled on Lightsail - 2026-09-27
 

@@ -603,6 +603,16 @@ Common failure checks:
 
 ## Deploy later updates
 
+The live quote-email setup was enabled on 2026-09-27 using Gmail SMTP on port 587
+with STARTTLS. Sender, From address, and comma-separated recipients are configured
+in `/etc/styl/styl.env`; the app password was entered through a hidden terminal
+prompt and the file is root-only (0600). Systemd reads it for the API service.
+Do not overwrite SMTP settings when updating origins or GeoIP configuration.
+Google password changes or app-password revocation can invalidate sending;
+replace credentials privately and restart only `styl-api` when needed.
+The SMTP setup backup is `/etc/styl/smtp-backup-20260927T183705Z`.
+See [project history](project-history.md) for the test inquiry and delivery limits.
+
 For regional pricing, also follow [the local GeoIP setup](geoip-pricing.md).
 Provision a country database and configure `STYL_GEOIP_DATABASE`; without it,
 location remains unknown and CAD is used. Apply the updated API service's trusted
