@@ -2,6 +2,45 @@
 
 Last recorded: 2026-09-27
 
+## Quote-form landing position corrected - 2026-09-27
+
+Reported: cart Request a quote navigated to the correct home/contact URL but left
+the form low in the viewport. Added USR-012 tests before changing the implementation;
+all four original desktop entry/repeat cases failed the landing-position check.
+The observed desktop gap was 148 px below the header instead of the expected
+8-32 px.
+
+The correction handles both asynchronous layout changes and insufficient trailing
+page space on tall desktop windows. Home now waits for initial catalog/banner/cart
+loading to settle before a one-time alignment below the measured sticky header.
+The targeted form has enough minimum viewport-height space to reach that position.
+Client-side history navigation did not reliably set CSS `:target`, so the hook
+explicitly marks the quote target and handles repeated same-page quote links.
+There are no timed scroll loops or forced input focus.
+
+Wheel/touch/pointer, navigation keys, and field focus cancel pending adjustments.
+Quote-prefill text remains intact; ordinary visits and later price refreshes do
+not trigger a new quote scroll. Other catalog links keep their normal navigation.
+
+Validation against base `91f3d3d` plus this local frontend patch:
+
+- Seven frontend unit tests passed.
+- All 71 configured production-build E2E executions passed, including 27
+  USR-012 cases across desktop Chromium, phone Chromium, and phone WebKit.
+- New checks cover cart/product/direct/repeated links, delayed catalog/banner/
+  cart data, failures, typing/scroll cancellation, and post-landing refresh.
+- Production build/TypeScript and editor diagnostics passed; lint had no errors
+  and the existing five image-optimization warnings.
+- An intermediate test needed a WebKit-compatible touch-intent simulation and
+  hydration synchronization; physical touch/keyboard behavior is not certified
+  by that simulation. An empty generated build directory was removed after a
+  Windows filesystem-lock failure; source/catalog data was not deleted.
+
+Regression plan and responsive design were updated. No backend/SMTP changes,
+live inquiry sends, production configuration changes, deployment, or backup-branch
+updates were performed. This fix is local and requires a later push/deployment
+before customers receive it.
+
 ## Multiple-recipient SMTP enabled - 2026-09-27
 
 The user approved using a separately authenticated Gmail sender and delivering

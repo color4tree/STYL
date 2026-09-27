@@ -46,6 +46,18 @@ button, summary, a {
 
 summary { cursor: pointer; }
 
+#contact[data-quote-target] {
+  min-height: calc(100svh - var(--quote-header-offset, 8rem));
+  scroll-margin-top: var(--quote-header-offset, 8rem);
+}
+
+@media (min-width: 1024px) {
+  #contact[data-quote-target] {
+    min-height: calc(100svh - var(--quote-header-offset, 6rem));
+    scroll-margin-top: var(--quote-header-offset, 6rem);
+  }
+}
+
 .safe-action {
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }

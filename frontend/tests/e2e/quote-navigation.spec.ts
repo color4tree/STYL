@@ -1,0 +1,150 @@
+import { test, expect, type Page } from "@playwright/test";
+
+async function expectQuoteLanding(page: Page) {
+  await expect.poll(async () => {
+    const form = await page.locator("#contact").boundingBox();
+    const header = await page.locator("header").boundingBox();
+    return form && header ? Math.round(form.y - header.y - header.height) : -1;
+  }, { message: "Quote form should land immediately below the sticky header" }).toBeGreaterThanOrEqual(8);
+  await expect.poll(async () => {
+    const form = await page.locator("#contact").boundingBox();
+    const header = await page.locator("header").boundingBox();
+    return form && header ? Math.round(form.y - header.y - header.height) : Infinity;
+  }).toBeLessThanOrEqual(32);
+  await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeInViewport({ ratio: 1 });
+}
+
+for (const origin of ["cart", "product", "direct"] as const) {
+  test(`USR-012: ${origin} quote link lands on the form after a delayed catalog`, async ({ page, request }) => {
+    const items = (await (await request.get("http://127.0.0.1:8102/api/products")).json()).items;
+    const product = items[0];
+    await page.addInitScript((item) => localStorage.setItem("styl-cart", JSON.stringify([{ ...item, quantity: 2 }])), product);
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => { release = resolve; });
+    await page.route("**/api/products", async (route) => {
+      await ready;
+      await route.continue();
+    });
+    try {
+      if (origin === "cart") {
+        await page.goto("/cart");
+        await page.locator("main").getByRole("link", { name: "Request a quote", exact: true }).first().click();
+      } else if (origin === "product") {
+        await page.goto(`/products/${product.slug}`);
+        await page.locator("main").getByRole("link", { name: "Request quote", exact: true }).click();
+      } else {
+        await page.goto("/?quote=cart#contact");
+      }
+      await expect(page).toHaveURL(/#contact$/);
+      await expect(page.getByText("Loading equipment...", { exact: true })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(new RegExp(product.name));
+      release();
+      await expect(page.locator("#products article")).toHaveCount(items.length);
+      await expectQuoteLanding(page);
+      await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(new RegExp(product.name));
+    } finally {
+      release();
+    }
+  });
+}
+
+test("USR-012: same-page quote navigation can be repeated without a reload", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#products article").first()).toBeVisible();
+  const desktop = page.getByRole("navigation", { name: "Main navigation", exact: true });
+  const mobile = page.getByRole("navigation", { name: "Mobile navigation", exact: true });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    if (await desktop.isVisible()) {
+      await desktop.getByRole("link", { name: "Request a quote", exact: true }).click();
+    } else {
+      await page.getByRole("button", { name: "Menu", exact: true }).click();
+      await mobile.getByRole("link", { name: "Request a quote", exact: true }).click();
+    }
+    await expectQuoteLanding(page);
+  }
+});
+
+test("USR-012: late banner and cart content settle before the final quote landing", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/hero", async (route) => {
+    await ready;
+    await route.fulfill({ json: { item: {
+      tag: "Training equipment", number: "01", eyebrow: "Equipment for your space",
+      title: "A longer banner title that wraps across multiple lines", image: "/images/pro-elite.svg",
+    } } });
+  });
+  await page.route("**/api/catalog/selection", async (route) => { await ready; await route.continue(); });
+  try {
+    await page.goto("/?quote=cart#contact");
+    await expect(page.locator("#products article").first()).toBeVisible();
+    release();
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).not.toHaveValue("");
+    await expectQuoteLanding(page);
+  } finally { release(); }
+});
+
+test("USR-012: catalog and banner failures still land on the quote form", async ({ page }) => {
+  await page.route("**/api/products", (route) => route.fulfill({ status: 503, body: "Unavailable" }));
+  await page.route("**/api/hero", (route) => route.fulfill({ status: 503, body: "Unavailable" }));
+  await page.goto("/#contact");
+  await expect(page.locator("#products").getByRole("alert")).toBeVisible();
+  await expectQuoteLanding(page);
+});
+
+test("USR-012: ordinary visits and later price refreshes do not trigger quote scrolling", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#products article").first()).toBeVisible();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await page.goto("/#contact");
+  await expect(page.locator("#products article").first()).toBeVisible();
+  await expectQuoteLanding(page);
+  await page.getByRole("textbox", { name: "Name", exact: true }).fill("Keep my name");
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  const refreshed = page.waitForResponse("**/api/catalog/selection");
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await refreshed;
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Keep my name");
+});
+
+for (const interaction of ["typing", "scrolling"] as const) {
+  test(`USR-012: loading content does not pull the user back after ${interaction}`, async ({ page }, testInfo) => {
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => { release = resolve; });
+    await page.route("**/api/products", async (route) => { await ready; await route.continue(); });
+    try {
+      const catalogRequested = page.waitForRequest("**/api/products");
+      await page.goto("/#contact");
+      await catalogRequested;
+      await expect(page.getByText("Loading equipment...", { exact: true })).toBeVisible();
+      if (interaction === "typing") {
+        await page.getByRole("textbox", { name: "Name", exact: true }).fill("Keep my input");
+      } else if (testInfo.project.use.isMobile) {
+        await page.locator("main").dispatchEvent("touchstart", { touches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+        await page.evaluate(() => window.scrollBy({ top: -300, behavior: "instant" }));
+      } else {
+        await page.mouse.wheel(0, -300);
+      }
+      await page.evaluate(() => {
+        const original = window.scrollTo.bind(window);
+        document.documentElement.dataset.programmaticScrolls = "0";
+        window.scrollTo = (x: number | ScrollToOptions = {}, y?: number) => {
+          document.documentElement.dataset.programmaticScrolls = String(Number(document.documentElement.dataset.programmaticScrolls) + 1);
+          if (typeof x === "number") original(x, y ?? 0);
+          else original(x);
+        };
+      });
+      release();
+      await expect(page.locator("#products article").first()).toBeVisible();
+      await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      expect(await page.evaluate(() => document.documentElement.dataset.programmaticScrolls)).toBe("0");
+      if (interaction === "typing") {
+        await expect(page.getByRole("textbox", { name: "Name", exact: true })).toHaveValue("Keep my input");
+        await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+      }
+    } finally { release(); }
+  });
+}

@@ -132,6 +132,7 @@ Use these short references in the case tables:
 | E-CATALOG | [catalog.spec.ts](../frontend/tests/e2e/catalog.spec.ts) | Production-build browser journeys, admin/content/media/cart/inquiry/banner/responsive checks |
 | E-MARKET | [market-ui.spec.ts](../frontend/tests/e2e/market-ui.spec.ts) | Mocked Canadian browser pricing/repricing and visible current-versus-earlier upload results |
 | E-ROUND2 | [round-two.spec.ts](../frontend/tests/e2e/round-two.spec.ts) | Both catalogs: Draft/missing-price/weight/category workflows and exact date entry-to-reload trace |
+| E-QUOTE | [quote-navigation.spec.ts](../frontend/tests/e2e/quote-navigation.spec.ts) | Desktop/mobile quote landing from cart/product/direct/same-page links, delayed/failed content, input preservation, and cancellation after user interaction; also configured in mobile WebKit |
 
 Representative exact entry points for diagnosis:
 
@@ -314,6 +315,7 @@ Examples of impact selection:
 | USR-009 | P1 | Compare 320/390/768/1024/1440 layouts, large text, desktop keyboard, phone landscape and virtual keyboard. | No page overflow or covered controls; desktop grids/split panes retained; input labels remain visible; touch targets practical. | P: E-CATALOG checks widths/navigation; real keyboard/zoom/device matrix M |
 | USR-010 | P1 | Use keyboard-only, VoiceOver/TalkBack, reduced motion, and 200% text resizing. | Logical headings/focus, announced errors/results, accessible dialogs, no focus obscured by sticky areas; information not conveyed only by colour. | M, with limited existing role/focus assertions |
 | USR-011 | P1 | At 320/390/767/768/1023 px use the visible Products/Accessories header links to switch catalogs without opening Menu; test 1024/1440 px desktop navigation. | Mobile links are visible at the top, destinations are correct and headings not covered by the taller header; no overflow; desktop has only the original full navigation. | A: E-MARKET `USR-011`; physical-device touch remains manual |
+| USR-012 | P1 | Open quote from cart, product detail, direct URL, and repeated same-page links on desktop/mobile. Delay catalog/banner/cart data, fail catalog/banner, and separately start typing or scrolling while data is pending. | After initial layout settles, the form starts 8-32 px below the sticky header and Name is visible; prefilled message remains correct. Enough trailing space exists on tall desktops. Automatic alignment stops after user input/scrolling and does not repeat on later price refresh. Ordinary visits do not jump. | A: E-QUOTE on desktop/phone Chromium and phone WebKit; mobile scroll-intent cancellation uses synthetic touch events, not physical-device certification |
 
 ## 10. Permanent Captured date diagnostic protocol
 
@@ -386,6 +388,7 @@ Run destructive/error-injection cases only in an isolated/staging environment.
 | Always-visible mobile Products / Accessories links | USR-001/008/009/011 | Shared header, not a replacement for desktop navigation; anchor offset preserves visible headings |
 | Enable domain HTTPS and canonical www redirect | OPS-001/008/010 | Preserve path/query and existing service access; DNS/mail records and application data must not be overwritten |
 | Configurable multiple inquiry recipients | SYS-014/016, USR-006, OPS-006 | Sending mailbox and recipient list are separate; confirm each inbox independently |
+| Quote link landing after async content and at page end | USR-006/009/012 | Align once below measured header, preserve form context, handle client-side hash navigation, and never keep pulling the user back |
 
 Historical commit context: `334d320`, `c412178`, `1f5f58c`, `f142fb6`,
 `aa2861a`, and the pending Round 2 changes. Use the actual tested revision in each

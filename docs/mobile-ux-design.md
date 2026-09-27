@@ -359,6 +359,13 @@ requested symbol-only public display and also needs approval.
 
 Keep the existing contact anchor and API for the initial iteration.
 
+- Quote navigation must land the form just below the actual sticky header on
+  desktop and mobile, including after asynchronous catalog/banner/cart content.
+  Give the targeted section enough viewport-height space for tall desktop
+  windows to reach that position. Align once when the initial layout is ready;
+  cancel further adjustment when the user starts scrolling, touching, or typing.
+  Preserve quote context, repeated same-page navigation, and reduced-motion safety
+  without introducing timed scroll loops or forcing keyboard focus.
 - Persistent labels: Name, Email, Phone (optional), Company / Studio (optional),
   and Message.
 - Keep Name, Email, and Message required unless the business approves a change.

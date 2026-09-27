@@ -11,6 +11,7 @@ import InquiryForm from "@/components/InquiryForm";
 import PhotoGallery from "@/components/PhotoGallery";
 import { getCatalogPhotos, type CatalogDetails } from "@/lib/catalogDetails";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
+import { useQuoteNavigation } from "@/lib/useQuoteNavigation";
 
 type Product = CatalogDetails & {
   id: number;
@@ -36,7 +37,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [hero, setHero] = useState<Hero>(defaultHero);
+  const [heroLoading, setHeroLoading] = useState(true);
   const { cart, add, loading: cartLoading, error, notice } = useCart();
+  useQuoteNavigation(!loading && !heroLoading && !cartLoading);
   useEffect(() => {
     let active = true;
     fetch(`${API_BASE}/api/products`, { cache: "no-store" }).then(async (response) => {
@@ -52,7 +55,11 @@ export default function Home() {
     return () => { active = false; };
   }, [retry]);
   useEffect(() => {
-    fetchHero().then(setHero).catch((error) => console.error("Unable to load home banner; using defaults:", error));
+    let active = true;
+    fetchHero().then((item) => { if (active) setHero(item); })
+      .catch((error) => console.error("Unable to load home banner; using defaults:", error))
+      .finally(() => { if (active) setHeroLoading(false); });
+    return () => { active = false; };
   }, []);
 
   return (
