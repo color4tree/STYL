@@ -23,7 +23,7 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Resp
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import AfterValidator, BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, TypeAdapter, field_validator, model_validator
 
 from app.media import VIDEO_FORMATS, upload_video, video_response
 from app.location import MarketContext, resolve_market
@@ -36,6 +36,7 @@ ACCESSORIES_PATH = DATA_DIRECTORY / "accessories.json"
 HERO_PATH = DATA_DIRECTORY / "hero.json"
 INQUIRIES_PATH = DATA_DIRECTORY / "inquiries"
 INQUIRY_RECIPIENT = "styl@stylfitness.com"
+INQUIRY_RECIPIENTS_ADAPTER = TypeAdapter(list[EmailStr])
 logger = logging.getLogger(__name__)
 UPLOAD_PATH = DATA_DIRECTORY / "uploads" if CONFIGURED_DATA_DIRECTORY else APP_PATH / "uploads"
 ADMIN_TOKEN = os.getenv("STYL_ADMIN_TOKEN", "")
@@ -836,10 +837,22 @@ def send_inquiry_email(request: InquiryRequest, inquiry_id: str) -> str:
     if not all((host, username, password)):
         return "unconfigured"
 
+    configured_recipients = os.getenv("STYL_INQUIRY_RECIPIENTS", INQUIRY_RECIPIENT)
+    if "\r" in configured_recipients or "\n" in configured_recipients:
+        logger.error("Invalid inquiry recipient configuration; email was not sent.")
+        raise ValueError("Recipient configuration must be a comma-separated address list.")
+    try:
+        recipients = list(dict.fromkeys(INQUIRY_RECIPIENTS_ADAPTER.validate_python(
+            [address.strip() for address in configured_recipients.split(",")],
+        )))
+    except ValueError:
+        logger.error("Invalid inquiry recipient configuration; email was not sent.")
+        raise ValueError("Configure valid inquiry recipient email addresses.") from None
+
     port = int(os.getenv("STYL_SMTP_PORT", "587"))
     email = EmailMessage()
     email["From"] = os.getenv("STYL_SMTP_FROM", INQUIRY_RECIPIENT)
-    email["To"] = INQUIRY_RECIPIENT
+    email["To"] = ", ".join(recipients)
     email["Reply-To"] = str(request.email)
     email["Subject"] = f"STYL inquiry {inquiry_id}"
     email.set_content(
@@ -855,12 +868,12 @@ def send_inquiry_email(request: InquiryRequest, inquiry_id: str) -> str:
     if port == 465:
         with smtplib.SMTP_SSL(host, port, timeout=10, context=context) as smtp:
             smtp.login(username, password)
-            refused = smtp.send_message(email)
+            refused = smtp.send_message(email, to_addrs=recipients)
     else:
         with smtplib.SMTP(host, port, timeout=10) as smtp:
             smtp.starttls(context=context)
             smtp.login(username, password)
-            refused = smtp.send_message(email)
+            refused = smtp.send_message(email, to_addrs=recipients)
     if refused:
         raise smtplib.SMTPException("Inquiry recipient refused")
     return "sent"

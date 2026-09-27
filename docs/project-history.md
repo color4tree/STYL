@@ -1,6 +1,81 @@
 # STYL project history and handoff
 
-Last recorded: 2026-09-26
+Last recorded: 2026-09-27
+
+## Multiple-recipient SMTP preparation - 2026-09-27
+
+The user approved using a separately authenticated Gmail sender and delivering
+quote notifications to that mailbox plus the STYL business mailbox. Added the
+server-only `STYL_INQUIRY_RECIPIENTS` comma-separated setting with validated,
+deduplicated addresses; default single-recipient behavior is retained.
+Reply-To remains the submitting customer's address. Invalid recipient settings
+prevent sending; partial refusal retains the inquiry with failed email status.
+
+Validation: the new multi-recipient test failed against the old single-recipient
+behavior, then passed. All 62 backend tests, seven frontend unit tests, and all 44
+configured production-build browser executions passed; lint has no errors and
+five image-optimization warnings. SMTP delivery is mocked in automated tests.
+The user entered the app password in a hidden server prompt, outside chat/history.
+A real STARTTLS Gmail authentication check succeeded and a root-only pending
+configuration was created. Deployment/activation and the authorized one-message
+inbox check are the next operational steps; authentication alone is not proof of
+mail delivery. No credential is included in this repository.
+
+## Domain HTTPS enabled on Lightsail - 2026-09-27
+
+The user authorized production configuration updates for `stylfitness.com` and
+`www.stylfitness.com`, preserving existing IP-based access. No application-code
+deployment, DNS/email change, or catalog-data write was performed.
+
+Before the change, public DNS already resolved the root domain to the attached
+Lightsail static IP `54.156.37.31`; `www` was a CNAME to the root domain.
+The installed Caddy configuration served only the HTTPS IP hostname, explaining
+domain TLS failures. The API allowed only the IP origin. The server checkout
+was `a78d3c6`, and all application/proxy services were active.
+
+Changes:
+
+- Backed up the original Caddy configuration and environment file under
+  `/etc/styl/domain-backup-20260927T172943Z` (root-only directory).
+- Appended the root-domain site with existing frontend/API routing and explicit
+  client-IP forwarding for the API; preserved the old IP block and its TLS policy.
+- Added a permanent `www` redirect to the root domain with path/query retention.
+- Added both HTTPS domain origins alongside the existing IP origin.
+- Validated the staged Caddy configuration, restarted only `styl-api` for its
+  environment setting, and gracefully reloaded Caddy. `styl-web` was not restarted.
+- Caddy obtained certificates for both domain names from Let's Encrypt.
+
+Verification (targeted operational smoke, not a full regression):
+
+- Trusted TLS validation succeeded for the root and www hostnames. The observed
+  root certificate expires 2026-12-26; Caddy manages renewal.
+- HTTPS root, health, admin page, cart page, catalog APIs, and one product detail
+  returned 200. Anonymous admin verification returned 401.
+- HTTP redirects to HTTPS (308); www redirects to the root (301), preserving a
+  test path and query string.
+- Allowed-origin preflight for the domain returned 200 and the expected origin.
+- Regional catalog/market responses remained private/no-store and returned
+  unknown/CAD; this does not prove GeoIP database provisioning.
+- Browser loaded the main catalog and Accessories on the domain without visible
+  API errors, using same-origin API requests; phone-width navigation was visible.
+- An uploaded image endpoint returned 200; an existing video byte range returned
+  206 with the requested 100 bytes. Full physical-device video/audio was not tested.
+- Existing HTTPS IP health worked from the server and an external explicitly
+  named TLS connection. One external IP probe without explicit SNI reset; domain
+  access is the recommended public URL.
+- Caddy, API, and frontend remained active.
+
+Browser-terminal bulk typing was unreliable; an initial transfer was cancelled,
+and another failed decoding before the configuration operation succeeded. Changes
+were subsequently staged in short commands and their diff/validation inspected
+before applying. No rollback was required for the successful apply.
+
+DNS MX/TXT/email settings, firewall rules, prices, source files, and database files
+were not changed. GeoIP setup, real mailbox delivery, and full physical-device
+testing remain separate work. The verification backup Git branch was not changed.
+
+Operational cases: OPS-001 and OPS-010 received targeted live evidence;
+OPS-002/003/004/005/006/008 are not fully certified by this smoke pass.
 
 ## CAD fallback and direct mobile catalog navigation - 2026-09-26
 

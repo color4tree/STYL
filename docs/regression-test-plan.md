@@ -258,6 +258,7 @@ Examples of impact selection:
 | SYS-013 | P1 | Load legacy custom banner containing priceLabel; edit tag/number/heading/title/image; save/reload; attempt unsupported price/selector fields. | Original text/image retained, price omitted from API/editor/public output, legacy price removed on subsequent save, unsupported new fields rejected. | A: B-AUTH/B-REG/E-CATALOG |
 | SYS-014 | P0 | Save an inquiry, simulate SMTP absent/failing, then simulate storage failure before notification. | Receipt only after persistence; SMTP failure does not discard inquiry; storage failure is not success and sends no email. | A: B-AUTH; real receipt in E-CATALOG |
 | SYS-015 | P0 | Submit invalid email, whitespace/empty required text, oversized content, and control-character email input. | Clear validation failure; no invalid stored inquiry or unintended mail headers; optional legitimate blanks remain accepted. | P: B-AUTH covers listed API cases; keep client/API validation matrix synchronized |
+| SYS-016 | P0 | Configure a sender different from two comma-separated recipients; include a duplicate, an invalid/empty list, and partial SMTP refusal. Exercise STARTTLS and implicit TLS. | Valid recipients receive one envelope entry each, From remains the sending mailbox, Reply-To remains the customer. Default single recipient still works. Invalid configuration sends nothing; refusal retains inquiry with failed email status rather than claiming all recipients accepted. | A: B-AUTH multi-recipient tests; real delivery to every mailbox still requires OPS-006 |
 
 ### 7.2 Regional pricing and GeoIP
 
@@ -356,6 +357,7 @@ Run destructive/error-injection cases only in an isolated/staging environment.
 | OPS-007 | P1 | Block browser storage, fail catalog/current-price requests, interrupt upload, and simulate staging disk-full/permission failure. | Explicit actionable failures, retained drafts/data where promised, no false success or stale-price confidence. | P: unit/browser recovery coverage; staging storage/process faults need more automation |
 | OPS-008 | P1 | Inspect CORS and public port exposure from an approved test host; test an unapproved browser origin. | Only intended origins can use browser APIs; API/service ports not public; CORS is not treated as admin authentication. | M |
 | OPS-009 | P2 | Record mobile/desktop performance on representative 12-media catalogs and slower networks. | No regression against measured baseline; media loading/layout stable. Targets remain LCP <=2.5s, INP <=200ms, CLS <=0.1 when meaningful field data exists. | M; do not claim field performance from a build result |
+| OPS-010 | P0 | Validate root/www DNS, trusted certificate chain/hostname, HTTP-to-HTTPS redirect, www-to-root path/query retention, same-origin API requests, allowed-origin preflight, and any explicitly retained IP access. Inspect backed-up/installed configuration and service health without changing mail DNS. | Domain works without TLS bypass; redirect destinations and API routes are correct; certificate renewal remains managed by Caddy; no catalog/email configuration loss. | M: live targeted evidence recorded 2026-09-27 in project history; future runs must reverify current configuration |
 
 ## 12. Recent bugs/enhancements and permanent traceability
 
@@ -382,6 +384,8 @@ Run destructive/error-injection cases only in an isolated/staging environment.
 | Restore standalone banner and remove pricing | SYS-013, ADM-008, USR-008 | Product-selector banner expectation is superseded, not current |
 | Default unresolved visitor location to CAD | GEO-001/003/005/007 | Supersedes unknown/USD only; identified US/other-country selection remains USD |
 | Always-visible mobile Products / Accessories links | USR-001/008/009/011 | Shared header, not a replacement for desktop navigation; anchor offset preserves visible headings |
+| Enable domain HTTPS and canonical www redirect | OPS-001/008/010 | Preserve path/query and existing service access; DNS/mail records and application data must not be overwritten |
+| Configurable multiple inquiry recipients | SYS-014/016, USR-006, OPS-006 | Sending mailbox and recipient list are separate; confirm each inbox independently |
 
 Historical commit context: `334d320`, `c412178`, `1f5f58c`, `f142fb6`,
 `aa2861a`, and the pending Round 2 changes. Use the actual tested revision in each

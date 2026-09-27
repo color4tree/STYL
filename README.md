@@ -43,7 +43,8 @@ uploads are stored under `STYL_DATA_DIR`.
 ### Inquiry email
 
 The inquiry API saves each submission under `STYL_DATA_DIR/inquiries/` before
-sending a notification to `styl@stylfitness.com`. Locally, submissions are stored
+sending a notification to `STYL_INQUIRY_RECIPIENTS` (a comma-separated list,
+defaulting to `styl@stylfitness.com`). Locally, submissions are stored
 in `backend/app/data/inquiries/`, which is excluded from Git. These files contain
 customer contact details; keep them and their backups private and remove them
 when no longer needed.
@@ -56,9 +57,17 @@ STYL_SMTP_PORT=587
 STYL_SMTP_USERNAME=styl@stylfitness.com
 STYL_SMTP_PASSWORD=replace-with-google-app-password
 STYL_SMTP_FROM=styl@stylfitness.com
+STYL_INQUIRY_RECIPIENTS=styl@stylfitness.com
 ```
 
 Use an app password for the sending Google account, not its regular password.
+The sender can be a separate Gmail mailbox: use its address for both
+`STYL_SMTP_USERNAME` and `STYL_SMTP_FROM`, and configure one or more notification
+recipients independently. Duplicate recipient addresses are removed. An empty or
+invalid recipient configuration prevents sending and is logged without address
+contents; the saved inquiry remains available with failed email status. Partial
+recipient refusal is also recorded as failed, since not every recipient accepted
+the message. There is no automatic retry that could duplicate partial deliveries.
 Google requires 2-Step Verification; Workspace policy may disable app passwords.
 If unavailable, ask the Workspace administrator for an approved SMTP relay or
 email service. If `styl@stylfitness.com` is an alias, authenticate with the actual

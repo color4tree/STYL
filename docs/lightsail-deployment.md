@@ -389,6 +389,27 @@ requests should enter through Caddy on port 80.
 
 ## 8. Add DNS and enable automatic HTTPS
 
+### Current STYL production configuration (verified 2026-09-27)
+
+- Primary URL: `https://stylfitness.com`.
+- `www.stylfitness.com` permanently redirects to the root domain, retaining path
+  and query string. HTTP redirects to HTTPS.
+- Caddy obtained trusted Let's Encrypt certificates for both names.
+- DNS already points to attached static IP `54.156.37.31`; `www` aliases to the
+  root domain. Google mail records were not changed.
+- Existing HTTPS IP access is retained for now; the domain is the recommended
+  public URL.
+- Allowed origins include the root domain, www domain, and existing IP origin.
+- Configuration backup: `/etc/styl/domain-backup-20260927T172943Z`, protected
+  root-only. It contains the prior environment file; never copy its contents into
+  a public issue or commit it.
+
+The following sections are general initial-setup instructions. Do not blindly
+replace the current installed Caddyfile with the repository template: preserve
+the production www redirect, existing IP block, and any subsequently approved
+settings. Inspect, back up, stage, and validate the actual changes first.
+No DNS hosting migration or AWS Certificate Manager resource is required.
+
 Complete this phase before using `/admin`, accepting inquiries, or announcing the
 site publicly.
 

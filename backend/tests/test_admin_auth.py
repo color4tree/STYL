@@ -50,8 +50,9 @@ class AdminAuthenticationTests(unittest.TestCase):
                 transport = smtp_ssl if port == "465" else smtp
                 connection = transport.return_value.__enter__.return_value
 
-                def accept_message(email):
+                def accept_message(email, *, to_addrs):
                     self.assertEqual(email["To"], "styl@stylfitness.com")
+                    self.assertEqual(to_addrs, ["styl@stylfitness.com"])
                     self.assertEqual(email["From"], "sender@example.com")
                     self.assertEqual(email["Reply-To"], payload["email"])
                     self.assertIn(payload["message"], email.get_content())
@@ -91,6 +92,49 @@ class AdminAuthenticationTests(unittest.TestCase):
             saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
             self.assertEqual(saved["emailStatus"], "failed")
             self.assertEqual(saved["email"], payload["email"])
+
+    def test_inquiry_sends_to_configured_recipients_with_customer_reply_to(self) -> None:
+        # SYS-016: sender and delivery recipients come from server configuration.
+        settings = {
+            "STYL_SMTP_HOST": "smtp.example.com", "STYL_SMTP_USERNAME": "sender@example.com",
+            "STYL_SMTP_PASSWORD": "test-password", "STYL_SMTP_FROM": "sender@example.com",
+            "STYL_INQUIRY_RECIPIENTS": " sender@example.com, sales@example.com, sender@example.com ",
+        }
+        for port in ("587", "465"):
+            with self.subTest(port=port), patch.dict(main.os.environ, {**settings, "STYL_SMTP_PORT": port}, clear=True), patch.object(main.smtplib, "SMTP") as smtp, patch.object(main.smtplib, "SMTP_SSL") as smtp_ssl:
+                connection = (smtp_ssl if port == "465" else smtp).return_value.__enter__.return_value
+                connection.send_message.return_value = {}
+                response = self.client.post("/api/inquiries", json={
+                    "name": "Customer", "email": "customer@example.com", "message": "Two-recipient quote",
+                })
+                self.assertEqual(response.status_code, 200)
+                email = connection.send_message.call_args.args[0]
+                self.assertEqual(str(email["To"]), "sender@example.com, sales@example.com")
+                self.assertEqual(str(email["From"]), "sender@example.com")
+                self.assertEqual(str(email["Reply-To"]), "customer@example.com")
+                self.assertEqual(connection.send_message.call_args.kwargs["to_addrs"], ["sender@example.com", "sales@example.com"])
+                saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
+                self.assertEqual(saved["emailStatus"], "sent")
+
+    def test_invalid_recipients_and_partial_refusal_do_not_report_email_sent(self) -> None:
+        settings = {
+            "STYL_SMTP_HOST": "smtp.example.com", "STYL_SMTP_USERNAME": "sender@example.com",
+            "STYL_SMTP_PASSWORD": "test-password", "STYL_SMTP_FROM": "sender@example.com",
+        }
+        payload = {"name": "Customer", "email": "customer@example.com", "message": "Quote"}
+        for recipients in ("", "invalid-address", "sales@example.com\r\nBcc: other@example.com"):
+            with self.subTest(recipients=recipients), patch.dict(main.os.environ, {**settings, "STYL_INQUIRY_RECIPIENTS": recipients}, clear=True), patch.object(main.smtplib, "SMTP") as smtp:
+                response = self.client.post("/api/inquiries", json=payload)
+                self.assertEqual(response.status_code, 200)
+                smtp.assert_not_called()
+                saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
+                self.assertEqual(saved["emailStatus"], "failed")
+        with patch.dict(main.os.environ, {**settings, "STYL_INQUIRY_RECIPIENTS": "sender@example.com,sales@example.com"}, clear=True), patch.object(main.smtplib, "SMTP") as smtp:
+            smtp.return_value.__enter__.return_value.send_message.return_value = {"sales@example.com": (550, b"Recipient refused")}
+            response = self.client.post("/api/inquiries", json=payload)
+            saved = json.loads((main.INQUIRIES_PATH / f"{response.json()['id']}.json").read_text())
+            self.assertEqual(saved["emailStatus"], "failed")
+            self.assertEqual(saved["message"], payload["message"])
 
     def test_inquiry_storage_failure_does_not_report_success_or_send_email(self) -> None:
         with patch.object(main, "write_json_list", side_effect=OSError("Disk full")), patch.object(main, "send_inquiry_email") as send:
