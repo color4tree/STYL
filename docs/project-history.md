@@ -2,6 +2,48 @@
 
 Last recorded: 2026-09-27
 
+## Catalog and quote UI deployed - 2026-09-27
+
+With explicit user approval, committed/pushed the pending frontend, tests and
+related documentation as `08f1334` on `main`, then deployed it to Ubuntu-1 at
+2026-09-28 04:04 UTC (September 27 Pacific time). This includes aligned catalog
+cards, 21rem desktop previews with subtle italic Show more, complete mobile
+details, numbered multiline quote messages, and the quote-navigation flash fix.
+The user's local product/accessory JSON edits and untracked banner configuration
+were excluded from the release. The backup branch remains at `91f3d3d`.
+
+The data-backup service succeeded. Preserved the prior frontend build and protected
+environment/Caddy/web-service configuration in the root-only directory
+`/var/backups/styl/ui-release-20260928T040100Z`. Fast-forwarded the production
+checkout from `608df88`, preserving existing deployment-script mode changes.
+Built the exact candidate in a separate temporary directory, using unchanged
+installed dependencies and same-origin API requests. Build and TypeScript passed.
+Replaced the built frontend and restarted only `styl-web`; API and Caddy remained
+active. The predeployment automated baseline was 101 browser executions and nine
+unit tests, with zero lint errors and five existing image warnings.
+
+Targeted live verification:
+
+- Six catalog checks across desktop Chromium, phone Chromium and phone WebKit
+  passed: aligned desktop cards, 336 px preview limit, italic overflow controls
+  and complete expansion, plus full unmasked mobile details without controls.
+- Eighteen cart/product/header quote transitions passed across those browsers
+  with normal/reduced motion and separately delayed cart/catalog GET responses.
+  Every sampled form/header gap was 16 px. Name stayed visible, and numbered
+  multiline cart messages and product-only context were retained.
+- Tests used isolated browser storage and read-only production requests.
+  No inquiry was submitted, no email was sent, and no customer/catalog record
+  was modified. No browser runtime errors occurred.
+- HTTPS home, cart, accessories, admin, health, both catalog APIs and market
+  endpoint returned 200; the web service started normally.
+- Before/after checksums matched for environment, Caddy, products, accessories
+  and banner data. The API kept its predeployment process/start time, and the
+  environment file remained root-owned mode 0600, preserving SMTP configuration.
+
+This is targeted live deployment verification, not a new full backend regression
+or physical-device certification. Outstanding GeoIP provisioning and independent
+mailbox-delivery checks are unchanged.
+
 ## Quote navigation flash corrected before paint - 2026-09-27
 
 The user reported a flash on the cart-to-quote transition even though the final
