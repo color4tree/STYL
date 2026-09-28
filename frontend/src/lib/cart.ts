@@ -1,4 +1,4 @@
-import { quantityLabel, type SellingUnit } from "./catalogDetails";
+import { quantityLabel, saleUnitLabel, type SellingUnit } from "./catalogDetails";
 
 export type CartItem = {
   id: number;
@@ -136,6 +136,13 @@ export function formatCartSummary(items: CartItem[] = readCart()) {
     return "No items selected yet.";
   }
 
-  const summary = items.map((item) => `${item.name} x ${quantityLabel(item.quantity, item.sellingUnit)}${item.packageQuantity ? ` (${item.packageQuantity} pieces per sale unit)` : ""} at ${formatPrice(item.price, item.currency)} per sale unit`).join(", ");
-  return `Interested in: ${summary}.`;
+  const summary = items.map((item, index) => {
+    const unit = saleUnitLabel(item.sellingUnit) || "sale unit";
+    const quantity = item.sellingUnit ? quantityLabel(item.quantity, item.sellingUnit) : `${item.quantity} sale unit${item.quantity === 1 ? "" : "s"}`;
+    const lines = [`${index + 1}. ${item.name}`, `   Quantity: ${quantity}`];
+    if (item.packageQuantity) lines.push(`   Contents: ${item.packageQuantity} ${item.packageQuantity === 1 ? "piece" : "pieces"} per ${unit}`);
+    lines.push(`   Unit price: ${formatPrice(item.price, item.currency)} per ${unit}`);
+    return lines.join("\n");
+  }).join("\n\n");
+  return `Interested in:\n\n${summary}`;
 }

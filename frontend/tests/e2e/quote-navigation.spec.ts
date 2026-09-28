@@ -14,6 +14,76 @@ async function expectQuoteLanding(page: Page) {
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeInViewport({ ratio: 1 });
 }
 
+for (const origin of ["cart", "product", "header"] as const) {
+  for (const reducedMotion of ["no-preference", "reduce"] as const) {
+    test(`USR-015: ${origin} quote transition stays aligned during loading (${reducedMotion})`, async ({ page, request }) => {
+      await page.emulateMedia({ reducedMotion });
+      const items = (await (await request.get("http://127.0.0.1:8102/api/products")).json()).items;
+      const product = items[0];
+      await page.addInitScript((item) => localStorage.setItem("styl-cart", JSON.stringify([{ ...item, quantity: 2 }])), product);
+      await page.goto(origin === "product" ? `/products/${product.slug}` : "/cart");
+      await expect(page.locator("main").getByRole("button", { name: "Add to cart", exact: true })
+        .or(page.locator("main").getByRole("link", { name: "Request a quote", exact: true }).first())).toBeVisible();
+
+      let releaseCatalog!: () => void;
+      let releaseCart!: () => void;
+      const catalogGate = new Promise<void>((resolve) => { releaseCatalog = resolve; });
+      const cartGate = new Promise<void>((resolve) => { releaseCart = resolve; });
+      await page.route("**/api/products", async (route) => { await catalogGate; await route.continue(); });
+      await page.route("**/api/catalog/selection", async (route) => { await cartGate; await route.continue(); });
+      await page.evaluate(() => {
+        const samples: number[] = [];
+        document.documentElement.dataset.quotePaintGaps = "[]";
+        const sample = () => {
+          const form = document.getElementById("contact");
+          const header = document.querySelector("header");
+          if (form && header) {
+            samples.push(Math.round(form.getBoundingClientRect().top - header.getBoundingClientRect().bottom));
+            document.documentElement.dataset.quotePaintGaps = JSON.stringify(samples);
+          }
+          if (document.documentElement.dataset.stopQuoteSampling !== "true") requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+      try {
+        if (origin === "product") {
+          await page.locator("main").getByRole("link", { name: "Request quote", exact: true }).click();
+        } else if (origin === "cart") {
+          await page.locator("main").getByRole("link", { name: "Request a quote", exact: true }).first().click();
+        } else {
+          const desktop = page.getByRole("navigation", { name: "Main navigation", exact: true });
+          if (await desktop.isVisible()) await desktop.getByRole("link", { name: "Request a quote", exact: true }).click();
+          else {
+            await page.getByRole("button", { name: "Menu", exact: true }).click();
+            await page.getByRole("navigation", { name: "Mobile navigation", exact: true }).getByRole("link", { name: "Request a quote", exact: true }).click();
+          }
+        }
+        await expect(page).toHaveURL(/#contact$/);
+        await expect(page.getByText("Loading equipment...", { exact: true })).toBeVisible();
+        await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        releaseCart();
+        await expect(page.getByRole("link", { name: "Review your cart", exact: true })).toBeVisible();
+        await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        releaseCatalog();
+        await expect(page.locator("#products article")).toHaveCount(items.length);
+        await expectQuoteLanding(page);
+        await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+          document.documentElement.dataset.stopQuoteSampling = "true";
+          resolve();
+        }))));
+        const gaps: number[] = JSON.parse(await page.locator("html").getAttribute("data-quote-paint-gaps") ?? "[]");
+        expect(gaps.length).toBeGreaterThan(2);
+        expect(Math.min(...gaps), "No painted frame puts the form under the sticky header").toBeGreaterThanOrEqual(8);
+        expect(Math.max(...gaps), "No early anchor jump or late correction is painted").toBeLessThanOrEqual(32);
+        if (origin !== "header") await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(new RegExp(product.name));
+      } finally {
+        releaseCart();
+        releaseCatalog();
+      }
+    });
+  }
+}
+
 for (const origin of ["cart", "product", "direct"] as const) {
   test(`USR-012: ${origin} quote link lands on the form after a delayed catalog`, async ({ page, request }) => {
     const items = (await (await request.get("http://127.0.0.1:8102/api/products")).json()).items;
@@ -126,7 +196,11 @@ for (const interaction of ["typing", "scrolling"] as const) {
         await page.locator("main").dispatchEvent("touchstart", { touches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
         await page.evaluate(() => window.scrollBy({ top: -300, behavior: "instant" }));
       } else {
+        await page.evaluate(() => {
+          window.addEventListener("wheel", () => { document.documentElement.dataset.quoteWheelReceived = "true"; }, { once: true, passive: true });
+        });
         await page.mouse.wheel(0, -300);
+        await expect(page.locator("html")).toHaveAttribute("data-quote-wheel-received", "true");
       }
       await page.evaluate(() => {
         const original = window.scrollTo.bind(window);

@@ -228,9 +228,11 @@ real video seeking, failed-only upload retry, media limits, cart quantities,
 inquiry errors and storage, navigation, responsive layouts, prominent homepage
 business-principle placement, custom price-free banners, regional prices and
 missing-price visibility, date persistence across timezones, upload batch history,
-quote-anchor landing after delayed content without overriding user interaction,
-and unavailable-media recovery. Quote-navigation cases run in desktop/phone
-Chromium and mobile WebKit. Controlled failure responses are injected only
+quote-anchor landing and frame-stable navigation during delayed content without overriding user interaction,
+aligned product/accessory cards with taller desktop previews and full mobile details,
+multiline quote-message persistence,
+and unavailable-media recovery. Quote-navigation and catalog-layout cases run in
+desktop/phone Chromium and mobile WebKit. Controlled failure responses are injected only
 for recovery tests; successful operations use the real isolated API.
 Canadian browser-price fixtures are mocked; GeoIP reader and regional API behavior
 are separately covered by offline tests. Live database accuracy is not certified

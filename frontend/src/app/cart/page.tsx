@@ -51,14 +51,14 @@ export default function CartPage() {
             <h2 className="text-xl font-semibold">Summary</h2>
             <div className="mt-5 space-y-3">{totals.map(([currency, total]) => <div key={currency} className="flex flex-wrap justify-between gap-3 text-lg"><span>Total</span><span>{formatPrice(total, currency)}</span></div>)}</div>
             <p className="mt-3 text-sm text-white/80">Shipping and final pricing confirmed with your quote.</p>
-            {items.length && !error ? <Link href="/?quote=cart#contact" className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-4 text-center font-medium text-[var(--ink)]">Request a quote</Link> : null}
+            {items.length && !error ? <Link href="/?quote=cart#contact" scroll={false} className="mt-6 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-4 text-center font-medium text-[var(--ink)]">Request a quote</Link> : null}
           </aside>
         </div>
         <div className="mt-8">
           {confirmClear ? <div className="flex flex-wrap items-center gap-3"><p>Remove all selected items?</p><button type="button" className="min-h-11 rounded-full bg-red-700 px-4 text-white" onClick={() => { if (clear()) setConfirmClear(false); }}>Confirm clear cart</button><button type="button" className="min-h-11 px-4" onClick={() => setConfirmClear(false)}>Cancel</button></div>
             : <button type="button" className="min-h-11 px-3 text-sm underline" onClick={() => setConfirmClear(true)}>Clear cart</button>}
         </div>
-        {items.length && !error ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="text-sm">{getCartCount(items)} sale units selected</span><Link href="/?quote=cart#contact" className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--ink)] px-5 font-medium text-white">Request a quote</Link></div> : null}
+        {items.length && !error ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="text-sm">{getCartCount(items)} sale units selected</span><Link href="/?quote=cart#contact" scroll={false} className="inline-flex min-h-12 items-center justify-center rounded-full bg-[var(--ink)] px-5 font-medium text-white">Request a quote</Link></div> : null}
       </>}
     </main>
   </>;

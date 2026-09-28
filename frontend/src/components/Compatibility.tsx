@@ -24,12 +24,13 @@ export function CompatibilityEditor({ value, onChange }: { value?: Compatibility
   );
 }
 
-export function CompatibilityDetails({ value }: { value?: Compatibility }) {
+export function CompatibilityDetails({ value, headingLevel = 3 }: { value?: Compatibility; headingLevel?: 3 | 4 }) {
   const fields = compatibilityFields.filter((field) => value?.[field.key]?.trim());
   if (!fields.length) return null;
+  const Heading = headingLevel === 3 ? "h3" : "h4";
   return (
     <section className="my-5 min-w-0 border-t border-[var(--line)] pt-4">
-      <h3 className="text-base font-semibold">Compatibility</h3>
+      <Heading className="text-base font-semibold">Compatibility</Heading>
         <dl className="mt-3 space-y-3 text-sm">
           {fields.map((field) => (
             <div key={field.key}>

@@ -2,6 +2,179 @@
 
 Last recorded: 2026-09-27
 
+## Quote navigation flash corrected before paint - 2026-09-27
+
+The user reported a flash on the cart-to-quote transition even though the final
+content was correct. Local animation-frame traces reproduced two competing
+scroll steps: Next's early `scrollIntoView`, then the navigation hook's later
+`scrollTo`. The desktop form/header gap moved from 88 to 16 px; mobile briefly
+moved from 15 to 161 to 16 px as the selected-cart summary appeared. The new
+USR-015 transition test failed against the old implementation.
+
+Quote links in both cart actions, product detail, and desktop/mobile header now
+disable Next's automatic scroll. The hook aligns initial homepage layout commits
+in a layout effect before paint, stopping once initial loading settles or the
+user interacts. Direct hash targets also receive the viewport-height space from
+CSS before hydration. No timed scroll loop, hidden-page workaround or forced
+input focus was added. Quote text, interruption protection and later price-refresh
+behavior are preserved.
+
+After the fix, all sampled local cart-transition frames stayed 16 px below the
+header on desktop/mobile, with both normal responses and delayed catalog data.
+USR-015 samples intermediate positions while separately releasing cart and catalog
+responses for cart/product/header links, normal/reduced motion, and all three
+configured browser projects (18 combinations). The existing desktop wheel test
+now waits for actual wheel-event delivery before releasing delayed data; the
+browser automation's wheel dispatch does not itself wait for that delivery.
+
+Final current-working-tree frontend validation (base `608df88` plus pending UI
+changes): all 101 configured browser executions and nine unit tests passed,
+including production build/TypeScript. Lint had no errors and the same five image
+warnings; editor diagnostics were clear. Updated USR-015, related plan references,
+responsive design and README. This was full frontend automation, not a new backend
+regression or physical-device certification. No live inquiry/email, catalog-data
+edit, push, backup-branch update or deployment was performed.
+
+## Softer italic Show more styling - 2026-09-27
+
+At the user's request, replaced the warm highlight and bold label with a subtle
+neutral background, light border, muted text and regular-weight italic label.
+Retained the underline, dots, arrow, hit area and existing desktop/mobile behavior.
+Updated the design and USR-014 assertions for the new appearance.
+
+All six targeted browser executions passed with production build/TypeScript;
+lint had zero errors and the five existing warnings. The color assertion accepts
+equivalent RGBA/Oklab serialization. Cleared only inspected generated production
+build folders after Windows unlink failures, then reran successfully. Verified
+and visually inspected the final localhost control. No data changes or deployment.
+
+## Make Show more easier to notice - 2026-09-27
+
+The user found the plain expansion row easy to miss. Added a decorative "..."
+overflow cue, semibold underlined label, warm tinted background, outlined rounded
+button and at least a 48 px hit area. The dots disappear when expanded and are
+excluded from the accessible name. The 21rem desktop cap and full mobile details
+are unchanged. Updated USR-014 and responsive design.
+
+All six targeted product/accessory layout executions passed across desktop/phone
+Chromium and phone WebKit, including production build/TypeScript, keyboard/focus,
+alignment and breakpoint checks. Lint passed with the five existing image warnings
+and no errors. Verified the rendered localhost button styling and hidden mobile
+control, and inspected its screenshot. This was targeted validation, not a full
+regression or physical-device check. No catalog changes, push or deployment.
+
+## Taller desktop previews; complete mobile details - 2026-09-27
+
+The user requested a 50% longer default preview and no detail truncation on
+mobile. Increased the desktop cap from 14rem to 21rem (224 to 336 px at default
+text size). Truncation, fade and Show more/less now apply only at the existing
+1024 px desktop breakpoint and above. Narrower layouts display the complete
+details, including the two-column tablet layout. Returning to desktop retains
+the card's expanded/collapsed choice; alignment and full names/prices are unchanged.
+This supersedes the all-width preview limit described in the previous entry.
+
+The revised desktop tests first failed on the old 224 px cap. Eight focused
+layout/accessory workflow executions then passed, followed by all 39 selected
+catalog-layout and quote-navigation executions across desktop Chromium, phone
+Chromium and phone WebKit, including production build/TypeScript. Tests cover
+1023/1024 px boundaries, full unmasked mobile content, hidden mobile controls,
+desktop expansion state across resizes, aligned rows, and 200% text scaling.
+Lint passed with zero errors and the five existing image warnings; an initial
+lint attempt overlapped Playwright's temporary result-directory cleanup and was
+rerun after that cleanup finished.
+
+Refreshed the stale local development CSS cache using verified local-server
+control, then checked both actual local catalogs at 1440/1024/1023/390/320 px:
+desktop used the 336 px cap; narrower layouts showed full unmasked details and
+no visible expansion controls. No saved catalog data was changed.
+Updated USR-004/014 and responsive design. This was targeted frontend validation,
+not a new full regression or physical-device certification. No push, deployment,
+production changes, or real inquiry/email sends were performed.
+
+## Detail previews clarified: hide only overflow - 2026-09-27
+
+The user clarified that the earlier arrow design hid too much: details should
+remain visible by default, with only excess content concealed to align cards.
+This supersedes the closed-accordion design recorded immediately below.
+
+Products and accessories now show a single details preview containing the summary,
+description, features, use, compatibility and supplied specifications. It is
+capped at 14rem (224 px with default text size), with a faded cut-off and Show more
+only when the content actually overflows. Short content has no toggle; empty
+content has no details section. Show more reveals all content and Show less
+restores the preview, without duplicating the summary. A resize observer updates
+the overflow control as the layout or text size changes. The visible fit-check
+cue, full names/prices/units, galleries and product detail links are retained.
+Shared rows continue aligning card bottoms and purchase controls when expanded.
+Multiline quote formatting is unchanged.
+
+Validation: both new visible-short-detail assertions failed against the closed
+accordions before implementation. Eight targeted browser executions passed after
+the correction, then all 83 configured frontend browser executions and nine unit
+tests passed, including production build/TypeScript. Lint had zero errors and
+the same five image warnings; editor diagnostics were clear. USR-014 now checks
+initial detail visibility, bounded previews, overflow-only controls, complete
+expansion, no overlap, keyboard/focus/ARIA behavior, and control appearance/removal
+after resizing and 200% text. USR-004 and the design oracle were updated too.
+
+The local dev server again retained superseded CSS; rebuilt only its generated
+development cache. Fresh-browser checks and screenshots then verified the user's
+current three CAD products and three CAD accessories with 224 px previews and
+working mobile expansion/collapse. Saved catalog edits were left untouched.
+No backend source changes, production writes, live inquiry emails, push or
+deployment were performed. Physical-device and screen-reader checks remain
+unverified. The updated preview is available locally.
+
+## Readable quote messages and aligned catalog cards - 2026-09-27
+
+The user requested line-by-line quote text and consistent product/accessory
+cards, then selected inline expandable details with a down arrow rather than a
+dialog. Implemented on `main`, based on `608df88`, without pushing or deploying.
+
+- Cart quote messages now use numbered item blocks with separate quantity,
+  known package contents, and currency-labelled unit-price lines. Items and the
+  final pricing/delivery request are separated by blank lines. Each/Pair/Set
+  semantics and legacy unspecified units remain explicit. Product-only requests
+  use the same paragraph structure without inventing a quantity or price.
+- The editable message area grows from eight to at most eighteen rows. User
+  changes survive errors, and exact line breaks reach saved inquiry JSON.
+- Both catalogs reuse one card presentation, with aligned media/category/name/
+  price/summary/contents/disclosure/action rows. Names remain complete; short
+  previews use at most two lines, with full text available in Details &
+  specifications. Native keyboard-operable disclosures have rotating chevrons.
+- Compatibility and specifications are now inside the approved inline listing
+  disclosure, with an explicit visible fit-check cue. Product detail-page
+  compatibility is unchanged. Expanding a card stretches its desktop/tablet
+  row so the purchase controls stay aligned; mobile cards grow individually.
+  Empty fields/disclosures are omitted, and media/cart/detail links remain.
+
+Evidence:
+
+- Before implementation, the new desktop fixtures reproduced card-bottom
+  differences of 416 px for products and 875 px for accessories. All four new
+  browser scenarios and three changed/new quote unit assertions failed.
+- Final full frontend validation: nine unit tests and all 83 configured browser
+  executions passed, including production build/TypeScript; lint had zero errors
+  and the same five image-optimization warnings. The new E-LAYOUT suite adds
+  twelve executions across desktop Chromium, phone Chromium, and phone WebKit.
+- An intermediate full run exposed an ambiguous old product-name test selector
+  after nested detail headings were added. Scoped the name lookup and preserved
+  hierarchical detail headings; the complete rerun passed.
+- Additional explicit disclosure/action non-overlap assertions passed all twelve
+  E-LAYOUT executions. Widths 320/390/768/1280/1440, two-line previews, complete
+  expanded content, empty details, keyboard toggles, and 200% text are covered.
+- Inspected local desktop/mobile/expanded/quote screenshots using read-only
+  public catalog data with isolated browser storage. A stale local development
+  cache initially served superseded seven-row CSS; a clean dev-cache rebuild
+  restored the current eight-row layout. The fresh production test builds were
+  unaffected. No catalog data or credentials were changed.
+
+Added USR-013/014 and updated the responsive design and regression oracle.
+Backend source is unchanged and its full suite was not rerun for this frontend
+change. Inquiry persistence checks used the isolated real API with SMTP disabled;
+no live inquiries/emails were sent. Physical devices, screen readers and actual
+mailbox rendering remain unverified. These changes are local, not deployed.
+
 ## Quote-position fix deployed - 2026-09-27
 
 With user approval, committed and pushed the tested frontend change as `7cce208`

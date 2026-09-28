@@ -96,9 +96,10 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   await page.goto("/accessories");
   const card = page.locator("article").filter({ hasText: name });
   await expect(card).toContainText("CAD $19.95 / pair");
-  await card.locator("summary").click();
-  await expect(card).toContainText("Full description distinct from public use.");
-  await expect(card).toContainText("Cable exercise use.");
+  await expect(card.getByText("Full description distinct from public use.", { exact: true })).toBeVisible();
+  const showMore = card.getByRole("button", { name: "Show more", exact: true });
+  if (await showMore.isVisible()) await showMore.click();
+  await expect(card.getByText("Cable exercise use.", { exact: true })).toBeVisible();
   await expect(card.getByText("Dimensions", { exact: true })).toHaveCount(0);
   await expect(card.getByText("Weight", { exact: true })).toHaveCount(0);
   await card.getByRole("button", { name: "Add to cart", exact: true }).click();
@@ -113,7 +114,9 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   await page.reload();
   await expect(row).toContainText("$39.90");
   await page.getByRole("link", { name: "Request a quote", exact: true }).last().click();
-  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(new RegExp(`${name} x 2 pairs`));
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(
+    `Interested in:\n\n1. ${name}\n   Quantity: 2 pairs\n   Contents: 2 pieces per pair\n   Unit price: CAD $19.95 per pair\n\nPlease share final pricing and delivery details.`,
+  );
 });
 
 test("unsaved changes, failed save, retry and delete", async ({ page, request }) => {
@@ -276,7 +279,7 @@ test("responsive navigation, desktop grids, narrow widths and cart quantity limi
   }
   await page.setViewportSize(testInfo.project.name.startsWith("phone") ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
   const first = page.locator("#products article").first();
-  const name = await first.locator("h3").innerText();
+  const name = await first.locator(":scope > h3").innerText();
   await first.getByRole("button", { name: "Add to cart", exact: true }).click();
   await page.getByRole("link", { name: "Cart (1)", exact: true }).click();
   const plus = page.getByRole("button", { name: `Increase quantity for ${name}` });

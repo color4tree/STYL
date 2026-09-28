@@ -68,13 +68,13 @@ test("selling units persist into cart and quote without private metadata", () =>
   cart.addProductToCart(item, 2);
   assert.equal(cart.readCart()[0].sellingUnit, "Pair");
   assert.equal(cart.readCart()[0].provenance, undefined);
-  assert.match(cart.formatCartSummary(), /Handles x 2 pairs \(2 pieces per sale unit\)/);
+  assert.match(cart.formatCartSummary(), /1\. Handles\n   Quantity: 2 pairs\n   Contents: 2 pieces per pair/);
 });
 
 test("legacy cart and image-only catalog items still work", () => {
   storage.set(cart.CART_KEY, JSON.stringify([{ id: 1, name: "Bench", price: 19, quantity: 1 }]));
   assert.equal(cart.getCartCount(cart.readCart()), 1);
-  assert.match(cart.formatCartSummary(), /Bench x 1/);
+  assert.match(cart.formatCartSummary(), /1\. Bench\n   Quantity: 1 sale unit/);
   assert.deepEqual(details.getCatalogPhotos({ image: "/images/bench.jpg" }), ["/images/bench.jpg"]);
   assert.deepEqual(details.getCatalogPhotos({ image: "/images/bench.jpg", photos: [] }), []);
 });
@@ -92,4 +92,23 @@ test("failed storage does not report successful cart writes", () => {
   window.localStorage.setItem = () => { throw new Error("Storage blocked"); };
   assert.throws(() => cart.addProductToCart({ id: 1, name: "Bench", price: 19 }), /Storage blocked/);
   assert.equal(storage.size, 0);
+});
+
+test("USR-013: quote items have numbered blocks, explicit units and independent currency prices", () => {
+  assert.equal(cart.formatCartSummary([
+    { id: 1, name: "Bench", price: 750, currency: "CAD", quantity: 1 },
+    { id: 2, name: "Grips", price: 39, currency: "CAD", quantity: 2, sellingUnit: "Pair", packageQuantity: 2 },
+    { id: 3, name: "Plate set", price: 99.5, currency: "USD", quantity: 3, sellingUnit: "Set", packageQuantity: 4 },
+    { id: 4, name: "Handle", price: 10, currency: "CAD", quantity: 1, sellingUnit: "Each", packageQuantity: 1 },
+  ]), [
+    "Interested in:", "",
+    "1. Bench", "   Quantity: 1 sale unit", "   Unit price: CAD $750.00 per sale unit", "",
+    "2. Grips", "   Quantity: 2 pairs", "   Contents: 2 pieces per pair", "   Unit price: CAD $39.00 per pair", "",
+    "3. Plate set", "   Quantity: 3 sets", "   Contents: 4 pieces per set", "   Unit price: USD $99.50 per set", "",
+    "4. Handle", "   Quantity: 1 item", "   Contents: 1 piece per item", "   Unit price: CAD $10.00 per item",
+  ].join("\n"));
+});
+
+test("USR-013: empty quote selection remains explicit without invented items", () => {
+  assert.equal(cart.formatCartSummary([]), "No items selected yet.");
 });

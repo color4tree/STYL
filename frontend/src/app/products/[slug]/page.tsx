@@ -122,7 +122,7 @@ export default function ProductDetailPage() {
               <button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50">
                 {atLimit ? "Maximum 10 in cart" : "Add to cart"}
               </button>
-              <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}#contact`} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">
+              <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}#contact`} scroll={false} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">
                 Request quote
               </Link>
             </div>

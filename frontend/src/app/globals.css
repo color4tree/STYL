@@ -46,12 +46,41 @@ button, summary, a {
 
 summary { cursor: pointer; }
 
+.catalog-card {
+  display: grid;
+  /* Share content rows so media, names, prices and actions align. */
+  grid-row: span 7;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+}
+
+.catalog-details-preview {
+  max-height: none;
+}
+
+@media (min-width: 1024px) {
+  .catalog-details-preview {
+    max-height: 21rem;
+    overflow: hidden;
+  }
+
+  .catalog-details-preview[data-expanded="true"] {
+    max-height: none;
+  }
+
+  .catalog-details-preview[data-clipped="true"] {
+    mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent);
+  }
+}
+
+#contact:target,
 #contact[data-quote-target] {
   min-height: calc(100svh - var(--quote-header-offset, 8rem));
   scroll-margin-top: var(--quote-header-offset, 8rem);
 }
 
 @media (min-width: 1024px) {
+  #contact:target,
   #contact[data-quote-target] {
     min-height: calc(100svh - var(--quote-header-offset, 6rem));
     scroll-margin-top: var(--quote-header-offset, 6rem);

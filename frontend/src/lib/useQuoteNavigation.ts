@@ -1,33 +1,28 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 export function useQuoteNavigation(layoutReady: boolean) {
   const navigation = useRef({ initialized: false, pending: false, interrupted: false });
 
-  useEffect(() => {
+  // Stabilize initial layout commits before paint, then stop once ready or interrupted.
+  useLayoutEffect(() => {
     const state = navigation.current;
-    let frame = 0;
     if (!state.initialized) {
       state.initialized = true;
       state.pending = window.location.hash === "#contact";
     }
 
     const align = () => {
-      cancelAnimationFrame(frame);
-      if (!layoutReady || !state.pending || state.interrupted) return;
-      frame = requestAnimationFrame(() => {
-        if (!state.pending || state.interrupted || window.location.hash !== "#contact") return;
-        const target = document.getElementById("contact");
-        if (!target) return;
-        const offset = (document.querySelector("header")?.getBoundingClientRect().height ?? 0) + 16;
-        // Client-side history navigation does not always update CSS :target.
-        target.dataset.quoteTarget = "true";
-        target.style.setProperty("--quote-header-offset", `${offset}px`);
-        // Finish the landing once, after async sections have their final height.
-        window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - offset), behavior: "instant" });
-        state.pending = false;
-      });
+      if (!state.pending || state.interrupted || window.location.hash !== "#contact") return;
+      const target = document.getElementById("contact");
+      if (!target) return;
+      const offset = (document.querySelector("header")?.getBoundingClientRect().height ?? 0) + 16;
+      // Client-side history navigation does not always update CSS :target.
+      target.dataset.quoteTarget = "true";
+      target.style.setProperty("--quote-header-offset", `${offset}px`);
+      window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - offset), behavior: "instant" });
+      if (layoutReady) state.pending = false;
     };
     const begin = () => {
       state.pending = window.location.hash === "#contact";
@@ -55,7 +50,6 @@ export function useQuoteNavigation(layoutReady: boolean) {
     const interrupt = () => {
       state.interrupted = true;
       state.pending = false;
-      cancelAnimationFrame(frame);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Tab"].includes(event.key)) interrupt();
@@ -73,7 +67,6 @@ export function useQuoteNavigation(layoutReady: boolean) {
     document.addEventListener("focusin", onFocus);
     align();
     return () => {
-      cancelAnimationFrame(frame);
       window.removeEventListener("hashchange", begin);
       document.removeEventListener("click", onClick, true);
       window.removeEventListener("wheel", interrupt);
@@ -82,5 +75,5 @@ export function useQuoteNavigation(layoutReady: boolean) {
       window.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("focusin", onFocus);
     };
-  }, [layoutReady]);
+  });
 }

@@ -29,9 +29,9 @@ export default function InquiryForm() {
           selection = formatCartSummary(current);
         }
         const message = params.get("quote") === "cart"
-          ? `${selection} Please share final pricing and delivery details.`
+          ? `${selection}\n\nPlease share final pricing and delivery details.`
           : params.get("quote") === "product" && params.get("product")
-            ? `I am interested in ${params.get("product")}. Please share options, pricing, and lead time.`
+            ? `Interested in:\n\n1. ${params.get("product")}\n\nPlease share options, pricing, and lead time.`
             : "";
         if (active && message) setInquiry((current) => current.message ? current : { ...current, message });
       } catch (error) {
@@ -84,7 +84,7 @@ export default function InquiryForm() {
             </label>
           ))}
           <label className="block min-w-0 text-sm font-medium sm:col-span-2">Message
-            <textarea name="message" required maxLength={10000} value={inquiry.message} onChange={(event) => { const message = event.target.value; setInquiry((current) => ({ ...current, message })); }} rows={5} className="mt-2 w-full rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-base" />
+            <textarea name="message" required maxLength={10000} value={inquiry.message} onChange={(event) => { const message = event.target.value; setInquiry((current) => ({ ...current, message })); }} rows={Math.min(18, Math.max(8, inquiry.message.split("\n").length))} className="mt-2 w-full rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-base leading-6" />
           </label>
         </fieldset>
         <button type="submit" disabled={pending} className="min-h-12 w-full rounded-full bg-[var(--ink)] px-5 py-3 font-medium text-white disabled:opacity-60">{pending ? "Submitting..." : "Submit inquiry"}</button>

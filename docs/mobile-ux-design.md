@@ -279,12 +279,38 @@ Keep `/#contact` working for existing links.
   a concise confirmation with View cart. Do not force a redirect.
 - Preserve the existing maximum of 10 per item and visibly explain the limit.
 - Use horizontal `[-] quantity [+]` controls, with labeled 44 px targets.
-- Show expanded specifications on demand; keep compatibility exclusions visible
-  before selection rather than hiding them in an accordion.
+- Product and accessory listing cards share aligned media, category, name, price,
+  contents, detail-preview, and purchase-control rows. Cards in each desktop/
+  tablet row stay equal-height, including when one card is expanded; mobile
+  single-column cards keep their natural content height.
+- Keep full names, prices, selling units, and package quantities visible.
+  The 2026-09-27 clarification supersedes the initial closed-accordion design:
+  details are visible by default, not hidden behind a heading. Show the summary,
+  description, features, compatibility and specifications together. On desktop
+  (1024 CSS px and above), cap the preview at 21rem (336 px at default text size),
+  50% taller than the initial 14rem preview. Short content is fully displayed.
+- Below 1024 px, show all details without clipping, fading, or Show more/less.
+  Single-column mobile cards do not need a preview cap. The tablet two-column
+  layout also shows complete details; shared rows retain aligned purchase controls.
+- On desktop only, when content exceeds the preview height, fade the cut-off edge and show a
+  keyboard-operable "Show more" down arrow. Make the control easy to notice:
+  use a visible "..." overflow cue, regular-weight italic underlined label, subtle
+  neutral background (2% black; 4% on hover), light outline, and at least a 48 px hit area.
+  This replaces the initial bold label and warm highlight at the user's request. The dots are
+  decorative for assistive technology and disappear when expanded.
+  Expanding reveals everything without
+  duplicate summary text; "Show less" restores the preview. Recheck overflow as
+  width/text/content size changes. No expansion control for short or empty content.
+  Resizing to mobile shows everything; returning to desktop preserves that card's
+  expanded/collapsed choice.
+- Show an explicit "Includes compatibility - check fit" cue outside the capped
+  preview when applicable, so users know to check fit even if those fields are
+  below the cut-off. Product detail-page compatibility is unchanged. Blank fields
+  are omitted; media controls and existing product-page links remain available.
 - If the catalog grows, add category chips with a visible All option, result
   count, and clear no-results state. Defer search until inventory warrants it.
 
-For accessories, retain an inline Details expansion because no separate accessory
+For accessories, retain inline overflow expansion because no separate accessory
 detail route currently exists. Do not introduce a new route solely for this phase.
 Long technical values should stack under labels instead of compressing into narrow
 left/right columns.
@@ -359,11 +385,20 @@ requested symbol-only public display and also needs approval.
 
 Keep the existing contact anchor and API for the initial iteration.
 
+- Prefill a numbered item list, with quantity, package contents when known, and
+  currency-labelled unit price on separate lines. Separate items and the final
+  pricing/delivery request with blank lines; never invent prices or combine
+  currencies. Product-only requests retain the product name without inventing
+  a price or quantity. The editable message area grows from 8 to at most 18 rows;
+  edits and line breaks survive submission errors and saved inquiry JSON.
 - Quote navigation must land the form just below the actual sticky header on
   desktop and mobile, including after asynchronous catalog/banner/cart content.
   Give the targeted section enough viewport-height space for tall desktop
-  windows to reach that position. Align once when the initial layout is ready;
-  cancel further adjustment when the user starts scrolling, touching, or typing.
+  windows to reach that position. Quote links disable the router's competing
+  automatic scroll; align before paint as initial homepage sections render, then
+  stop once initial data settles. Do not paint an early landing followed by a
+  visible correction. Cancel further adjustment when the user starts scrolling,
+  touching, or typing.
   Preserve quote context, repeated same-page navigation, and reduced-motion safety
   without introducing timed scroll loops or forcing keyboard focus.
 - Persistent labels: Name, Email, Phone (optional), Company / Studio (optional),

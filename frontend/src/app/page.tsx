@@ -2,18 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatPrice, getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
+import { getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { useCart } from "@/lib/useCart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
 import InquiryForm from "@/components/InquiryForm";
-import PhotoGallery from "@/components/PhotoGallery";
-import { getCatalogPhotos, type CatalogDetails } from "@/lib/catalogDetails";
+import CatalogCard from "@/components/CatalogCard";
+import { productSpecificationFields, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 import { useQuoteNavigation } from "@/lib/useQuoteNavigation";
 
-type Product = CatalogDetails & {
+type Product = CatalogDetails & ProductSpecifications & {
   id: number;
   slug: string;
   name: string;
@@ -21,6 +21,8 @@ type Product = CatalogDetails & {
   price: number;
   currency: string;
   shortDescription: string;
+  description?: string;
+  features?: string[];
   featured?: boolean;
 };
 
@@ -103,19 +105,16 @@ export default function Home() {
           {loading ? <p role="status" className="rounded-2xl bg-white/60 p-8">Loading equipment...</p>
             : catalogError ? <div role="alert"><p>Products are unavailable right now.</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button></div>
               : !products.length ? <p>No products are currently available.</p>
-                : <div className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+                : <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
                   {products.map((product) => {
                     const atLimit = (cart.find((item) => item.id === product.id)?.quantity ?? 0) >= MAX_ITEM_QUANTITY;
-                    return <article key={product.id} className="soft-panel min-w-0 rounded-3xl p-4 lg:p-5">
-                      <PhotoGallery photos={getCatalogPhotos(product)} name={product.name} compact />
-                      <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><span className="text-sm text-[var(--muted)]">{product.category}</span><span className="text-lg font-semibold">{formatPrice(product.price, product.currency)}</span></div>
-                      <h3 className="mt-2 break-words text-2xl font-semibold"><Link href={`/products/${product.slug}`} className="hover:underline">{product.name}</Link></h3>
-                      {product.shortDescription?.trim() ? <p className="mt-3 leading-7 text-[var(--muted)]">{product.shortDescription}</p> : null}
-                      <div className="mt-5 flex flex-wrap gap-3">
+                    return <CatalogCard key={product.id} item={product} headingLevel={3} href={`/products/${product.slug}`}
+                      specifications={[...productSpecificationFields.map((field) => [field.label, product[field.key]] as const), ["Availability", product.stockStatus]]}>
+                      <div className="flex flex-wrap gap-3">
                         <button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button>
                         <Link href={`/products/${product.slug}`} className="inline-flex min-h-12 items-center rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium">Details</Link>
                       </div>
-                    </article>;
+                    </CatalogCard>;
                   })}
                 </div>}
         </section>
