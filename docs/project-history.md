@@ -40,6 +40,17 @@ Targeted live verification:
   and banner data. The API kept its predeployment process/start time, and the
   environment file remained root-owned mode 0600, preserving SMTP configuration.
 
+Removed the temporary build directory and repeated live verification. Repeat
+automation intermittently stalled waiting for catalog/product content, at both
+five- and twenty-second readiness limits. Immediate browser diagnostics showed
+the populated homepage without errors; server logs showed normal startup and
+HTTP 200. A later complete post-cleanup run passed all six catalog and eighteen
+frame-transition checks. The intermittent loading cause was not established.
+Independent checks without request interception rendered home/accessory/product
+pages in all three configurations; WebKit additionally reported RSC-prefetch
+access-control errors during rapid programmatic navigation. These repeat-run
+warnings are recorded for follow-up, not claimed fixed by this deployment.
+
 This is targeted live deployment verification, not a new full backend regression
 or physical-device certification. Outstanding GeoIP provisioning and independent
 mailbox-delivery checks are unchanged.
