@@ -614,6 +614,15 @@ The SMTP setup backup is `/etc/styl/smtp-backup-20260927T183705Z`.
 See [project history](project-history.md) for the test inquiry and delivery limits.
 
 For regional pricing, also follow [the local GeoIP setup](geoip-pricing.md).
+Production GeoLite2 Country was enabled on 2026-09-27 Pacific time: the API reads
+`/var/lib/styl-geoip/GeoLite2-Country.mmdb`; root-only updater credentials are in
+`/etc/styl/GeoIP.conf`. The `styl-geoip-update.timer` checks twice daily. Its
+root-run service validates and atomically publishes the database without
+restarting the API. Keep this data outside normal catalog backups, and never
+overwrite the credential file during a code deployment. The activation backup
+is `/var/backups/styl/geoip-activation-bc45b22`. Public US/USD detection and
+forged-header resistance were verified; Canadian visitor checks remain pending.
+
 Provision a country database and configure `STYL_GEOIP_DATABASE`; without it,
 location remains unknown and CAD is used. Apply the updated API service's trusted
 loopback proxy flags and the API reverse proxy's explicit client-IP overwrite to

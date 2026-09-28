@@ -27,7 +27,7 @@ The resolver stores no per-IP cache or history and logs no IPs or raw exception 
 ## Provision a country database
 
 1. Obtain **GeoLite2 Country** through your own [MaxMind account](https://dev.maxmind.com/geoip/geolite2-free-geolocation-data/), or obtain a licensed compatible Country database. Use the binary `.mmdb` file, not CSV, a compressed archive or the web-service product. Follow the provider's license, attribution and update requirements. GeoLite licensing has specific freshness requirements; check the current terms.
-2. Install the extracted file outside the repository and static/upload roots. A Linux deployment can use `/var/lib/styl/geoip/GeoLite2-Country.mmdb`. Make the directory owned by the administrator/updater with group `styl` and mode `0750`, and the file mode `0640`, readable by `styl` but not writable by the API user. Do not commit databases or download credentials.
+2. Install the extracted file outside the repository, static/upload roots and catalog backups. The production updater uses `/var/lib/styl-geoip/GeoLite2-Country.mmdb`. Make the directory owned by the administrator/updater with group `styl` and mode `0750`, and the file mode `0640`, readable by `styl` but not writable by the API user. Do not commit databases or download credentials.
 3. Set `STYL_GEOIP_DATABASE` in `/etc/styl/styl.env` to that absolute path. Protect the environment file and any updater configuration with restrictive permissions. Keep provider credentials only in protected server-side updater configuration; the API needs no provider credentials.
 4. On Windows, use an absolute local path such as `C:\ProgramData\STYL\GeoIP\GeoLite2-Country.mmdb` and an ACL granting read access to the API identity and write access only to the administrator/updater.
 5. Install the pinned backend requirements. Restart the service when first changing its environment setting (and reload systemd after changing the unit); routine database replacements do not require a restart.
@@ -68,9 +68,8 @@ supplies forged country/forwarded headers. Keep `--no-proxy-headers` for this
 direct local server rather than trusting arbitrary headers to simulate countries.
 
 This installation is **manual**: no MaxMind license key or scheduled updater was
-configured. Keep the database current under MaxMind's terms. Before production
-activation, configure protected updater credentials, atomic updates, required
-attribution, the trusted proxy chain and real visitor checks. See
+configured locally. Keep this local database current under MaxMind's terms.
+Production now has its own independently configured updater; see below and
 [project history](project-history.md) for the local verification record.
 
 ## Updates without restarting the API
@@ -138,6 +137,23 @@ change. Deploy/rebuild the frontend separately if its attribution is not yet liv
 Routine database refreshes do not require API restarts. Test the public
 `/api/market` from actual visitors, including spoofed-header comparisons, then
 verify regional catalog visibility and no-store headers.
+
+Production activation was completed with the user through Edge's Ubuntu-1 SSH
+terminal on 2026-09-27 Pacific time using application release `bc45b22`.
+Independent public requests from the current network return
+`{"countryCode":"US","currency":"USD","locationStatus":"located"}` and
+`Cache-Control: no-store, private`; forged Canadian forwarding/country headers
+do not change that result. The user confirmed a second updater run succeeded
+without changing the API PID, the timer is enabled, the API cannot write its
+database, credentials remain root-only and non-GeoIP settings/catalog checksums
+are unchanged. The tiny attribution footer is live.
+
+Monitor the job with `systemctl --no-pager status styl-geoip-update.timer` and
+`journalctl -u styl-geoip-update.service --no-pager`. The built-in job sanitizes
+provider failures; never print the protected GeoIP configuration or raw provider
+download logs. There is no external failure-alert delivery configured yet.
+Real Canadian/other-country browsing and the next scheduled timer invocation
+remain separate follow-up checks; local sample lookups do not certify them.
 
 ## Offline focused tests
 

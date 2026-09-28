@@ -283,9 +283,20 @@ was installed outside the repository. Seven real-MMDB application checks with
 temporary catalog fixtures covered GEO-001/002/004/005/007, including IPv6,
 missing-market detail access and spoofed-header rejection; all 17 B-GEO tests
 also passed. This does not replace the mocked automation or certify actual
-visitor location, production forwarding, or scheduled updates. AWS GeoIP
-provisioning and OPS-002 remain incomplete. See
+visitor location, production forwarding, or scheduled updates. At that local
+setup checkpoint AWS provisioning had not yet occurred. See
 [local setup](geoip-pricing.md#local-windows-setup-verified-on-2026-09-27).
+
+Subsequent production evidence: updater activation and a second successful manual
+run were confirmed by the user through Edge SSH; timer enabled, API PID unchanged,
+credentials root-only, database API-readable/not-writable and catalog/SMTP
+preserved. Independent public requests returned US/USD/located even with forged
+Canadian headers; all public catalog responses used USD with no-store/private
+market responses. MaxMind/GeoNames footer and currency assertions passed in six
+desktop/mobile storefront checks. WebKit still reported the previously recorded
+RSC-prefetch warning, so its no-runtime-errors check did not pass. OPS-002 is
+partially verified for this network; Canadian/other visitor egress and observation
+of a future scheduled update remain unverified.
 
 ### 7.3 Media processing
 

@@ -2,6 +2,49 @@
 
 Last recorded: 2026-09-27
 
+## Production GeoIP activated and US pricing verified - 2026-09-27
+
+After embedded-browser AWS authentication failed, the user continued through
+Edge's Ubuntu-1 SSH terminal. They confirmed the replacement MaxMind credential
+configuration was installed, the authenticated download succeeded, and the
+reviewed updater/service/database installation reported
+`UPDATER AND DATABASE READY`. The server's real-MMDB CA and US sample checks and
+service invocation succeeded.
+
+Published release `bc45b22` contains the updater, timer, tests, configuration
+example and authorized 12px MaxMind/GeoNames attribution. The user ran the reviewed
+activation block and confirmed `GEOPRICING ACTIVATED`: a separate frontend build,
+configuration/build backups, API database-path setting, explicit loopback-only
+Uvicorn proxy trust, API/web restart, and scheduled updater enablement.
+Configuration/build rollback materials are in the root-only directory
+`/var/backups/styl/geoip-activation-bc45b22`. The database is outside normal catalog
+backups; Caddy's existing domain forwarding rules were not changed.
+
+Independent live verification:
+
+- Public market requests returned US / USD / located with `no-store, private`.
+  Forged Canadian X-Forwarded-For, X-Real-IP and CF-IPCountry headers produced the
+  same US result. The integrated browser also displayed the actual US response.
+- Public products returned 3 USD items, accessories 16 USD items, and selection
+  19 USD items. Health returned 200. Counts reflect current production data,
+  not a fixed contract or a copied Canada price.
+- All six storefront currency/attribution/layout checks passed across desktop
+  Chromium, phone Chromium and phone WebKit. The additional WebKit no-runtime-
+  errors assertion failed on the previously recorded RSC-prefetch access-control
+  warning during navigation; that warning remains unresolved.
+- The user confirmed the final `GEOIP VERIFIED AND TRANSFER FILES CLEANED` block:
+  second updater invocation successful with API PID unchanged, timer enabled,
+  database readable but not writable by the API, root-only credentials, matching
+  catalog/Caddy checksums and unchanged non-GeoIP environment (including SMTP).
+  Temporary server transfer keys/ciphertext/setup scripts/private download logs
+  were removed without printing their contents.
+
+Production now detects public IP countries; localhost deliberately remains
+unknown/CAD. No visitor IP is sent to MaxMind for lookup. A real Canadian visitor
+test and observation of the next scheduled update are still pending; external
+updater-failure alerts are not configured. No actual quote emails were sent during
+verification. User local catalog edits and the backup branch were preserved.
+
 ## Production GeoIP preparation and updater validation - 2026-09-27
 
 The user authorized production country detection, automatic updates, and a very
