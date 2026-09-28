@@ -1,0 +1,6 @@
+# Store the real file at /etc/styl/GeoIP.conf, root:root, mode 0600.
+AccountID YOUR_MAXMIND_ACCOUNT_ID
+LicenseKey YOUR_MAXMIND_LICENSE_KEY
+EditionIDs GeoLite2-Country
+DatabaseDirectory /var/cache/styl-geoip
+RetryFor 2m

@@ -1,5 +1,17 @@
 import { test, expect } from "@playwright/test";
 
+test("GEO-008: compact GeoLite attribution is readable on desktop and mobile", async ({ page }) => {
+  for (const route of ["/", "/accessories"]) {
+    await page.goto(route);
+    const footer = page.getByRole("contentinfo");
+    await expect(footer).toContainText("GeoLite data by");
+    await expect(footer.getByRole("link", { name: "MaxMind", exact: true })).toHaveAttribute("href", "https://www.maxmind.com/");
+    await expect(footer.getByRole("link", { name: "GeoNames", exact: true })).toHaveAttribute("href", "https://www.geonames.org/");
+    await expect(footer).toHaveCSS("font-size", "12px");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test("GEO-007: unknown visitors see configured CAD prices across catalog, detail and cart", async ({ page, request }) => {
   const api = "http://127.0.0.1:8102";
   const headers = { Authorization: `Bearer ${process.env.STYL_E2E_TOKEN}` };

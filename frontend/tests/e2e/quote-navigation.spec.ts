@@ -22,7 +22,7 @@ for (const origin of ["cart", "product", "header"] as const) {
       const product = items[0];
       await page.addInitScript((item) => localStorage.setItem("styl-cart", JSON.stringify([{ ...item, quantity: 2 }])), product);
       await page.goto(origin === "product" ? `/products/${product.slug}` : "/cart");
-      await expect(page.locator("main").getByRole("button", { name: "Add to cart", exact: true })
+      await expect(page.locator("main").getByRole("link", { name: "Request quote", exact: true })
         .or(page.locator("main").getByRole("link", { name: "Request a quote", exact: true }).first())).toBeVisible();
 
       let releaseCatalog!: () => void;

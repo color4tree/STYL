@@ -34,6 +34,45 @@ The resolver stores no per-IP cache or history and logs no IPs or raw exception 
 
 Leaving `STYL_GEOIP_DATABASE` unset or blank is supported: unknown location and CAD are used. On the first public-IP lookup, absent, missing, unreadable or corrupt databases produce a concise server warning. Repeated failures of the same kind are suppressed rather than logged per visitor. Private/local requests skip database access altogether.
 
+### Local Windows setup verified on 2026-09-27
+
+The development machine has a manually downloaded **GeoLite2 Country** database
+under `%LOCALAPPDATA%\STYL\GeoIP\GeoLite2-Country.mmdb`, outside Git, OneDrive,
+static files and uploaded content. `LICENSE.txt` and `COPYRIGHT.txt` are retained
+beside it. Access is restricted to the current Windows account, SYSTEM and
+Administrators. The local API runs as the same developer account; this is not
+the production updater/API identity separation described above.
+
+The archive was verified against MaxMind's matching **binary Country** SHA256
+download before extraction. The CSV ZIP checksum is a different file and cannot
+verify the binary TAR.GZ archive. The installed database reports a build timestamp
+of `2026-09-25T12:18:30Z` and supports IPv4/IPv6.
+
+The ignored local API launcher (`.vscode/start-local.ps1`, used by the
+**STYL: local API** task) now sets `STYL_GEOIP_DATABASE` to that path unless an
+explicit environment value is already supplied. Restart that task after changing
+its initial environment. This does not change machine-wide environment variables,
+the public AWS service, or unrelated startup scripts. For a separate terminal
+startup, set the variable in the same PowerShell process before launching the API:
+
+```powershell
+$env:STYL_GEOIP_DATABASE = Join-Path $env:LOCALAPPDATA 'STYL\GeoIP\GeoLite2-Country.mmdb'
+```
+
+Actual database/application checks passed for CA/CAD, US/USD, GB/USD, public IPv6,
+IPv4-mapped IPv6 and unknown/local addresses, using isolated temporary catalog
+fixtures and simulated ASGI client addresses. These are real MMDB lookups, but
+not proof of an actual Canadian/US visitor's end-to-end network path. The running
+loopback API intentionally still returns `unknown/CAD`, including when a request
+supplies forged country/forwarded headers. Keep `--no-proxy-headers` for this
+direct local server rather than trusting arbitrary headers to simulate countries.
+
+This installation is **manual**: no MaxMind license key or scheduled updater was
+configured. Keep the database current under MaxMind's terms. Before production
+activation, configure protected updater credentials, atomic updates, required
+attribution, the trusted proxy chain and real visitor checks. See
+[project history](project-history.md) for the local verification record.
+
 ## Updates without restarting the API
 
 Use the provider's [GeoIP Update tooling or supported download process](https://dev.maxmind.com/geoip/updating-databases/) with your own account. Schedule updates according to its release cadence and licensing requirements. Downloads retrieve database files, not visitor-IP lookups.
@@ -44,10 +83,69 @@ For each public-IP lookup, the resolver checks the path, file identity, size and
 
 A missing or broken replacement falls back to unknown/CAD; an old country's result is not served. A corrupt file version is not repeatedly reopened; replace/fix the file (changing its metadata) to retry. Updates preserving every observed identity/timestamp/size are not detectable. Each process has its own reader; the provided service runs one worker. This feature does not configure an update job or deploy/download a database for you.
 
+### Production updater installation
+
+The optional [updater](../deploy/update_geoip.py) uses the distribution's
+`geoipupdate` binary and [systemd service](../deploy/styl-geoip-update.service) /
+[timer](../deploy/styl-geoip-update.timer). Install these only with production
+authorization; committing the files does not enable the timer.
+
+- `/etc/styl/GeoIP.conf`: root-owned mode 0600, configured from
+  [the example](../deploy/GeoIP.conf.example) with the account's real credentials.
+  Download only `GeoLite2-Country`. Never commit or display this file.
+- `/var/cache/styl-geoip`: root-only mode 0700 download cache.
+- `/var/lib/styl-geoip`: root:styl mode 0750; published
+  `GeoLite2-Country.mmdb` is root:styl mode 0640. This separate location avoids
+  retaining licensed database copies in the normal catalog backup archives.
+- `/usr/local/lib/styl/update_geoip.py`: root-owned copy of the reviewed script.
+  The API has read-only database access, not updater credentials.
+
+The script validates database type and build age, copies to a temporary file in
+the destination directory, flushes it, then atomically replaces the published
+file. An unchanged file is not replaced. Failed downloads or validation do not
+overwrite a still-current published database. Provider output is captured rather
+than logged because it can contain signed download URLs. Failures produce a
+nonzero service result and an explicit sanitized error.
+
+The timer checks at 00:00 and 12:00 UTC, with up to 30 minutes of random delay and
+catch-up after downtime. As an additional safeguard, each run removes database
+copies whose build timestamps are over 30 days old, even if the next download
+fails; the application then uses unknown/CAD. Monitor failed updates: a disabled
+timer cannot enforce freshness. MaxMind's license requires prompt updates and
+removal of superseded data within 30 days. A small site-footer credit attributes
+GeoLite data to MaxMind and GeoNames.
+
+Once directories/configuration and the official updater are installed:
+
+```bash
+sudo install -d -m 0755 /usr/local/lib/styl
+sudo install -m 0644 /opt/styl/deploy/update_geoip.py /usr/local/lib/styl/update_geoip.py
+sudo install -m 0644 /opt/styl/deploy/styl-geoip-update.service /etc/systemd/system/
+sudo install -m 0644 /opt/styl/deploy/styl-geoip-update.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start styl-geoip-update.service
+sudo systemctl --no-pager show styl-geoip-update.service -p Result -p ExecMainStatus
+sudo systemctl enable --now styl-geoip-update.timer
+sudo systemctl --no-pager list-timers styl-geoip-update.timer
+```
+
+Only after the first validated publish, set
+`STYL_GEOIP_DATABASE=/var/lib/styl-geoip/GeoLite2-Country.mmdb` in the protected
+STYL environment, preserving all SMTP/admin/origin settings. Ensure the installed
+API service uses the repository's loopback-only proxy trust flags and Caddy
+overwrites incoming forwarded IPs. Restart only the API for its environment/unit
+change. Deploy/rebuild the frontend separately if its attribution is not yet live.
+Routine database refreshes do not require API restarts. Test the public
+`/api/market` from actual visitors, including spoofed-header comparisons, then
+verify regional catalog visibility and no-store headers.
+
 ## Offline focused tests
 
 From `backend`, run `python -m unittest discover -s tests -p test_location.py`.
 Tests mock MMDB records and file metadata, including country results, unavailable files, replacement and concurrent access. No external database, network or provider account is required.
+The updater's separate tests are in
+[test_geoip_update.py](../backend/tests/test_geoip_update.py); they exercise atomic
+publication, invalid/expired data, permissions and sanitized failure behavior.
 
 ## Troubleshooting a Canadian visitor seeing USD
 

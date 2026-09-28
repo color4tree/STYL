@@ -275,6 +275,17 @@ Examples of impact selection:
 | GEO-005 | P0 | View F-MISSING-CA/US/NONE/ZERO under each market, including direct product URL and saved cart. | Missing-market item not exposed; admin warning accurate; no fallback to the other price; zero-price item is not hidden merely for being zero. | A core: B-REG/U-CART/E-MARKET/E-ROUND2; physical/live geography needs OPS-002 |
 | GEO-006 | P1 | Change market between visits and revisit a saved cart/quote; inject a failed current-price request. | Current available items repriced without conversion, unavailable items removed with notice, quantities preserved; failure does not pretend stale prices are current. | P: U-CART/E-MARKET cover reconciliation; extend browser network-failure scenario |
 | GEO-007 | P0 | With no resolvable country, query market/list/detail/selection and add a dual-price item to cart; include a USD-only item. | Country remains null/unknown while CAD prices are used end to end; missing CAD items stay hidden; USD is not copied/relabeled. Known US/other-country tests still return USD. | A: B-REG `test_unknown_location_uses_cad_without_relabeling_usd_prices`, B-GEO, E-MARKET `GEO-007` |
+| GEO-008 | P1 | Inspect the small GeoLite credit on home/accessories at desktop and mobile widths. | Readable 12px footer with MaxMind/GeoNames links, no page overflow, no impact on quote landing. | A: E-MARKET `GEO-008`; E-QUOTE protects quote positioning |
+| GEO-009 | P0 | Validate updater type/freshness boundaries, unchanged files, failed copy/replace/download, expired files and config permissions. Execute installed timer/service with approved credentials and compare before/after API results. | Atomic root-owned publication; API read-only access; no secret/provider URL logs; bad downloads preserve current data; >30-day files removed on runs; explicit failures and scheduled refresh. | P: [updater tests](../backend/tests/test_geoip_update.py); installed timer/network/permissions verification M, never inferred from mocks |
+
+Local operational evidence (2026-09-27): a checksum-verified GeoLite2 Country MMDB
+was installed outside the repository. Seven real-MMDB application checks with
+temporary catalog fixtures covered GEO-001/002/004/005/007, including IPv6,
+missing-market detail access and spoofed-header rejection; all 17 B-GEO tests
+also passed. This does not replace the mocked automation or certify actual
+visitor location, production forwarding, or scheduled updates. AWS GeoIP
+provisioning and OPS-002 remain incomplete. See
+[local setup](geoip-pricing.md#local-windows-setup-verified-on-2026-09-27).
 
 ### 7.3 Media processing
 

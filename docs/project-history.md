@@ -2,6 +2,87 @@
 
 Last recorded: 2026-09-27
 
+## Production GeoIP preparation and updater validation - 2026-09-27
+
+The user authorized production country detection, automatic updates, and a very
+small attribution footer after the successful local database setup.
+Installed Ubuntu's `geoipupdate` 6.1.0 package on Ubuntu-1 and disabled its default
+timer pending STYL-specific configuration. Backed up the prior API service,
+Caddy and environment under `/etc/styl/geoip-backup-20260928T045300Z`; existing
+catalog/Caddy checksums were recorded. The live domain already overwrites
+forwarded client IPs. The API's explicit loopback proxy flags still need activation.
+
+The first hidden-prompt credential entry was exposed by the browser tool's
+retained input state. The user was notified and confirmed revoking that key and
+creating a replacement. The replacement was read from the user-designated local
+configuration without displaying it, encrypted to a fingerprint-verified server
+public key, and transferred as ciphertext. After embedded AWS login expired,
+the user continued in Edge's SSH terminal and confirmed the protected replacement
+configuration was installed and `GEOLITE DOWNLOAD OK`. Replacement credentials
+were not printed or committed.
+
+Added a root-run updater that validates type/age, atomically publishes a mode-0640
+database readable by the API group, suppresses provider output from logs, and
+removes >30-day database copies on each run. A twice-daily randomized persistent
+timer and a credential-free example configuration are included. Cache/published
+data live outside the catalog backup directory. Added the authorized compact
+MaxMind/GeoNames footer attribution and GEO-008/009 regression cases.
+
+Validation: all 72 backend tests passed (including ten new updater tests); all
+55 selected market/quote browser executions passed with production build and
+TypeScript; lint had no errors and five existing image warnings. An ambiguous
+mobile Add to cart readiness selector was scoped to the Request quote link after
+the sticky action appeared in an intermediate run. No live inquiry emails sent.
+
+At this preparation checkpoint, the production database is downloaded but not
+yet published to the API, the scheduled STYL updater is not enabled, and the
+attribution frontend has not been deployed. Complete and record those operations
+before claiming live country detection works.
+
+## Local MaxMind Country database enabled - 2026-09-27
+
+The user created a MaxMind account and explicitly selected local setup before
+AWS configuration. They downloaded GeoLite2 Country binary data and its matching
+checksum. The first checksum supplied was for the CSV ZIP; it was not used to
+verify or install the binary archive. The correct binary checksum subsequently
+matched:
+
+- Archive: `GeoLite2-Country_20260925.tar.gz`, 4,420,208 bytes.
+- Archive SHA256: `5c3cb833a65e7dd2975ea0c790fec211863ad10c29aa0c5a66376dcc1dbcada3`.
+- Installed MMDB: 8,441,997 bytes; type `GeoLite2-Country`; build
+  `2026-09-25T12:18:30Z`; IPv4/IPv6 support.
+- MMDB SHA256: `a4c816daf2837559ce2a6470ae59e285ac4666e4535315b4b22adbbf66ef229c`.
+
+Installed under `%LOCALAPPDATA%\STYL\GeoIP`, outside Git and OneDrive. Retained
+the bundled license/copyright files and verified Windows ACLs limited to the
+developer account, SYSTEM and Administrators. No credentials or database files
+were added to the repository.
+
+Updated the ignored local API launcher to supply `STYL_GEOIP_DATABASE` unless
+already overridden, then restarted only the verified local API using the existing
+VS Code task. The repository virtual environment already contained the required
+MaxMind reader; no dependency installation or application-code change was needed.
+
+Verification:
+
+- Real MMDB records returned CA for `24.48.0.1`, US for `8.8.8.8`, GB for
+  `81.2.69.142`, and US for `2001:4860:4860::8888`.
+- Seven application integration cases used the real MMDB, simulated ASGI client
+  addresses, disposable catalog JSON and no SMTP. CA/unknown mapped to CAD;
+  US/GB mapped to USD. IPv4-mapped IPv6, exact configured prices, missing-market
+  list/detail/selection visibility, no-store headers and ignored forged country/
+  forwarded headers all passed. Temporary catalog fixtures were removed.
+- All 17 existing GeoIP tests passed, covering missing/corrupt/replaced databases,
+  fallback, concurrency and privacy behavior.
+- Running local API health returned 200. Loopback market remained unknown/CAD,
+  with or without spoofed headers, as designed. The user's three visible local
+  products and three accessories remained available; their saved data was not edited.
+
+This is local configuration verification, not a full regression or real visitor/
+proxy certification. No license key, scheduled database updates or AWS GeoIP
+configuration was added. Production remains on its previous unknown/CAD fallback.
+No push, deployment, real email, or production-data operation was performed.
+
 ## Catalog and quote UI deployed - 2026-09-27
 
 With explicit user approval, committed/pushed the pending frontend, tests and
