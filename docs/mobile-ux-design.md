@@ -292,7 +292,13 @@ Keep `/#contact` working for existing links.
   contents, detail-preview, and purchase-control rows. Cards in each desktop/
   tablet row stay equal-height, including when one card is expanded; mobile
   single-column cards keep their natural content height.
-- Admin catalogs have a visual arrange mode: click "Arrange listing order" to
+- Current customer/admin wording is Equipment and Accessories; keep the catalogs
+  separate and preserve existing product URLs/anchors and stored identifiers.
+  The home call-to-action group includes Shop equipment, Shop accessories and the
+  existing quote action on desktop and mobile.
+- Admin catalogs share a toolbar ordered Catalog, Arrange listing order, New.
+  Arrange/Done stays between the heading and New, including wrapped mobile
+  layouts; use at least 48px button height. Click "Arrange listing order" to
   show keyboard/touch-friendly up/down buttons directly on each existing listing
   card, retaining its image, name, prices and status. Do not show a duplicate list
   or position selector. Cards visibly move in the list after each successful
@@ -302,6 +308,11 @@ Keep `/#contact` working for existing links.
   New items append; a stale order or changed item set requires refresh/retry.
   Draft/missing-market items retain their saved positions but are filtered from
   customer lists. This explicitly replaces Featured-first sorting.
+- Daily email settings use a checkbox and a full-width recipient textarea with
+  save/reload feedback. Preserve unsaved edits across tabs and on failures, block
+  repeat saves while pending, and fit the form/errors at 320px without horizontal
+  scrolling. Show the non-production no-send restriction independently of the
+  saved enabled preference. Keep credentials out of the interface.
 - Keep full names, prices, selling units, and package quantities visible.
   The 2026-09-27 clarification supersedes the initial closed-accordion design:
   details are visible by default, not hidden behind a heading. Show the summary,

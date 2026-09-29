@@ -343,6 +343,24 @@ Reuse protected SMTP transport without inheriting inquiry recipients or changing
 customer Reply-To. Use only a configured business Reply-To and a credential-free
 authenticated dashboard link. Preview never sends mail.
 
+The 2026-09-29 enhancement adds an admin **Daily email settings** form for the
+enabled preference and up to 20 validated recipients (one per line or comma
+separated, case-insensitive duplicate removal). This new form is local until an
+approved deployment. Settings are stored in private SQLite, survive restarts,
+and override environment defaults after the first save. Enabled requires a
+recipient; disabled may preserve addresses or save an empty list. SMTP credentials
+remain server-managed and inquiry notifications are unaffected.
+
+Only an authenticated administrator may read/save full recipient addresses.
+Stale saves return 409 with edits retained, storage failures do not pretend the
+settings are off, and reloading dirty fields requires confirmation. Preview,
+scheduler and manual retry use the same saved configuration. Saving sends nothing;
+production's next timer tick may deliver the latest due report. Recheck disabled/
+removed-recipient settings before claiming each delivery; already in-progress
+mail cannot be recalled. Non-production sending remains unconditionally blocked.
+Current configuration is included in analytics database backups, not catalog ZIPs,
+and does not expire with the 90-day delivery history.
+
 ### Required content: TA-011
 
 Keep the email and preview short and business-focused:

@@ -415,7 +415,7 @@ class AnalyticsTests(unittest.TestCase):
             self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 0)
 
     def test_an013_admin_reports_require_auth_and_csv_is_safe(self) -> None:
-        for endpoint in ("report?start=2026-09-28&end=2026-09-28", "export?start=2026-09-28&end=2026-09-28", "email-preview?date=2026-09-28", "deliveries"):
+        for endpoint in ("report?start=2026-09-28&end=2026-09-28", "export?start=2026-09-28&end=2026-09-28", "email-preview?date=2026-09-28", "deliveries", "email-settings"):
             self.assertEqual(self.client.get("/api/admin/analytics/" + endpoint).status_code, 401)
         self.products[0]["name"] = "=PRIVATE_FORMULA"
         self.products_path.write_text(json.dumps(self.products))
@@ -428,6 +428,80 @@ class AnalyticsTests(unittest.TestCase):
         report["countries"] = [{"label": "=FORMULA", "pageViews": 1}]
         self.assertIn("'=FORMULA", analytics.export_csv(report))
         self.assertIn("no-store", result.headers["cache-control"])
+
+    def test_an017_settings_api_is_private_persistent_and_never_sends_on_save(self) -> None:
+        url = "/api/admin/analytics/email-settings"
+        body = {"enabled": True, "recipients": ["owner@example.com", "Owner@EXAMPLE.COM"], "expectedRevision": 0}
+        self.assertEqual(self.client.put(url, json=body).status_code, 401)
+        before_products = self.products_path.read_bytes()
+        before_accessories = self.accessories_path.read_bytes()
+        initial = self.client.get(url, headers=self.admin)
+        self.assertEqual(initial.status_code, 200)
+        self.assertEqual(initial.json()["source"], "environment")
+        with patch.object(analytics_reports, "_send") as send:
+            response = self.client.put(url, json=body, headers=self.admin)
+            send.assert_not_called()
+        self.assertEqual(response.status_code, 200, response.text)
+        value = response.json()
+        self.assertEqual(value["recipients"], ["owner@example.com"])
+        self.assertEqual(value["revision"], 1)
+        self.assertTrue(value["enabled"])
+        self.assertFalse(value["effectiveEnabled"])
+        self.assertIn("no-store", response.headers["cache-control"])
+        self.assertEqual(self.client.get(url, headers=self.admin).json()["revision"], 1)
+        stale = self.client.put(url, json={**body, "recipients": ["different@example.com"]}, headers=self.admin)
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(self.client.get(url, headers=self.admin).json()["recipients"], ["owner@example.com"])
+        public = self.client.get("/api/analytics/config")
+        self.assertNotIn("owner@example.com", public.text)
+        self.assertEqual(self.products_path.read_bytes(), before_products)
+        self.assertEqual(self.accessories_path.read_bytes(), before_accessories)
+
+    def test_an017_invalid_settings_are_explicit_and_do_not_overwrite_saved_values(self) -> None:
+        url = "/api/admin/analytics/email-settings"
+        valid = {"enabled": False, "recipients": ["owner@example.com"], "expectedRevision": 0}
+        self.assertEqual(self.client.put(url, json=valid, headers=self.admin).status_code, 200)
+        for body in (
+            {**valid, "expectedRevision": 1, "enabled": "yes"},
+            {**valid, "expectedRevision": 1, "recipients": ["not-an-address"]},
+            {**valid, "expectedRevision": 1, "enabled": True, "recipients": []},
+            {**valid, "expectedRevision": 1, "recipients": ["owner@example.com\r\nBcc: PRIVATE_VALUE"]},
+            {**valid, "expectedRevision": 1, "smtpPassword": "PRIVATE_VALUE"},
+            {**valid, "expectedRevision": 1, "recipients": [f"user{i}@example.com" for i in range(21)]},
+        ):
+            response = self.client.put(url, json=body, headers=self.admin)
+            self.assertEqual(response.status_code, 422)
+            self.assertNotIn("PRIVATE_VALUE", response.text)
+        self.assertEqual(self.client.get(url, headers=self.admin).json()["revision"], 1)
+        self.assertEqual(self.client.get(url, headers=self.admin).json()["recipients"], ["owner@example.com"])
+        allowed = {**valid, "expectedRevision": 1, "recipients": [f"user{i}@example.com" for i in range(20)]}
+        self.assertEqual(self.client.put(url, json=allowed, headers=self.admin).status_code, 200)
+
+    def test_an017_settings_storage_outage_has_no_success_shaped_defaults(self) -> None:
+        url = "/api/admin/analytics/email-settings"
+        with patch.object(analytics.AnalyticsStore, "connection", side_effect=sqlite3.OperationalError("PRIVATE_DATABASE_DETAIL")):
+            for response in (
+                self.client.get(url, headers=self.admin),
+                self.client.put(url, json={"enabled": False, "recipients": [], "expectedRevision": 0}, headers=self.admin),
+            ):
+                self.assertEqual(response.status_code, 503)
+                self.assertNotIn("PRIVATE_DATABASE_DETAIL", response.text)
+
+    def test_an017_malformed_or_duplicate_json_is_input_error_and_corrupt_saved_state_is_unavailable(self) -> None:
+        url = "/api/admin/analytics/email-settings"
+        for text in ('{"enabled":', '{"enabled":false,"enabled":true,"recipients":[],"expectedRevision":0}'):
+            response = self.client.put(url, content=text, headers={**self.admin, "Content-Type": "application/json"})
+            self.assertEqual(response.status_code, 422)
+        value = {"enabled": False, "recipients": [], "expectedRevision": 0}
+        self.assertEqual(self.client.put(url, json=value, headers=self.admin).status_code, 200)
+        with analytics.get_store().connection() as connection:
+            connection.execute("UPDATE analytics_email_settings SET recipients='PRIVATE_INVALID_JSON'")
+        for response in (
+            self.client.get(url, headers=self.admin),
+            self.client.put(url, json={**value, "expectedRevision": 1}, headers=self.admin),
+        ):
+            self.assertEqual(response.status_code, 503)
+            self.assertNotIn("PRIVATE_INVALID_JSON", response.text)
 
     def test_an009_dates_configuration_environment_and_sql_fail_explicitly(self) -> None:
         for first, last in (("20260928", "2026-09-28"), ("2026-02-30", "2026-09-28"), ("2026-09-29", "2026-09-28"), ("2024-01-01", "2026-09-28"), ("9999-12-31", "9999-12-31")):

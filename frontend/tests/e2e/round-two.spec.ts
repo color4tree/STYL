@@ -15,7 +15,7 @@ for (const endpoint of ["products", "accessories"] as const) {
     }
     await page.getByRole("button", { name: "New", exact: true }).click();
     const name = `Missing market ${endpoint} ${Date.now()}`;
-    await page.getByLabel(endpoint === "products" ? "Product name" : "Accessory name", { exact: true }).fill(name);
+    await page.getByLabel(endpoint === "products" ? "Equipment name" : "Accessory name", { exact: true }).fill(name);
     const category = page.getByRole("combobox", { name: "Category", exact: true });
     await expect(category.locator('option[value="Bench"]')).toHaveCount(0);
     await category.selectOption("Benches");
@@ -24,7 +24,7 @@ for (const endpoint of ["products", "accessories"] as const) {
     await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("4000.95");
     await page.getByRole("textbox", { name: "Weight", exact: true }).fill("35.5 kg");
     const createdResponse = page.waitForResponse((response) => response.url() === `${api}/api/${endpoint}` && response.request().method() === "POST");
-    await page.getByRole("button", { name: endpoint === "products" ? "Create product" : "Create accessory", exact: true }).click();
+    await page.getByRole("button", { name: endpoint === "products" ? "Create equipment" : "Create accessory", exact: true }).click();
     const created = await createdResponse;
     expect(created.status()).toBe(200);
     const item = (await created.json()).item;
@@ -75,7 +75,7 @@ for (const endpoint of ["products", "accessories"] as const) {
 
       await page.getByRole("button", { name: "New", exact: true }).click();
       const name = `Date trace ${endpoint} ${Date.now()}`;
-      await page.getByLabel(endpoint === "products" ? "Product name" : "Accessory name", { exact: true }).fill(name);
+      await page.getByLabel(endpoint === "products" ? "Equipment name" : "Accessory name", { exact: true }).fill(name);
       await page.getByRole("combobox", { name: "Category", exact: true }).selectOption("Handle");
       await page.getByRole("textbox", { name: "Canada price (CAD)", exact: true }).fill("29.95");
       await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("19.95");
@@ -101,7 +101,7 @@ for (const endpoint of ["products", "accessories"] as const) {
       await expect(date).toHaveValue("2026-09-26");
       const savedResponse = page.waitForResponse((response) =>
         response.url() === `${api}/api/${endpoint}` && response.request().method() === "POST");
-      await page.getByRole("button", { name: endpoint === "products" ? "Create product" : "Create accessory", exact: true }).click();
+      await page.getByRole("button", { name: endpoint === "products" ? "Create equipment" : "Create accessory", exact: true }).click();
       const saved = await savedResponse;
       expect(saved.status(), await saved.text()).toBe(200);
       expect(saved.request().postDataJSON().provenance.capturedDate).toBe("2026-09-26");

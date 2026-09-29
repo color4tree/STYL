@@ -216,7 +216,7 @@ test("AN-010 AN-011 AN-013: aggregate dashboard/CSV/email preserve unsaved edito
   expect((await request.get(`${api}/api/admin/analytics/report?start=${reportDate()}&end=${reportDate()}`)).status()).toBe(401);
   await admin(page);
   await page.getByRole("button", { name: "New", exact: true }).click();
-  const name = page.getByRole("textbox", { name: "Product name", exact: true });
+  const name = page.getByRole("textbox", { name: "Equipment name", exact: true });
   await name.fill("Unsaved analytics fixture");
   await page.getByRole("button", { name: "Analytics", exact: true }).click();
   await expect(page.getByTestId("analytics-page-view-count")).toBeVisible();
@@ -244,7 +244,7 @@ test("AN-010 AN-011 AN-013: aggregate dashboard/CSV/email preserve unsaved edito
   await file.delete();
   await page.setViewportSize({ width: 320, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
-  await page.getByRole("button", { name: "Products", exact: true }).click();
+  await page.getByRole("button", { name: "Equipment", exact: true }).click();
   await expect(name).toHaveValue("Unsaved analytics fixture");
 });
 

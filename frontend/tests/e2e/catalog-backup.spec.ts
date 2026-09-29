@@ -115,6 +115,7 @@ test("ADM-010 SYS-017: real private ZIP download, progress, duplicate guard, fil
   await signIn(page);
   await openBackup(page);
   await expect(page.getByText("Private, unencrypted archive", { exact: true })).toBeVisible();
+  await expect(page.getByText("All equipment and accessories, including drafts, private provenance, CAD and USD prices, and record IDs.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Saved changes only\./)).toBeVisible();
   await expect(page.getByText(/Browser upload\/import is not implemented/)).toBeVisible();
   await expect(page.getByText(/not a machine or full website backup/)).toBeVisible();
@@ -161,7 +162,7 @@ test("ADM-010 SYS-017: real private ZIP download, progress, duplicate guard, fil
     await expect.poll(() => requests).toBe(1);
     await expect(page.getByRole("button", { name: "Preparing backup…", exact: true })).toBeDisabled();
     await expect(page.getByRole("status").filter({ hasText: "Preparing the catalog and media ZIP" })).toBeVisible();
-    for (const name of ["Backup", "Products", "Accessories", "Home banner", "Sign out"]) {
+    for (const name of ["Backup", "Equipment", "Accessories", "Home banner", "Sign out"]) {
       await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
     }
     release();
@@ -255,7 +256,7 @@ test("ADM-010: Backup preserves all three unsaved editors and their navigation g
     if (request.url().startsWith(api) && ["POST", "PUT", "DELETE", "PATCH"].includes(request.method())) writes++;
   });
   for (const editor of [
-    { tab: "Products", name: productName, label: "Product name" },
+    { tab: "Equipment", name: productName, label: "Equipment name" },
     { tab: "Accessories", name: accessoryName, label: "Accessory name" },
     { tab: "Home banner", name: hero.title, label: "Title" },
   ]) {
@@ -266,7 +267,7 @@ test("ADM-010: Backup preserves all three unsaved editors and their navigation g
     await input.fill(`Unsaved ${editor.name}`);
     await openBackup(page);
     await expect(page.getByRole("status").filter({ hasText: "You have unsaved changes" })).toBeVisible();
-    if (editor.tab === "Products") await successfulDownload(page);
+    if (editor.tab === "Equipment") await successfulDownload(page);
     const dialog = page.waitForEvent("dialog");
     const signingOut = page.getByRole("button", { name: "Sign out", exact: true }).click();
     const confirmation = await dialog;

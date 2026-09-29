@@ -47,7 +47,7 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     fetch(`${API_BASE}/api/products`, { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) throw new Error("Unable to load products.");
+      if (!response.ok) throw new Error("Unable to load equipment.");
       const data = await response.json();
       if (!Array.isArray(data.items)) throw new Error("Invalid catalog response.");
       if (active) {
@@ -85,7 +85,7 @@ export default function Home() {
             </blockquote>
             <div className="mt-5 flex flex-wrap gap-3 lg:mt-8">
               <a href="#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 py-3 font-medium text-white">Shop equipment</a>
-              <Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium">Accessories</Link>
+              <Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium">Shop accessories</Link>
             </div>
           </div>
           <aside aria-label="Home banner" className="hidden rounded-3xl bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-4 text-white md:block lg:p-7">
@@ -105,8 +105,8 @@ export default function Home() {
           </div>
           <CartFeedback error={error} notice={notice} />
           {loading ? <p role="status" className="rounded-2xl bg-white/60 p-8">Loading equipment...</p>
-            : catalogError ? <div role="alert" data-analytics-event="site_error"><p>Products are unavailable right now.</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button></div>
-              : !products.length ? <p data-analytics-event="catalog_empty" data-analytics-list="products">No products are currently available.</p>
+            : catalogError ? <div role="alert" data-analytics-event="site_error"><p>Equipment is unavailable right now.</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button></div>
+              : !products.length ? <p data-analytics-event="catalog_empty" data-analytics-list="products">No equipment is currently available.</p>
                 : <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
                   {products.map((product) => {
                     const atLimit = (cart.find((item) => item.id === product.id)?.quantity ?? 0) >= MAX_ITEM_QUANTITY;

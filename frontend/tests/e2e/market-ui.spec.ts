@@ -34,13 +34,13 @@ test("GEO-007: unknown visitors see configured CAD prices across catalog, detail
   await expect(page.locator("main")).not.toContainText("USD $");
 });
 
-test("USR-011: mobile top links switch Products and Accessories without opening the menu", async ({ page }) => {
+test("USR-011: mobile top links switch Equipment and Accessories without opening the menu", async ({ page }) => {
   await page.goto("/");
   const mobile = page.getByRole("navigation", { name: "Catalog navigation", exact: true });
   for (const width of [320, 390, 767, 768, 1023]) {
     await page.setViewportSize({ width, height: 844 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-    await expect(mobile.getByRole("link", { name: "Products", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(mobile.getByRole("link", { name: "Equipment", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(mobile.getByRole("link", { name: "Accessories", exact: true })).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
@@ -48,7 +48,7 @@ test("USR-011: mobile top links switch Products and Accessories without opening 
   await mobile.getByRole("link", { name: "Accessories", exact: true }).click();
   await page.waitForURL("**/accessories");
   await expect(page.getByRole("heading", { name: "Accessories", exact: true })).toBeVisible();
-  await mobile.getByRole("link", { name: "Products", exact: true }).click();
+  await mobile.getByRole("link", { name: "Equipment", exact: true }).click();
   await page.waitForURL("**/#products");
   await expect(page.locator("#products article").first()).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Site navigation" })).not.toBeVisible();
@@ -61,7 +61,7 @@ test("USR-011: mobile top links switch Products and Accessories without opening 
     await page.setViewportSize({ width, height: 1000 });
     await expect(mobile).toBeHidden();
     const desktop = page.getByRole("navigation", { name: "Main navigation", exact: true });
-    await expect(desktop.getByRole("link", { name: "Products", exact: true })).toBeVisible();
+    await expect(desktop.getByRole("link", { name: "Equipment", exact: true })).toBeVisible();
     await expect(desktop.getByRole("link", { name: "Accessories", exact: true })).toBeVisible();
   }
 });

@@ -676,4 +676,35 @@ def make_router(require_admin, allowed_origins: list[str]) -> APIRouter:
         except (ValueError, OSError, sqlite3.Error) as error:
             raise safe_error(error) from None
 
+    @router.get("/api/admin/analytics/email-settings", dependencies=[Depends(require_admin)])
+    def email_settings(response: Response):
+        from app.analytics_reports import get_email_settings
+        response.headers["Cache-Control"] = "no-store, private"
+        try:
+            return get_email_settings()
+        except (ValueError, OSError, sqlite3.Error):
+            logger.error("Daily email settings could not be loaded; private values were not logged.")
+            raise HTTPException(status_code=503, detail="Daily email settings are unavailable. Check the server configuration and private analytics storage.") from None
+
+    @router.put("/api/admin/analytics/email-settings", dependencies=[Depends(require_admin)])
+    async def update_email_settings(request: Request, response: Response):
+        from app.analytics_reports import EmailSettingsConflict, EmailSettingsInput, EmailSettingsUnavailable, ReportError, save_email_settings
+        response.headers["Cache-Control"] = "no-store, private"
+        try:
+            value = EmailSettingsInput.model_validate(await body(request))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Use valid JSON with an enabled switch, up to 20 recipient addresses and the current settings revision.") from None
+        try:
+            return save_email_settings(value)
+        except EmailSettingsConflict as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        except EmailSettingsUnavailable:
+            logger.error("Saved daily email settings are invalid; private values were not logged.")
+            raise HTTPException(status_code=503, detail="Saved email settings are unavailable. Check the private analytics storage before saving.") from None
+        except ReportError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        except (ValueError, OSError, sqlite3.Error):
+            logger.error("Daily email settings could not be saved; private values were not logged.")
+            raise HTTPException(status_code=503, detail="Daily email settings could not be saved. Your edits have not been applied; please retry.") from None
+
     return router

@@ -46,7 +46,7 @@ export default function ProductDetailPage() {
       try {
         const res = await fetch(`${API_BASE}/api/products/${slug}`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) {
-          throw new Error("Product not found");
+          throw new Error("Equipment not found");
         }
 
         const data = await res.json();
@@ -74,7 +74,7 @@ export default function ProductDetailPage() {
   if (loading || resolvedSlug !== slug) {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-20 text-[var(--ink)]">
-        <div className="mx-auto max-w-4xl text-lg text-[var(--muted)]">Loading product...</div>
+        <div className="mx-auto max-w-4xl text-lg text-[var(--muted)]">Loading equipment...</div>
       </main>
     );
   }
@@ -83,7 +83,7 @@ export default function ProductDetailPage() {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-20 text-[var(--ink)]">
         <div className="mx-auto max-w-4xl">
-          <h1 data-analytics-event="item_unavailable" className="text-3xl font-semibold">Product not found</h1>
+          <h1 data-analytics-event="item_unavailable" className="text-3xl font-semibold">Equipment not found</h1>
           <button type="button" className="mt-4 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button>
           <Link href="/" className="mt-6 inline-block rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white">
             Return home

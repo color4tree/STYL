@@ -185,8 +185,8 @@ These settings are server-side; never expose SMTP credentials to the frontend.
 | `STYL_ANALYTICS_DB` | Private SQLite path; production example `/var/lib/styl-analytics/analytics.sqlite3` |
 | `STYL_ANALYTICS_TIMEZONE` | `America/Los_Angeles` |
 | `STYL_ANALYTICS_CAMPAIGN_ALLOWLIST` | Approved campaign codes only; empty means no campaign values retained |
-| `STYL_ANALYTICS_EMAIL_ENABLED` | Defaults false; non-production sending remains blocked |
-| `STYL_ANALYTICS_RECIPIENTS` | Separate approved internal report recipients; empty by default and not approved yet |
+| `STYL_ANALYTICS_EMAIL_ENABLED` | Initial default until admin settings are saved; defaults false. Local/test/staging sending is always blocked |
+| `STYL_ANALYTICS_RECIPIENTS` | Initial comma-separated recipients until admin settings are saved; never inherits inquiry recipients |
 | `STYL_ANALYTICS_REPLY_TO` | Optional business reply address, never a customer's form address |
 | `STYL_ANALYTICS_DASHBOARD_URL` | Credential-free admin URL; HTTPS required in production |
 
@@ -195,6 +195,41 @@ Do not overwrite inquiry configuration or treat a local flag as mail authorizati
 Pacific is the approved reporting zone. Whole-hour UTC-offset zones are
 supported, including Pacific DST; fractional-offset zones fail explicitly
 because hour-only buckets cannot represent their day boundaries exactly.
+
+### Admin daily-email settings
+
+The new **Analytics → Daily email settings** form is implemented locally; this
+change does not itself deploy it or enable production mail. It provides:
+
+- **Enable daily summary emails**, recipient addresses and **Save email settings**.
+  Enter one address per line or separate addresses with commas, up to 20 entries.
+  The server validates addresses and removes case-insensitive duplicates.
+  Enabling requires at least one recipient; disabling may retain addresses or save
+  an empty list.
+- A saved revision in the private `analytics_email_settings` SQLite table.
+  Settings survive API/job restarts and override the two environment defaults
+  above. They are not catalog data, not browser-local settings, and are included
+  in a consistent analytics SQLite backup but not the catalog recovery ZIP.
+- Authenticated `GET` and `PUT /api/admin/analytics/email-settings`, both private/
+  no-store. PUT accepts `{enabled, recipients, expectedRevision}`; stale edits
+  return 409 rather than overwrite another administrator. Validation and storage
+  errors retain form entries; unavailable settings are not displayed as default
+  disabled settings. SMTP passwords/sender settings are not exposed or editable.
+- Preview, scheduled delivery and manual retry all read the saved settings.
+  Local/test/staging can save an enabled preference for testing but
+  `effectiveEnabled` remains false and no actual mail is sent.
+- Saving settings does not send mail. When enabled in production, the existing
+  job may send the latest due report at its next 15-minute check. Disabling or
+  removing a recipient is checked again transactionally before each delivery
+  claim; an email already claimed/in progress cannot be recalled.
+
+Unsaved entries survive admin tab changes. Save clears any stale preview;
+**Discard changes and reload** requires explicit confirmation. Corruption or
+inaccessible storage causes an explicit error rather than fallback. Do not delete
+the saved row to turn mail off: an absent row uses the environment defaults.
+Use the disabled preference instead.
+Settings persist until an administrator changes them; the 90-day report-history
+cleanup does not remove current configuration.
 
 ### Public collector contract and private aggregate tables
 

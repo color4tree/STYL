@@ -2,6 +2,66 @@
 
 Last recorded: 2026-09-29
 
+## Admin email settings and Equipment catalog UX - 2026-09-29 (local)
+
+Completed the owner's five new requests. The owner clarified that Products
+should be renamed Equipment while Accessories remains a separate catalog;
+URLs, API/data field names, IDs and saved catalog content must stay compatible.
+
+- Added Analytics → Daily email settings: enabled preference, editable recipient
+  list, explicit save/reload, pending/error/conflict feedback and unsaved-state
+  retention across admin tabs. Recipients accept lines or commas, up to 20,
+  validated and deduplicated case-insensitively. Enabled requires a recipient;
+  disabled may preserve or clear addresses.
+- Protected GET/PUT settings endpoints store a revisioned configuration in private
+  SQLite. Concurrent stale saves return 409; malformed input is 422 and unavailable/
+  corrupt storage is 503, not a successful default state. After the first save,
+  these preferences override the initial environment defaults. Current settings
+  survive restarts/history cleanup and are included in SQLite backups, not
+  catalog recovery ZIPs. No SMTP secrets or inquiry-notification settings changed.
+- Preview, scheduled delivery and manual retries share those saved settings.
+  Every recipient is checked again before its transactional delivery claim, so
+  disabling/removing recipients stops unclaimed sends; an already in-progress
+  email cannot be recalled. Saving itself sends nothing. Local/test/staging mail
+  remains blocked even when the saved preference is on. The UI explains that
+  enabled production may send the latest due report at the next 15-minute check.
+- Both catalog toolbars now read Catalog → Arrange listing order/Done arranging
+  → New, with the existing visual card movement, saving and selection behavior.
+  Added Shop accessories beside Shop equipment; Equipment wording is consistent
+  in navigation/catalog/admin views while existing quote journeys remain intact.
+- Updated the English/Chinese email requirements, operations, responsive guidance,
+  README and regression cases AN-017, ADM-011 and USR-011.
+
+Final dirty candidate on `b4c6ff2`: implementation/test-file SHA-256
+`67e00cc2cc9a2bebc911102a580005272a6fbf1e0c32757e56ccaa1846e81aec`
+(23 changed/new code files, excluding user catalog data).
+
+Verification:
+
+- **170 complete backend tests and 33 frontend unit tests passed.**
+- **All 217 configured browser executions passed**, including desktop Chromium,
+  phone Chromium and phone WebKit, without test retries. Build/TypeScript passed;
+  full lint had zero errors and the same five pre-existing image warnings.
+  Relevant editor/Pylance diagnostics were clear.
+- The initial targeted run had 96 passes and one WebKit arrange-mode failure.
+  Its trace showed the moved card already at position 1 while the outer fieldset
+  was still disabled. The test's non-waiting focus call therefore missed Done,
+  and Enter stayed on the card. The test now waits for enabled and confirms
+  keyboard focus before Enter; pointer coverage and toolbar assertions remain.
+  The focused rerun and the final complete matrix passed. No UI defect was
+  claimed fixed from that timing evidence.
+- Local readonly browser checks confirmed both Catalog/Arrange/New toolbars,
+  Equipment/Accessories navigation, the new shop link and the settings form at
+  320px. DNT prevented synthetic traffic; no user settings, catalog order or
+  records were saved by those visual checks. Screenshots and the diagnostic trace
+  remain private session artifacts; the temporary verification script was removed.
+
+These changes are local and uncommitted, not deployed. Production email remains
+unchanged/disabled; no real email or credential changes were performed. The user's
+local products/accessories/hero edits remain intact. Full automated regression
+passed; physical devices, actual mailbox delivery and production operation of the
+new settings interface remain unverified until an approved rollout.
+
 ## Concise daily email deployed - 2026-09-29
 
 Deployed application **`dbccf7a69d61bdd15bab0c78b150646d67f0366f`** using the

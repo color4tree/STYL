@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from email.message import EmailMessage
 import html
@@ -18,7 +19,7 @@ import ssl
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import EmailStr, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, ValidationError
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,28 @@ class ReportError(ValueError):
     """Report configuration or content is not safe to send."""
 
 
+class EmailSettingsConflict(ReportError):
+    """The administrator edited a stale settings revision."""
+
+
+class EmailSettingsUnavailable(ReportError):
+    """Persisted configuration cannot be read safely."""
+
+
+class EmailSettingsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    enabled: bool
+    recipients: list[str] = Field(max_length=20)
+    expectedRevision: int = Field(ge=0, le=2**53 - 1)
+
+
+@dataclass(frozen=True)
+class EmailPreferences:
+    enabled: bool
+    recipients: tuple[str, ...]
+    revision: int
+
+
 def report_timezone() -> ZoneInfo:
     try:
         return ZoneInfo(os.getenv("STYL_ANALYTICS_TIMEZONE", "America/Los_Angeles"))
@@ -38,29 +61,101 @@ def report_timezone() -> ZoneInfo:
         raise ReportError("Analytics reporting timezone is invalid or its timezone data is missing.") from error
 
 
-def email_enabled() -> bool:
+def _environment_email_enabled() -> bool:
     value = os.getenv("STYL_ANALYTICS_EMAIL_ENABLED", "false").strip().lower()
     if value not in ("true", "false", "1", "0", "yes", "no", ""):
         raise ReportError("STYL_ANALYTICS_EMAIL_ENABLED must be true or false.")
     return value in ("true", "1", "yes")
 
 
-def recipients() -> list[str]:
-    configured = os.getenv("STYL_ANALYTICS_RECIPIENTS", "").strip()
-    if not configured:
-        return []
-    if "\r" in configured or "\n" in configured:
-        raise ReportError("Analytics recipient configuration is invalid.")
+def _validated_recipients(configured: list[str]) -> list[str]:
+    if any("\r" in value or "\n" in value for value in configured):
+        raise ReportError("Enter valid email addresses without line breaks inside an address.")
     try:
-        addresses = EMAILS.validate_python([value.strip() for value in configured.split(",")])
+        addresses = EMAILS.validate_python([value.strip() for value in configured])
     except ValidationError as error:
-        raise ReportError("Analytics recipient configuration is invalid.") from error
+        raise ReportError("Enter valid recipient email addresses.") from error
     unique: dict[str, str] = {}
     for address in addresses:
         unique.setdefault(str(address).casefold(), str(address))
     if len(unique) > 20:
         raise ReportError("Configure at most 20 internal analytics recipients.")
     return list(unique.values())
+
+
+def _read_email_preferences(connection: sqlite3.Connection) -> EmailPreferences:
+    row = connection.execute("SELECT enabled,recipients,revision FROM analytics_email_settings WHERE id=1").fetchone()
+    if row is None:
+        configured = os.getenv("STYL_ANALYTICS_RECIPIENTS", "").strip()
+        addresses = _validated_recipients(configured.split(",") if configured else [])
+        return EmailPreferences(_environment_email_enabled(), tuple(addresses), 0)
+    try:
+        addresses = json.loads(row["recipients"])
+        if (row["enabled"] not in (0, 1) or type(row["revision"]) is not int or not 1 <= row["revision"] <= 2**53 - 1
+                or not isinstance(addresses, list) or any(not isinstance(value, str) for value in addresses)):
+            raise ReportError("Stored email settings are invalid.")
+        addresses = _validated_recipients(addresses)
+        if row["enabled"] and not addresses:
+            raise ReportError("Stored enabled email settings have no recipients.")
+        return EmailPreferences(bool(row["enabled"]), tuple(addresses), row["revision"])
+    except (ValueError, TypeError) as error:
+        raise EmailSettingsUnavailable("Stored email settings are invalid; check the private analytics database.") from error
+
+
+def _email_preferences() -> EmailPreferences:
+    with _store().connection() as connection:
+        _ensure_tables(connection)
+        return _read_email_preferences(connection)
+
+
+def email_enabled() -> bool:
+    return _email_preferences().enabled
+
+
+def recipients() -> list[str]:
+    return list(_email_preferences().recipients)
+
+
+def _settings_view(preferences: EmailPreferences, now: datetime | None = None) -> dict[str, object]:
+    environment = os.getenv("STYL_ANALYTICS_ENVIRONMENT", "local")
+    zone = report_timezone()
+    return {
+        "enabled": preferences.enabled, "recipients": list(preferences.recipients),
+        "revision": preferences.revision, "source": "admin" if preferences.revision else "environment",
+        "environment": environment, "effectiveEnabled": preferences.enabled and bool(preferences.recipients) and environment == "production",
+        "timezone": zone.key, "nextRunAt": next_run_at(now or datetime.now(timezone.utc), zone).isoformat(),
+    }
+
+
+def get_email_settings(now: datetime | None = None) -> dict[str, object]:
+    return _settings_view(_email_preferences(), now)
+
+
+def save_email_settings(value: EmailSettingsInput) -> dict[str, object]:
+    addresses = tuple(_validated_recipients(value.recipients))
+    if value.enabled and not addresses:
+        raise ReportError("Add at least one recipient before enabling daily email.")
+    now = datetime.now(timezone.utc)
+    with _store().connection() as connection:
+        _ensure_tables(connection)
+        if not connection.in_transaction:
+            connection.execute("BEGIN IMMEDIATE")
+        previous = _read_email_preferences(connection)
+        if previous.revision != value.expectedRevision:
+            raise EmailSettingsConflict("Email settings changed in another session. Reload saved settings before saving your changes.")
+        if previous.revision and previous.enabled == value.enabled and previous.recipients == addresses:
+            return _settings_view(previous, now)
+        if previous.revision >= 2**53 - 1:
+            raise ReportError("Email settings revision limit reached; contact the administrator.")
+        saved = EmailPreferences(value.enabled, addresses, previous.revision + 1)
+        result = _settings_view(saved, now)
+        connection.execute(
+            """INSERT INTO analytics_email_settings(id,enabled,recipients,revision,updated_at) VALUES(1,?,?,?,?)
+            ON CONFLICT(id) DO UPDATE SET enabled=excluded.enabled,recipients=excluded.recipients,
+            revision=excluded.revision,updated_at=excluded.updated_at""",
+            (int(saved.enabled), json.dumps(saved.recipients), saved.revision, now.isoformat()),
+        )
+    return result
 
 
 def next_run_at(now: datetime, zone: ZoneInfo | None = None) -> datetime:
@@ -253,10 +348,11 @@ def preview_report(report_date: str, now: datetime | None = None) -> dict[str, o
     date.fromisoformat(report_date)
     report = get_report(report_date, report_date, cutoff=now.replace(minute=0, second=0, microsecond=0))
     rendered = render_report(report, report_date)
+    settings = get_email_settings(now)
     return {
         "reportDate": report_date, "timezone": report_timezone().key, **rendered,
-        "emailEnabled": email_enabled() and os.getenv("STYL_ANALYTICS_ENVIRONMENT", "local") == "production",
-        "recipientsConfigured": bool(recipients()), "nextRunAt": next_run_at(now).isoformat(),
+        "emailEnabled": settings["effectiveEnabled"],
+        "recipientsConfigured": bool(settings["recipients"]), "nextRunAt": settings["nextRunAt"],
     }
 
 
@@ -267,6 +363,10 @@ def _store():
 
 
 def _ensure_tables(connection: sqlite3.Connection) -> None:
+    connection.execute("""CREATE TABLE IF NOT EXISTS analytics_email_settings (
+        id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
+        recipients TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), updated_at TEXT NOT NULL
+    )""")
     connection.execute("""CREATE TABLE IF NOT EXISTS analytics_report_snapshot (
         report_date TEXT NOT NULL, timezone TEXT NOT NULL, version INTEGER NOT NULL,
         subject TEXT NOT NULL, text_body TEXT NOT NULL, html_body TEXT NOT NULL, created_at TEXT NOT NULL,
@@ -360,10 +460,16 @@ def _deliver(report_date: str, now: datetime, addresses: list[str]) -> dict[str,
         raise ReportError("Unable to persist the report snapshot; no email sent.")
     rendered = {"subject": snapshot["subject"], "text": snapshot["text_body"], "html": snapshot["html_body"]}
     outcomes: list[str] = []
+    skipped = 0
     for recipient in addresses:
         with store.connection() as connection:
             if not connection.in_transaction:
                 connection.execute("BEGIN IMMEDIATE")
+            preferences = _read_email_preferences(connection)
+            if (not preferences.enabled or os.getenv("STYL_ANALYTICS_ENVIRONMENT", "local") != "production"
+                    or recipient.casefold() not in {address.casefold() for address in preferences.recipients}):
+                skipped += 1
+                continue
             earlier = connection.execute(
                 "SELECT status FROM analytics_report_delivery WHERE report_date=? AND timezone=? AND recipient=? COLLATE NOCASE AND version<>? AND status IN ('accepted','sending','ambiguous')",
                 (report_date, zone, recipient, REPORT_VERSION),
@@ -412,10 +518,12 @@ def _deliver(report_date: str, now: datetime, addresses: list[str]) -> dict[str,
             )
         outcomes.append(status)
     return {
-        "status": "accepted" if outcomes and all(outcome == "accepted" for outcome in outcomes) else
+        "status": "skipped" if not outcomes and skipped else
+                  "accepted" if outcomes and all(outcome == "accepted" for outcome in outcomes) else
                   "in_progress" if outcomes and all(outcome in ("accepted", "sending") for outcome in outcomes) else "needs_review",
         "reportDate": report_date, "acceptedRecipients": outcomes.count("accepted"),
         "failedRecipients": outcomes.count("failed"), "ambiguousRecipients": outcomes.count("ambiguous"),
+        "skippedRecipients": skipped,
         "nextRunAt": next_run_at(now).isoformat(),
     }
 

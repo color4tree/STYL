@@ -241,17 +241,11 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
     <AdminNotice message={message} />
     <fieldset disabled={saving || uploading || ordering} className="grid min-w-0 gap-8 lg:grid-cols-[0.8fr_1.2fr]">
       <aside className={`${showEditor ? "hidden lg:block" : ""} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Accessories ({accessories.length})</h2>
-          <button type="button" onClick={resetForm} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-medium">
-            New
-          </button>
-        </div>
-
+        <p className="mb-3 text-sm text-[var(--muted)]">Accessories ({accessories.length})</p>
         <CatalogOrderControls catalog="accessories" items={accessories} adminToken={adminToken}
           onReordered={(ids) => setAccessories((current) => orderByIds(current, ids))}
           onRefresh={async () => setAccessories(await fetchAdminAccessories(adminToken))}
-          onBusyChange={setOrdering} selectedId={selectedId} onSelect={selectAccessory}>
+          onBusyChange={setOrdering} selectedId={selectedId} onSelect={selectAccessory} onCreate={resetForm}>
           {(item) => (
               <div className="flex items-center gap-3">
                 <img src={resolveProductImage(item.image)} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
@@ -349,7 +343,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
               onChange={(event) => updateField("description", event.target.value)}
               className={`${inputClass} min-h-24`}
               maxLength={10000}
-              placeholder="Complete product description, benefits, and fit information."
+              placeholder="Complete accessory description, benefits, and fit information."
             />
           </label>
           <label className="block text-sm font-medium md:col-span-2">

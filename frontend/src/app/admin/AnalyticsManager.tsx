@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { API_BASE } from "@/lib/api";
 import type { AnalyticsBreakdown, AnalyticsDelivery, AnalyticsEmailPreview, AnalyticsReport } from "@/lib/analyticsTypes";
 import { AdminNotice, type AdminMessage } from "./AdminFields";
+import DailyEmailSettings from "./DailyEmailSettings";
 
 const zone = "America/Los_Angeles";
 const number = (value: number | null | undefined) => value == null ? "N/A" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
@@ -283,10 +284,10 @@ export default function AnalyticsManager({ adminToken, active }: { adminToken: s
           <ul className="mt-3 space-y-2">{report.actions.map((row) => <li key={row.name} className="flex justify-between gap-3 text-sm"><span>{row.name}</span><span>{number(row.count)}</span></li>)}</ul>
         </Section>
       </div>
-      <Section title="Product and accessory interest">
+      <Section title="Equipment and accessory interest">
         <p className="mt-2 text-xs text-[var(--muted)]">Currencies stay separate. Counts are action occurrences, not distinct viewers. No view-to-cart or quote conversion rate is inferred from unlinked events.</p>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <label className="min-w-0">Item type<select aria-label="Analytics item type" value={itemType} onChange={(event) => setItemType(event.target.value)} className="ml-2 min-h-11 max-w-full rounded-lg border px-2"><option value="all">All</option><option value="product">Products</option><option value="accessory">Accessories</option></select></label>
+          <label className="min-w-0">Item type<select aria-label="Analytics item type" value={itemType} onChange={(event) => setItemType(event.target.value)} className="ml-2 min-h-11 max-w-full rounded-lg border px-2"><option value="all">All</option><option value="product">Equipment</option><option value="accessory">Accessories</option></select></label>
           <label className="min-w-0">Currency<select aria-label="Analytics currency" value={itemCurrency} onChange={(event) => setItemCurrency(event.target.value)} className="ml-2 min-h-11 max-w-full rounded-lg border px-2"><option value="all">All</option><option value="CAD">CAD</option><option value="USD">USD</option></select></label>
           <label className="min-w-0">Category<select aria-label="Analytics category" value={itemCategory} onChange={(event) => setItemCategory(event.target.value)} className="ml-2 min-h-11 max-w-full rounded-lg border px-2"><option value="all">All</option>{[...new Set(report.items.map((item) => item.category))].map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
         </div>
@@ -294,7 +295,7 @@ export default function AnalyticsManager({ adminToken, active }: { adminToken: s
         <div className="mt-3 max-w-full overflow-x-auto">
           <table className="w-full text-left text-sm"><thead><tr>{["Item", "Market", "Impressions", "Detail views", "Expansions", "Media opens", "Cart adds", "Quote opens"].map((label) => <th key={label} className="whitespace-nowrap border-b px-3 py-2">{label}</th>)}</tr></thead>
             <tbody>{report.items.filter((item) => (itemType === "all" || item.itemType === itemType) && (itemCurrency === "all" || item.currency === itemCurrency) && (itemCategory === "all" || item.category === itemCategory)).map((item) => <tr key={`${item.itemType}-${item.itemId}-${item.currency}`}>
-              <td className="min-w-44 border-b px-3 py-3">{item.name}<span className="block text-xs text-[var(--muted)]">{item.itemType} #{item.itemId} · {item.category}</span></td>
+              <td className="min-w-44 border-b px-3 py-3">{item.name}<span className="block text-xs text-[var(--muted)]">{item.itemType === "product" ? "equipment" : "accessory"} #{item.itemId} · {item.category}</span></td>
               {[item.currency, number(item.impressions), number(item.detailViews), number(item.expansions), number(item.mediaOpens), number(item.cartAdds), number(item.quoteOpens)].map((value, index) => <td key={index} className="border-b px-3 py-3">{value}</td>)}
             </tr>)}</tbody>
           </table>
@@ -313,6 +314,10 @@ export default function AnalyticsManager({ adminToken, active }: { adminToken: s
       </div>
       <button type="button" disabled={exportBusy || loading} onClick={downloadCsv} className="min-h-12 rounded-full border border-[var(--ink)] px-5 text-sm disabled:opacity-50">{exportBusy ? "Preparing CSV..." : "Download aggregate CSV"}</button>
     </> : !loading ? <p className="text-sm">Analytics data is unavailable. Refresh after resolving the reported problem.</p> : null}
+    <DailyEmailSettings adminToken={adminToken} active={active} onSaved={() => {
+      previewController.current?.abort();
+      setPreview(null);
+    }} />
     <Section title="Daily usage email preview">
       <p className="mt-2 text-sm leading-6">A short daily business summary, scheduled for 8:00 AM Pacific. Previewing does not send email.</p>
       <div className="mt-4 flex flex-wrap items-end gap-3">

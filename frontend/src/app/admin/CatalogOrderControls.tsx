@@ -8,7 +8,7 @@ import { AdminNotice, type AdminMessage } from "./AdminFields";
 
 type OrderItem = { id: number; name: string; publicationStatus?: string };
 
-export default function CatalogOrderControls<T extends OrderItem>({ catalog, items, adminToken, onReordered, onRefresh, onBusyChange, selectedId, onSelect, children }: {
+export default function CatalogOrderControls<T extends OrderItem>({ catalog, items, adminToken, onReordered, onRefresh, onBusyChange, selectedId, onSelect, onCreate, children }: {
   catalog: "products" | "accessories";
   items: readonly T[];
   adminToken: string;
@@ -17,6 +17,7 @@ export default function CatalogOrderControls<T extends OrderItem>({ catalog, ite
   onBusyChange: (busy: boolean) => void;
   selectedId: number | null;
   onSelect: (item: T) => void;
+  onCreate: () => void;
   children: (item: T) => ReactNode;
 }) {
   const [arranging, setArranging] = useState(false);
@@ -85,15 +86,19 @@ export default function CatalogOrderControls<T extends OrderItem>({ catalog, ite
     } finally { setPending(false); }
   };
   return <div className="min-w-0">
-    <div className="mb-3 flex flex-wrap gap-2">
+    <div role="group" aria-label={`${catalog === "products" ? "Equipment" : "Accessories"} catalog controls`} className="mb-4 flex flex-wrap items-center gap-2">
+      <h2 className="w-full text-lg font-semibold sm:mr-auto sm:w-auto">Catalog</h2>
       <button type="button" aria-pressed={arranging} aria-controls={listId} disabled={busy || !items.length}
         onClick={() => { setArranging(!arranging); setMessage(null); setMovedId(null); }}
-        className={`min-h-11 rounded-full border px-4 text-sm font-medium disabled:opacity-40 ${arranging ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-[var(--line)] bg-white"}`}>
+        className={`min-h-12 rounded-full border px-3 text-sm font-medium disabled:opacity-40 ${arranging ? "border-[var(--ink)] bg-[var(--ink)] text-white" : "border-[var(--line)] bg-white"}`}>
         {arranging ? "Done arranging" : "Arrange listing order"}
       </button>
-      {arranging ? <button type="button" disabled={busy} onClick={() => void refresh()} className="min-h-11 px-2 text-sm underline">Refresh listing order</button> : null}
+      <button type="button" onClick={onCreate} disabled={busy} className="min-h-12 rounded-full border border-[var(--line)] px-3 text-sm font-medium disabled:opacity-40">
+        New
+      </button>
     </div>
     {arranging ? <div className="mb-3 text-sm leading-6 text-[var(--muted)]">
+      <button type="button" disabled={busy} onClick={() => void refresh()} className="mb-2 min-h-12 px-2 text-sm underline">Refresh listing order</button>
       <p>Use the arrows on each card to move it up or down. Each move saves immediately.</p>
       <p className="mt-1 text-xs">Choose Done arranging to edit items. Open form edits are kept; Featured does not change this sequence.</p>
       <p role="status" aria-live="polite" className="min-h-12 pt-2 text-[var(--ink)]">
@@ -101,7 +106,7 @@ export default function CatalogOrderControls<T extends OrderItem>({ catalog, ite
       </p>
       <AdminNotice message={message?.type === "error" ? message : null} />
     </div> : null}
-    <ol ref={list} id={listId} aria-label={catalog === "products" ? "Product listings" : "Accessory listings"} className="space-y-3">
+    <ol ref={list} id={listId} aria-label={catalog === "products" ? "Equipment listings" : "Accessory listings"} className="space-y-3">
       {items.map((item, index) => <li key={item.id} tabIndex={arranging ? -1 : undefined}
         data-catalog-card={item.id} data-position={index + 1}
         aria-label={arranging ? `${item.name}, position ${index + 1} of ${items.length}` : undefined}
@@ -112,11 +117,11 @@ export default function CatalogOrderControls<T extends OrderItem>({ catalog, ite
           <span className="text-xs text-[var(--muted)]">Position {index + 1} of {items.length}</span>
           <div className="flex gap-2">
             <button type="button" disabled={busy || index === 0} aria-label={`Move ${item.name} up`} title="Move up"
-              onClick={() => void move(item.id, index - 1)} className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--line)] bg-white hover:bg-neutral-100 disabled:opacity-40">
+              onClick={() => void move(item.id, index - 1)} className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-[var(--line)] bg-white hover:bg-neutral-100 disabled:opacity-40">
               <ArrowUp size={18} aria-hidden="true" />
             </button>
             <button type="button" disabled={busy || index === items.length - 1} aria-label={`Move ${item.name} down`} title="Move down"
-              onClick={() => void move(item.id, index + 1)} className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--line)] bg-white hover:bg-neutral-100 disabled:opacity-40">
+              onClick={() => void move(item.id, index + 1)} className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-[var(--line)] bg-white hover:bg-neutral-100 disabled:opacity-40">
               <ArrowDown size={18} aria-hidden="true" />
             </button>
           </div>

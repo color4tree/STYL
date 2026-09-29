@@ -37,7 +37,7 @@ type Product = CatalogDetails & ProductSpecifications & {
 type AdminTab = "products" | "accessories" | "banner";
 
 const adminTabs: { id: AdminTab; label: string; heading: string }[] = [
-  { id: "products", label: "Products", heading: "Product management" },
+  { id: "products", label: "Equipment", heading: "Equipment management" },
   { id: "accessories", label: "Accessories", heading: "Accessory management" },
   { id: "banner", label: "Home banner", heading: "Home banner" },
 ];
@@ -65,11 +65,11 @@ async function fetchProducts(token: string): Promise<Product[]> {
     cache: "no-store",
   });
   if (!res.ok) {
-    throw new Error("Unable to fetch products");
+    throw new Error("Unable to fetch equipment");
   }
 
   const data = await res.json();
-  if (!Array.isArray(data.items)) throw new Error("Invalid product response. Please retry.");
+  if (!Array.isArray(data.items)) throw new Error("Invalid equipment response. Please retry.");
   return data.items as Product[];
 }
 
@@ -289,7 +289,7 @@ export default function AdminPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        const detail = typeof data.detail === "string" ? data.detail : "Unable to save product.";
+        const detail = typeof data.detail === "string" ? data.detail : "Unable to save equipment.";
         throw new Error(detail);
       }
       const saved = data.item as Product;
@@ -303,9 +303,9 @@ export default function AdminPage() {
 
       setSelectedId(saved.id);
       loadForm(toFormState(saved));
-      setMessage({ type: "success", text: "Product saved successfully." });
+      setMessage({ type: "success", text: "Equipment saved successfully." });
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to save product." });
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to save equipment." });
     } finally {
       setSaving(false);
     }
@@ -326,7 +326,7 @@ export default function AdminPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(typeof data.detail === "string" ? data.detail : "Unable to delete product.");
+        throw new Error(typeof data.detail === "string" ? data.detail : "Unable to delete equipment.");
       }
 
       const remaining = products.filter((item) => item.id !== product.id);
@@ -340,7 +340,7 @@ export default function AdminPage() {
       }
       setMessage({ type: "success", text: `"${product.name}" deleted.` });
     } catch (error) {
-      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to delete product." });
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to delete equipment." });
     } finally {
       setSaving(false);
     }
@@ -435,7 +435,7 @@ export default function AdminPage() {
           </div>
           {!showBackup && !showAnalytics && activeTab === "products" ? (
             <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
-              {products.length} products · {products.filter((product) => product.publicationStatus === "draft").length} drafts
+              {products.length} equipment items · {products.filter((product) => product.publicationStatus === "draft").length} drafts
             </div>
           ) : null}
           <button type="button" onClick={signOut} className="text-sm font-medium text-[var(--muted)]">
@@ -460,17 +460,10 @@ export default function AdminPage() {
         <AdminNotice message={message} />
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <aside className={`${showEditor ? "hidden lg:block" : ""} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold">Catalog</h2>
-              <button type="button" onClick={resetForm} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-medium">
-                New
-              </button>
-            </div>
-
             <CatalogOrderControls catalog="products" items={products} adminToken={adminToken}
               onReordered={(ids) => setProducts((current) => orderByIds(current, ids))}
               onRefresh={async () => setProducts(await fetchProducts(adminToken))}
-              onBusyChange={setOrderBusy} selectedId={selectedId} onSelect={selectProduct}>
+              onBusyChange={setOrderBusy} selectedId={selectedId} onSelect={selectProduct} onCreate={resetForm}>
               {(product) => (
                   <div className="flex items-center gap-3">
                     <img src={resolveProductImage(product.image)} alt={product.name} className="h-14 w-14 rounded-xl object-cover" />
@@ -492,11 +485,11 @@ export default function AdminPage() {
               loadForm(selected ? toFormState(selected) : emptyProduct);
               setShowEditor(false);
               setMessage(null);
-            }} className="mb-5 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to products</button>
+            }} className="mb-5 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to equipment</button>
             <fieldset className="grid min-w-0 gap-5 md:grid-cols-2">
-              <legend className="mb-4 text-lg font-semibold">Product essentials &amp; details</legend>
+              <legend className="mb-4 text-lg font-semibold">Equipment essentials &amp; details</legend>
               <label className="block text-sm font-medium">
-                Product name
+                Equipment name
                 <input
                   value={form.name}
                   onChange={(event) => updateField("name", event.target.value)}
@@ -536,7 +529,7 @@ export default function AdminPage() {
               </label>
 
               <fieldset className="min-w-0 border-t border-[var(--line)] pt-5 md:col-span-2">
-                <legend className="text-lg font-semibold">Product details (optional)</legend>
+                <legend className="text-lg font-semibold">Equipment details (optional)</legend>
                 <div className="grid gap-4 md:grid-cols-2">
                   {productSpecificationFields.map((field) => (
                     <label key={field.key} className="block min-w-0 text-sm font-medium">
@@ -568,7 +561,7 @@ export default function AdminPage() {
                   value={form.description}
                   onChange={(event) => updateField("description", event.target.value)}
                   className="mt-2 min-h-28 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3"
-                  placeholder="Describe the product value and use case."
+                  placeholder="Describe the equipment value and use case."
                 />
               </label>
 
@@ -614,7 +607,7 @@ export default function AdminPage() {
 
             <AdminSaveBar>
               <button type="button" onClick={saveProduct} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
-                {saving ? "Saving..." : selectedId ? "Save changes" : "Create product"}
+                {saving ? "Saving..." : selectedId ? "Save changes" : "Create equipment"}
               </button>
               {dirty ? <span className="text-sm text-[var(--muted)]">Unsaved changes</span> : null}
             </AdminSaveBar>
@@ -626,7 +619,7 @@ export default function AdminPage() {
                   disabled={saving}
                   className="rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
                 >
-                  Delete product
+                  Delete equipment
                 </button>
               ) : null}
               {selectedId && confirmingDelete ? (

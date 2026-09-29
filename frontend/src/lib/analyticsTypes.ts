@@ -111,3 +111,14 @@ export type AnalyticsDelivery = {
   updatedAt: string;
   error: string | null;
 };
+
+export type AnalyticsEmailSettings = {
+  enabled: boolean;
+  recipients: string[];
+  revision: number;
+  source: "environment" | "admin";
+  environment: "local" | "test" | "staging" | "production";
+  effectiveEnabled: boolean;
+  timezone: string;
+  nextRunAt: string;
+};

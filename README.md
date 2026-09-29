@@ -189,8 +189,15 @@ ignored on read and removed on the next admin save; the original text and image
 remain usable. The banner stays hidden below 768 CSS px. Regional product prices
 continue to appear in the catalog, product details, and cart.
 
-Products and accessories follow the saved listing sequence. In each admin catalog,
-click **Arrange listing order** to reveal up/down arrows on the existing image/
+Customer/admin labels use **Equipment** (previously Products) and **Accessories**
+as separate catalogs. The home page offers **Shop equipment** and
+**Shop accessories**, alongside the existing quote action. This is presentation
+only: `/api/products`, `/products/[slug]`, `#products`, IDs and saved JSON fields
+remain compatible.
+
+Equipment and accessories follow the saved listing sequence. In each admin catalog,
+the toolbar order is **Catalog → Arrange listing order → New**. Click
+**Arrange listing order** to reveal up/down arrows on the existing image/
 price cards. Cards move in place, show their current position, and keep keyboard
 focus on the moved card. Choose **Done arranging** to return to normal item
 editing; there is no duplicate ordering list or position dropdown.
@@ -198,6 +205,14 @@ Changes save immediately without saving/discarding open form fields. Concurrent
 catalog/order changes require an explicit refresh and retry. New items append to
 the end; drafts and missing-market prices remain hidden without reordering the
 eligible items. The retained Featured tag no longer overrides manual ordering.
+
+The Analytics tab includes **Daily email settings** for a saved on/off preference
+and recipient addresses. Private SQLite settings survive restarts; after saving
+they override the initial server defaults. Saving is not a send action, and
+local/test/staging never send real email. Production may send its latest due
+summary at the next scheduled check after an administrator enables it.
+See [analytics operations](docs/traffic-analytics-operations.md) for validation,
+concurrent edits and deployment status.
 
 Add to cart now confirms success immediately on the clicked button (a check icon
 and **Added** for 2.5 seconds), including the mobile product action bar. Failed

@@ -126,7 +126,7 @@ test("unsaved changes, failed save, retry and delete", async ({ page, request })
   await page.getByRole("button").filter({ hasText: item.name }).click();
   await page.getByRole("textbox", { name: "Full description", exact: true }).fill("Keep my unsaved text");
   page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("button", { name: "Products", exact: true }).click();
+  await page.getByRole("button", { name: "Equipment", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Full description", exact: true })).toHaveValue("Keep my unsaved text");
   await page.route(`**/api/accessories/${item.id}`, (route) => route.fulfill({ status: 503, contentType: "application/json", body: '{"detail":"Save temporarily unavailable"}' }));
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
@@ -145,7 +145,7 @@ test("product media upload, reorder, cover, real video conversion/seek and manua
   const name = unique("E2E equipment");
   await signIn(page);
   await page.getByRole("button", { name: "New", exact: true }).click();
-  await page.getByLabel("Product name", { exact: true }).fill(name);
+  await page.getByLabel("Equipment name", { exact: true }).fill(name);
   await page.getByRole("combobox", { name: "Category", exact: true }).selectOption("Racks");
   await expect(page.getByRole("combobox", { name: "Publication status", exact: true })).toHaveValue("draft");
   await page.getByRole("combobox", { name: "Publication status", exact: true }).selectOption("published");
@@ -161,7 +161,7 @@ test("product media upload, reorder, cover, real video conversion/seek and manua
   await expect(page.getByText(/1 of 1 files uploaded/)).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: "Move media 3 earlier", exact: true }).click();
   await page.getByRole("button", { name: "Move media 2 earlier", exact: true }).click();
-  const item = await save(page, "Create product", "products");
+  const item = await save(page, "Create equipment", "products");
   expect(item.photos).toHaveLength(3);
   expect(item.photos[0]).toMatch(/\.mp4$/);
   expect(item.image).toBe(item.photos[1]);
@@ -341,7 +341,7 @@ test("home banner custom content and upload persist without any price informatio
   await page.getByRole("button", { name: "Home banner", exact: true }).click();
   await expect(page.getByRole("button", { name: /Save/ })).toBeEnabled();
   await expect(page.getByLabel("Price text", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("combobox", { name: "Featured product", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: /Featured (product|equipment)/i })).toHaveCount(0);
   const title = unique("Custom banner");
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Small heading", { exact: true }).fill("Your training space");

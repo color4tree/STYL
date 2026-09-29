@@ -4,6 +4,7 @@ from contextlib import closing, contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import os
+import json
 import smtplib
 import sqlite3
 import sys
@@ -421,6 +422,126 @@ class AnalyticsReportTests(unittest.TestCase):
             self.assertEqual(recovered.execute("SELECT count(*) FROM analytics_report_delivery WHERE status='accepted'").fetchone()[0], 1)
         with self.assertRaises(reports.ReportError):
             reports.backup_store(target)
+
+    def test_an017_email_settings_use_environment_defaults_until_saved_and_survive_reopen(self) -> None:
+        initial = reports.get_email_settings(NOW)
+        self.assertEqual(initial["source"], "environment")
+        self.assertEqual(initial["revision"], 0)
+        self.assertTrue(initial["enabled"])
+        self.assertEqual(initial["recipients"], ["owner@example.com"])
+        saved = reports.save_email_settings(reports.EmailSettingsInput(
+            enabled=False, recipients=[" owner@example.com ", "Owner@EXAMPLE.COM", "sales@example.com"], expectedRevision=0,
+        ))
+        self.assertEqual(saved["recipients"], ["owner@example.com", "sales@example.com"])
+        self.assertEqual(saved["revision"], 1)
+        self.assertEqual(saved["source"], "admin")
+        with patch.object(reports, "_store", return_value=ReportStore(self.store.path)), \
+                patch.dict(os.environ, {"STYL_ANALYTICS_RECIPIENTS": "different@example.com", "STYL_ANALYTICS_EMAIL_ENABLED": "true"}):
+            self.assertEqual(reports.recipients(), ["owner@example.com", "sales@example.com"])
+            self.assertFalse(reports.email_enabled())
+        same = reports.save_email_settings(reports.EmailSettingsInput(
+            enabled=False, recipients=["owner@example.com", "sales@example.com"], expectedRevision=1,
+        ))
+        self.assertEqual(same["revision"], 1)
+
+    def test_an017_enabled_settings_require_recipients_and_validate_without_leaking_values(self) -> None:
+        for addresses in ([], ["invalid"], ["owner@example.com\r\nBcc: private@example.com"]):
+            with self.subTest(addresses=addresses), self.assertRaises(reports.ReportError) as error:
+                reports.save_email_settings(reports.EmailSettingsInput(enabled=True, recipients=addresses, expectedRevision=0))
+            self.assertNotIn("private@example.com", str(error.exception))
+        self.assertEqual(reports.get_email_settings()["revision"], 0)
+        saved = reports.save_email_settings(reports.EmailSettingsInput(enabled=False, recipients=[], expectedRevision=0))
+        self.assertEqual(saved["recipients"], [])
+        self.assertFalse(saved["enabled"])
+
+    def test_an017_stale_or_concurrent_saves_cannot_silently_replace_recipients(self) -> None:
+        def save(address):
+            try:
+                reports.save_email_settings(reports.EmailSettingsInput(enabled=False, recipients=[address], expectedRevision=0))
+                return "saved"
+            except reports.EmailSettingsConflict:
+                return "conflict"
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(save, ["one@example.com", "two@example.com"]))
+        self.assertCountEqual(results, ["saved", "conflict"])
+        self.assertEqual(reports.get_email_settings()["revision"], 1)
+
+    def test_an017_local_saved_enabled_is_not_effective_and_never_sends(self) -> None:
+        with patch.dict(os.environ, {"STYL_ANALYTICS_ENVIRONMENT": "local"}), patch.object(reports, "_send") as send:
+            saved = reports.save_email_settings(reports.EmailSettingsInput(
+                enabled=True, recipients=["owner@example.com"], expectedRevision=0,
+            ))
+            self.assertTrue(saved["enabled"])
+            self.assertFalse(saved["effectiveEnabled"])
+            self.assertEqual(reports.run_due(NOW)["status"], "disabled")
+            send.assert_not_called()
+        self.assertEqual(self.store.prunes, 1)
+        self.assertEqual(reports.get_email_settings()["revision"], 1)
+
+    def test_an017_save_never_sends_and_preview_uses_persisted_configuration(self) -> None:
+        with patch.object(reports, "_send") as send:
+            reports.save_email_settings(reports.EmailSettingsInput(enabled=False, recipients=[], expectedRevision=0))
+            with patch.dict(sys.modules, {"app.analytics": SimpleNamespace(get_report=Mock(return_value=fixture_report()))}):
+                preview = reports.preview_report("2026-09-27", NOW)
+            self.assertFalse(preview["emailEnabled"])
+            self.assertFalse(preview["recipientsConfigured"])
+            send.assert_not_called()
+
+    def test_an017_scheduler_uses_saved_recipients_instead_of_environment(self) -> None:
+        reports.save_email_settings(reports.EmailSettingsInput(
+            enabled=True, recipients=["new@example.com"], expectedRevision=0,
+        ))
+        with patch.object(reports, "preview_report", side_effect=self.preview), \
+                patch.object(reports, "_send", return_value=("accepted", None)) as send:
+            self.assertEqual(reports.run_due(NOW)["status"], "accepted")
+        send.assert_called_once()
+        self.assertEqual(send.call_args.args[1], "new@example.com")
+
+    def test_an017_disable_or_recipient_removal_stops_unclaimed_deliveries(self) -> None:
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                self.store = ReportStore(self.root / f"change-during-send-{enabled}.sqlite3")
+                with patch.object(reports, "_store", return_value=self.store), \
+                        patch.dict(os.environ, {"STYL_ANALYTICS_RECIPIENTS": "owner@example.com,sales@example.com"}):
+                    def send_first(_message, address):
+                        self.assertEqual(address, "owner@example.com")
+                        reports.save_email_settings(reports.EmailSettingsInput(
+                            enabled=enabled, recipients=["owner@example.com"], expectedRevision=0,
+                        ))
+                        return "accepted", None
+                    with patch.object(reports, "preview_report", side_effect=self.preview), \
+                            patch.object(reports, "_send", side_effect=send_first) as send:
+                        result = reports.run_due(NOW)
+                    send.assert_called_once()
+                    self.assertEqual(result["acceptedRecipients"], 1)
+                    self.assertEqual(result["skippedRecipients"], 1)
+
+    def test_an017_disabled_saved_settings_block_manual_retry(self) -> None:
+        with patch.object(reports, "preview_report", side_effect=self.preview), \
+                patch.object(reports, "_send", return_value=("failed", "connection_failed")):
+            reports.run_due(NOW)
+        reports.save_email_settings(reports.EmailSettingsInput(enabled=False, recipients=["owner@example.com"], expectedRevision=0))
+        with patch.object(reports, "_send") as send, self.assertRaises(reports.ReportError):
+            reports.retry_delivery("2026-09-27", "owner@example.com", True)
+        send.assert_not_called()
+
+    def test_an017_corrupt_settings_fail_closed_instead_of_reverting_to_enabled_environment(self) -> None:
+        reports.save_email_settings(reports.EmailSettingsInput(enabled=False, recipients=[], expectedRevision=0))
+        with self.store.connection() as connection:
+            connection.execute("UPDATE analytics_email_settings SET recipients='invalid JSON'")
+        with self.assertRaises(reports.ReportError), patch.object(reports, "_send") as send:
+            reports.run_due(NOW)
+        send.assert_not_called()
+
+    def test_an017_sqlite_backup_includes_settings_without_changing_the_catalog_scope(self) -> None:
+        reports.save_email_settings(reports.EmailSettingsInput(enabled=False, recipients=["owner@example.com"], expectedRevision=0))
+        target = self.root / "settings-backup.sqlite3"
+        reports.backup_store(target)
+        with closing(sqlite3.connect(target)) as connection:
+            row = connection.execute("SELECT enabled,recipients,revision FROM analytics_email_settings").fetchone()
+        self.assertEqual(row[0], 0)
+        self.assertEqual(json.loads(row[1]), ["owner@example.com"])
+        self.assertEqual(row[2], 1)
 
     def test_an013_dashboard_link_cannot_contain_credentials_or_query_tokens(self) -> None:
         for url in ("https://user:password@example.com/admin", "https://example.com/admin?token=private", "http://example.com/admin"):
