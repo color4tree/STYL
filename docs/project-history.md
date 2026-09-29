@@ -2,6 +2,60 @@
 
 Last recorded: 2026-09-29
 
+## Compact All products / MSRP release deployed - 2026-09-29
+
+The owner authorized push/deploy. Verified the exact implementation fingerprint
+from the preceding local run before committing/pushing application release
+**`17b30fcb2f2d1bae53542f8f3d1bb668e9056668`**. Production activation completed
+at **`2026-09-29T23:21:12Z`** on Ubuntu-1 via the verified kenny-daily session.
+The stale browser SSH connection was refreshed through the signed-in Lightsail
+page; no password/token was requested in chat or entered into terminal input.
+
+Protected backup: `/var/backups/styl/release-17b30fc`, including previous code/
+mode changes/build, catalog/media/inquiries, original environment and a consistent
+private analytics SQLite backup. The isolated Linux candidate passed **184 backend
+tests, 43 frontend unit tests and production build/TypeScript** before service
+activation. Dependencies/lockfiles were unchanged. The maintenance timer was paused
+and any running report job allowed to finish before the web/API switch; it was
+resumed afterward. Rollback was prepared but not needed.
+
+Verified live:
+
+- Default All products contains **3 equipment + 16 accessories**, in the expected
+  saved per-catalog order. All three filters, compact initial cards, explicit
+  expansion/collapse and desktop-versus-mobile actions worked.
+- Equipment and accessory detail pages, accessory-to-quote prefill, legacy URLs,
+  public selected-market MSRP shape and private-field redaction passed the live
+  functional assertions in desktop Chromium, phone Chromium and phone WebKit.
+  Desktop/phone Chromium had zero runtime errors and passed again after cleanup.
+- WebKit's functional assertions passed, but its separate zero-runtime-error
+  assertion did **not** pass: rapid navigation produced five, then four
+  previously observed prefetch/analytics-config access-control diagnostics.
+  Do not report that browser's complete smoke as a clean pass or claim this known
+  warning has been fixed. Physical Safari behavior remains unverified.
+- Protected admin catalog responses contained normalized CAD/USD MSRP maps for
+  all 19 records. Unauthorized admin routes returned 401. A private comparison
+  confirmed saved email preferences/revision exactly matched the SQLite backup;
+  SQLite integrity was OK. No recipient addresses or credentials were printed.
+- Catalog/inquiry/media, environment and GeoIP checksums matched the pre-release
+  copies. US/USD location remained correct; all five web/API/Caddy/analytics/
+  GeoIP services or timers were active. Existing prices and MSRP data were not
+  edited, seeded or migrated by deployment. No synthetic catalog/settings writes,
+  analytics events or test email/inquiry submissions were used for live checks.
+
+The staged build and deployment script/log were moved into the protected backup,
+with build-ID comparison against the running output; transient transfer/local
+verification scripts were removed. Local catalog edits and the historical backup
+branch were excluded from publishing. Existing saved email settings were retained,
+not automatically enabled/disabled by this UI release.
+
+The prior local 259-browser attempt remains recorded as 258 passes plus one
+ERR_NO_BUFFER_SPACE interruption that passed a focused rerun, not a fictitious
+single clean pass. Operator note: once MSRP fields are edited in production, review
+any rollback to serializers predating MSRP support; older generic serializers
+do not know to redact the full MSRP map. Backups alone do not certify arbitrary
+older application versions against newer catalog fields.
+
 ## Combined compact catalog, accessory details and regional MSRP - 2026-09-29 (local)
 
 The owner approved three specific choices: Equipment is the correct uncountable
