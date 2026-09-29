@@ -198,8 +198,9 @@ because hour-only buckets cannot represent their day boundaries exactly.
 
 ### Admin daily-email settings
 
-The new **Analytics → Daily email settings** form is implemented locally; this
-change does not itself deploy it or enable production mail. It provides:
+The **Analytics → Daily email settings** form was deployed in `e91f28a`.
+Production sending remains off until an administrator saves an enabled
+configuration with recipients. It provides:
 
 - **Enable daily summary emails**, recipient addresses and **Save email settings**.
   Enter one address per line or separate addresses with commas, up to 20 entries.

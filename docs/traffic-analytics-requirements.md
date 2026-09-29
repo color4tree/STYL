@@ -345,8 +345,8 @@ authenticated dashboard link. Preview never sends mail.
 
 The 2026-09-29 enhancement adds an admin **Daily email settings** form for the
 enabled preference and up to 20 validated recipients (one per line or comma
-separated, case-insensitive duplicate removal). This new form is local until an
-approved deployment. Settings are stored in private SQLite, survive restarts,
+separated, case-insensitive duplicate removal). The form was deployed in `e91f28a`;
+sending remained disabled at deployment. Settings are stored in private SQLite, survive restarts,
 and override environment defaults after the first save. Enabled requires a
 recipient; disabled may preserve addresses or save an empty list. SMTP credentials
 remain server-managed and inquiry notifications are unaffected.

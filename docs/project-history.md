@@ -2,6 +2,54 @@
 
 Last recorded: 2026-09-29
 
+## Daily email settings and Equipment labels deployed - 2026-09-29
+
+The owner authorized push/deploy. The exact implementation fingerprint matched
+the candidate with 170 backend, 33 unit and 217 browser passes before publishing.
+Release **`e91f28afd3452134dfe99070ea9132aa0ba81cb1`** deployed at
+`2026-09-29T18:43:24Z`, using the verified kenny-daily SSH session.
+
+Protected `/var/backups/styl/release-e91f28a` includes catalog/media/inquiries,
+original environment, previous source/mode changes and frontend output, plus a
+consistent 0600 SQLite analytics backup. The candidate was built separately;
+170 backend tests and the Linux production build/TypeScript check passed.
+Web/API were switched with rollback prepared; the report timer was briefly
+paused and resumed. Environment, catalog and GeoIP hashes remained unchanged,
+and all five application/maintenance/GeoIP services or timers were active.
+No SMTP settings or real recipient values were entered during deployment.
+
+Final application runtime is **`30d25896e68819cce6376af30fca15147a96cac2`**,
+activated at `2026-09-29T19:01:21Z`, after the detail-width correction below.
+Its separate protected backup is `/var/backups/styl/release-30d2589`; Linux
+170-test backend/build checks passed again and data/config/GeoIP hashes matched.
+Both staging builds and deployment logs/scripts were moved into their protected
+release folders; the running build ID matched the staged candidate. Temporary
+transfer files, local helper scripts and the stopped one-use transfer helper were
+cleaned up. One follow-up script checksum initially differed because of Windows
+CRLF versus Linux LF; the normalized reviewed hash was verified before execution.
+
+Authenticated production checks confirmed private email settings:
+enabled/effectiveEnabled false, recipients empty, revision 0/environment defaults;
+the concise preview remained disabled and delivery history empty. Public
+unauthorized GET/PUT settings requests returned 401. No production settings were
+saved or real emails sent. The live phone detail check then found the gallery
+width issue documented below; the rollout remained open for its verified
+follow-up rather than reporting that failing phone check as passed.
+After the correction, all three live browser flows passed: desktop Chromium,
+phone Chromium and phone WebKit, including the production seven-image equipment
+detail width, Equipment/Shop accessories navigation and compatible URLs. There
+were no runtime errors or behavioral/catalog writes in those DNT-protected checks.
+The same checks passed again after staging cleanup. Final private configuration
+verification confirmed mail still off, recipients empty and revision 0; no settings
+were saved or mail sent to make verification pass.
+
+Validation totals must not be combined into a fictitious full run: the primary
+release passed 170 backend / 33 unit / 217 full browser executions; the CSS-only
+follow-up passed 76 affected layout/navigation executions plus the unchanged
+backend baseline on Linux. Physical devices, real mail delivery and broader
+operational/privacy gates remain separate. Local catalog edits and the historical
+backup branch were not published or changed.
+
 ## Equipment-detail width found during live release verification - 2026-09-29
 
 After deploying the settings/Equipment release `e91f28a`, the public detail-flow
