@@ -47,6 +47,35 @@ Also confirm:
 4. You have an AWS account with MFA enabled on the root user.
 5. You control a domain's DNS records before beginning the later HTTPS phase.
 
+### Analytics activation is a separate release gate
+
+The approved analytics replacement is **anonymous aggregate-only**, with local
+implementation/final verification ongoing; it has not been deployed. Do not
+enable production collection or daily email simply by following this storefront
+deployment guide. Keep both switches disabled until their separate rollout is
+approved; analytics recipients and a real-mail test are not yet approved.
+
+The revised storefront uses an ordinary **Privacy** link to `/privacy`, with
+informative policy and a boolean measurement opt-out, not a consent banner/modal
+or technical tracking-status footer. Collection starts automatically only with
+enabled aggregate-only configuration and no opt-out/exclusion. Preserve prior
+declines, DNT/GPC/admin/internal/bot exclusions and fail-closed privacy checks.
+There is no fallback to browser/session identifiers or raw-event/journey storage.
+
+Before activation, verify independent server-hour aggregates, rejected identified
+payloads and the legacy session endpoint's 410 response; retain aggregates for
+13 calendar months. New reports must not read old session history. Existing
+legacy private data is not purged or destructively migrated by this change;
+verify its existing retention or separately approved bounded cleanup.
+Review infrastructure access logs and business inquiry/contact data separately:
+they may contain personal data even though new analytics is aggregate-only.
+
+Daily mail remains **08:00 America/Los_Angeles**, disabled outside production;
+previews exclude the incomplete hour. Served-market privacy review is required,
+not replaced by a universal claim of consent exemption. Private storage,
+consistent backups, retention jobs, timer/recipient setup and rollback are covered
+in [analytics operations](traffic-analytics-operations.md). City/postal is deferred.
+
 ## 0. Push and verify the source repository
 
 From PowerShell in the repository root, inspect what will be published:
@@ -503,6 +532,22 @@ Complete this browser checklist:
 7. Ports `3000` and `8000` cannot be reached from the public internet.
 
 ## 9. Verify backups
+
+For catalog-only disaster recovery, admin can also download a self-contained ZIP
+including both saved catalogs, private admin fields, banner and referenced
+images/videos/posters. The archive contains a standalone offline restore tool.
+Follow [catalog backup and recovery](catalog-backup-and-recovery.md), keep the
+download securely off this server, and restore into a new isolated destination.
+It does not replace the server backup below: customer inquiries, credentials,
+application code, GeoIP and machine configuration are separate recovery concerns.
+Browser upload/import is deferred.
+
+Analytics SQLite is also excluded from the catalog recovery ZIP. If analytics is
+later activated, verify its private storage is covered by a consistent SQLite
+backup and the applicable aggregate/legacy expiry rules; do not assume the
+catalog backup commands below include it. A full analytics backup can contain
+legacy private records and mail delivery metadata, not just anonymous counters.
+See [analytics backup guidance](traffic-analytics-operations.md#retention-deletion-and-backups).
 
 Run the backup once and inspect the archive:
 

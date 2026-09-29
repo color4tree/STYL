@@ -1,5 +1,8 @@
 # STYL project testing instructions
 
+- Follow the [autonomous testing workflow](skills/styl-autonomous-testing/SKILL.md)
+  for routine execution already authorized by the user. It avoids repeated
+  conversational permission questions, but does not override native tool approvals.
 - When asked to perform regression testing or comprehensive/release verification,
   use the [styl-regression skill](skills/styl-regression/SKILL.md) and the
   [living regression plan](../docs/regression-test-plan.md).
@@ -25,7 +28,7 @@
 - Regression testing does not itself authorize committing, pushing, deploying,
   exposing private test artifacts, or changing real customer/catalog data.
 
-## Local development authorization
+## Development, testing and deployment verification authorization
 
 - The user authorizes routine development and local testing for requested STYL
   work without repeated permission questions: inspect/edit relevant source,
@@ -33,6 +36,20 @@
   and inspect the app through localhost browser tools.
 - This includes starting/restarting/stopping verified STYL loopback development
   servers by specific process ID, not unrelated processes or production services.
+- The user prefers to focus on requirements and significant design decisions.
+  Complete implementation/debugging, reproduce failures, run and rerun relevant
+  tests, inspect results, and fix issues within the agreed scope without asking
+  for permission at each step. Test output is evidence, not a request for input;
+  report concise milestones and the final outcome rather than routine commands.
+- Non-destructive verification of the STYL live site is authorized: public
+  page/API requests, isolated browser sessions, screenshots and network traces
+  without credential/customer-data disclosure. Do not send real inquiry emails,
+  mutate production catalog/customer data, or expose private records as tests.
+- Once the user explicitly approves a deployment, carry out its scoped backups,
+  build/install, necessary service restarts and pre/post-deployment verification
+  without repeatedly asking for conversational approval. Pause for an unexpected
+  destructive operation, scope-changing decision, missing credential/access,
+  or unresolved risk needing the user's decision.
 - In this Windows Copilot session, use simple terminal invocations where possible.
   The runtime requires confirmation for inline PowerShell assignments/method
   calls even when the underlying commands are allowlisted. When the ignored
@@ -52,8 +69,13 @@
   and use disposable test fixtures with SMTP disabled. Restore dependencies only
   when the task needs it, after manifest changes or a missing-dependency failure.
 - This standing authorization does not cover commits/pushes, backup-branch
-  updates, deployment, AWS/production mutations, real emails, credential/account
-  changes, destructive operations, or exposing local services beyond loopback.
-  Obtain explicit approval for those actions.
+  updates, initiating a deployment, unrelated AWS/production mutations, real
+  emails, credential/account changes, destructive data operations, or exposing
+  local services beyond loopback. Obtain explicit approval for those actions;
+  an approved deployment includes the scoped execution/verification above.
 - Workspace approval rules are a convenience, not a sandbox or a substitute for
   these scope limits. Do not bypass a remaining VS Code/organization confirmation.
+- Session-wide Allow all must be selected by the user through VS Code's
+  permission control or its supported slash command. It removes tool prompts,
+  not the agreed scope limits; do not claim it is enabled merely because these
+  instructions were edited or a configuration file was validated.

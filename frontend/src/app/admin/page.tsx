@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import AccessoryManager from "./AccessoryManager";
 import HeroManager from "./HeroManager";
+import CatalogBackup from "./CatalogBackup";
+import AnalyticsManager from "./AnalyticsManager";
+import CatalogOrderControls from "./CatalogOrderControls";
+import { orderByIds } from "@/lib/catalogOrder";
 import BrandLogo from "@/components/BrandLogo";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
@@ -65,7 +69,8 @@ async function fetchProducts(token: string): Promise<Product[]> {
   }
 
   const data = await res.json();
-  return Array.isArray(data.items) ? (data.items as Product[]) : [];
+  if (!Array.isArray(data.items)) throw new Error("Invalid product response. Please retry.");
+  return data.items as Product[];
 }
 
 async function verifyAdminToken(token: string): Promise<void> {
@@ -114,9 +119,13 @@ export default function AdminPage() {
   const [childDirty, setChildDirty] = useState(false);
   const [message, setMessage] = useState<AdminMessage | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
+  const [showBackup, setShowBackup] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [orderBusy, setOrderBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) : childDirty;
-  const busy = saving || uploading || accessoryBusy;
+  const busy = saving || uploading || accessoryBusy || backupBusy || orderBusy;
   const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
 
   const loadForm = (next: Omit<Product, "id" | "slug">) => {
@@ -157,6 +166,8 @@ export default function AdminPage() {
     loadForm(emptyProduct);
     setChildDirty(false);
     setActiveTab("products");
+    setShowBackup(false);
+    setShowAnalytics(false);
     setShowEditor(false);
   };
 
@@ -380,7 +391,7 @@ export default function AdminPage() {
             <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">
-              {adminTabs.find((tab) => tab.id === activeTab)?.heading}
+              {showAnalytics ? "Traffic analytics" : showBackup ? "Catalog recovery backup" : adminTabs.find((tab) => tab.id === activeTab)?.heading}
             </h1>
             <div className="mt-4 inline-flex flex-wrap rounded-2xl border border-[var(--line)] bg-white p-1 text-sm font-medium">
               {adminTabs.map((tab) => (
@@ -388,22 +399,41 @@ export default function AdminPage() {
                   key={tab.id}
                   type="button"
                   onClick={() => {
-                    if (tab.id === activeTab || !confirmLeave()) return;
+                    if (tab.id === activeTab) {
+                      setShowBackup(false);
+                      setShowAnalytics(false);
+                      return;
+                    }
+                    if (!confirmLeave()) return;
                     const selected = products.find((product) => product.id === selectedId);
                     loadForm(selected ? toFormState(selected) : emptyProduct);
                     setMessage(null);
                     setChildDirty(false);
                     setActiveTab(tab.id);
+                    setShowBackup(false);
+                    setShowAnalytics(false);
                   }}
-                  aria-pressed={activeTab === tab.id}
-                  className={`rounded-full px-4 py-1.5 ${activeTab === tab.id ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
+                  aria-pressed={!showBackup && !showAnalytics && activeTab === tab.id}
+                  className={`min-h-11 rounded-full px-4 py-1.5 ${!showBackup && !showAnalytics && activeTab === tab.id ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
                 >
                   {tab.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => { setShowBackup(true); setShowAnalytics(false); }}
+                aria-pressed={showBackup}
+                className={`min-h-11 rounded-full px-4 py-1.5 ${showBackup ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
+              >
+                Backup
+              </button>
+              <button type="button" onClick={() => { setShowAnalytics(true); setShowBackup(false); }} aria-pressed={showAnalytics}
+                className={`min-h-11 rounded-full px-4 py-1.5 ${showAnalytics ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}>
+                Analytics
+              </button>
             </div>
           </div>
-          {activeTab === "products" ? (
+          {!showBackup && !showAnalytics && activeTab === "products" ? (
             <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
               {products.length} products · {products.filter((product) => product.publicationStatus === "draft").length} drafts
             </div>
@@ -413,6 +443,14 @@ export default function AdminPage() {
           </button>
         </header>
 
+        <div hidden={!showBackup}>
+          <CatalogBackup adminToken={adminToken} hasUnsavedChanges={dirty} onBusyChange={setBackupBusy} />
+        </div>
+        <div hidden={!showAnalytics}>
+          <AnalyticsManager adminToken={adminToken} active={showAnalytics} />
+        </div>
+        {/* Keep the editor mounted while viewing read-only tools so unsaved forms survive. */}
+        <div hidden={showBackup || showAnalytics}>
         {activeTab === "banner" ? (
           <HeroManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} />
         ) : activeTab === "accessories" ? (
@@ -421,7 +459,7 @@ export default function AdminPage() {
         <>
         <AdminNotice message={message} />
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-          <aside className={`${showEditor ? "hidden lg:block" : ""} rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
+          <aside className={`${showEditor ? "hidden lg:block" : ""} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Catalog</h2>
               <button type="button" onClick={resetForm} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-medium">
@@ -429,26 +467,22 @@ export default function AdminPage() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              {products.map((product) => (
-                <button
-                  key={product.id}
-                  type="button"
-                  onClick={() => selectProduct(product)}
-                  className={`w-full rounded-[22px] border p-3 text-left transition ${selectedId === product.id ? "border-[var(--ink)] bg-[#f5f1ea]" : "border-[var(--line)] bg-white"}`}
-                >
+            <CatalogOrderControls catalog="products" items={products} adminToken={adminToken}
+              onReordered={(ids) => setProducts((current) => orderByIds(current, ids))}
+              onRefresh={async () => setProducts(await fetchProducts(adminToken))}
+              onBusyChange={setOrderBusy} selectedId={selectedId} onSelect={selectProduct}>
+              {(product) => (
                   <div className="flex items-center gap-3">
                     <img src={resolveProductImage(product.image)} alt={product.name} className="h-14 w-14 rounded-xl object-cover" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">{product.name}</div>
+                      <div className="text-sm font-semibold [overflow-wrap:anywhere]">{product.name}</div>
                       <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">{product.category}</div>
                       <MarketPriceSummary prices={getMarketPrices(product)} />
                       <div className="mt-1 text-xs text-[var(--muted)]">{product.publicationStatus === "draft" ? "Draft" : "Published"}</div>
                     </div>
                   </div>
-                </button>
-              ))}
-            </div>
+              )}
+            </CatalogOrderControls>
           </aside>
 
           <section className={`${showEditor ? "" : "hidden lg:block"} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4 sm:p-6`}>
@@ -571,8 +605,9 @@ export default function AdminPage() {
                   onChange={(event) => updateField("featured", event.target.checked)}
                   className="h-4 w-4"
                 />
-                Show first in the home collection
+                Featured tag
               </label>
+              <p className="text-sm text-[var(--muted)] md:col-span-2">Featured is retained as a tag. Use Arrange listing order to control the storefront sequence.</p>
               </fieldset>
               <ProvenanceEditor value={form.provenance} onChange={(value) => updateField("provenance", value)} />
             </fieldset>
@@ -622,6 +657,7 @@ export default function AdminPage() {
         </div>
         </>
         )}
+        </div>
       </fieldset>
     </main>
   );

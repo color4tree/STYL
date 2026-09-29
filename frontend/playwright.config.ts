@@ -24,7 +24,7 @@ export default defineConfig({
   projects: [
     { name: "desktop-chromium", use: { browserName: "chromium", viewport: { width: 1440, height: 1000 } } },
     { name: "phone-chromium", use: { browserName: "chromium", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
-    { name: "phone-webkit", testMatch: ["round-two.spec.ts", "quote-navigation.spec.ts", "catalog-layout.spec.ts"], use: { browserName: "webkit", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    { name: "phone-webkit", testMatch: ["round-two.spec.ts", "quote-navigation.spec.ts", "catalog-layout.spec.ts", "catalog-backup.spec.ts", "cart-feedback-order.spec.ts", "analytics.spec.ts"], use: { browserName: "webkit", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
   ],
   webServer: [
     {

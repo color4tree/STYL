@@ -141,7 +141,7 @@ test("unsaved changes, failed save, retry and delete", async ({ page, request })
   expect(listed.some((entry: { id: number }) => entry.id === item.id)).toBe(false);
 });
 
-test("product media upload, reorder, cover, real video conversion/seek, featured ordering", async ({ page, request }) => {
+test("product media upload, reorder, cover, real video conversion/seek and manual listing order", async ({ page, request }) => {
   const name = unique("E2E equipment");
   await signIn(page);
   await page.getByRole("button", { name: "New", exact: true }).click();
@@ -151,7 +151,7 @@ test("product media upload, reorder, cover, real video conversion/seek, featured
   await page.getByRole("combobox", { name: "Publication status", exact: true }).selectOption("published");
   await page.getByRole("textbox", { name: "Canada price (CAD)", exact: true }).fill("399.99");
   await page.getByRole("textbox", { name: "US price (USD)", exact: true }).fill("299.99");
-  await page.getByLabel("Show first in the home collection", { exact: true }).check();
+  await page.getByLabel("Featured tag", { exact: true }).check();
   await page.locator('input[type="file"]').setInputFiles([
     { name: "first.png", mimeType: "image/png", buffer: png },
     { name: "second.png", mimeType: "image/png", buffer: png },
@@ -167,11 +167,11 @@ test("product media upload, reorder, cover, real video conversion/seek, featured
   expect(item.image).toBe(item.photos[1]);
   await page.goto("/");
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-  const names = await page.locator("#products article h3").allTextContents();
+  const names = await page.locator("#products article > h3").allTextContents();
   const publicItems = (await (await request.get(`${api}/api/products`)).json()).items;
-  const lastFeatured = names.indexOf(name);
-  const unfeatured = publicItems.filter((entry: { featured?: boolean }) => !entry.featured);
-  for (const entry of unfeatured) expect(lastFeatured).toBeLessThan(names.indexOf(entry.name));
+  expect(names).toEqual(publicItems.map((entry: { name: string }) => entry.name));
+  expect(names.at(-1)).toBe(name);
+  expect(publicItems.find((entry: { id: number }) => entry.id === item.id).featured).toBe(true);
   await page.goto(`/products/${item.slug}`);
   const video = page.locator("video");
   await expect(video).toBeVisible();

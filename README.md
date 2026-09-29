@@ -5,7 +5,13 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 ## Project structure
 
 - [Project history and handoff](docs/project-history.md) — implementation milestones, agreed decisions, verification results, and remaining work
+- [Traffic analytics and daily email requirements](docs/traffic-analytics-requirements.md) — approved anonymous aggregate-only replacement, local implementation/verification in progress; no production collection/email, City/postal deferred
+  - [简体中文版：网站流量分析与每日使用情况邮件](docs/traffic-analytics-requirements.zh-CN.md)
+- [Traffic analytics local use and operations](docs/traffic-analytics-operations.md) — automatic first-party aggregates with Privacy-page opt-out, private hour-based counts, admin reports and guarded daily email jobs
+- [AI-assisted customer-service architecture](docs/customer-service-ai-architecture.md) — current/future system design, grounded AI, human handoff, desktop/mobile chat UX and rollout prerequisites (draft; provider undecided)
+  - [简体中文版：网站与 AI 辅助客户服务架构](docs/customer-service-ai-architecture.zh-CN.md)
 - [Living regression test plan](docs/regression-test-plan.md) — system and end-user cases, automation mapping, release gates, and an expandable run-record template
+- [Catalog backup and offline recovery](docs/catalog-backup-and-recovery.md) — private admin ZIP download, included media/checksums, and recovery on a clean installation; browser upload/import remains deferred
 - [STYL regression agent skill](.github/skills/styl-regression/SKILL.md) — full-regression workflow and automatic coverage-maintenance guidance for new features and fixes
 - [Product catalog and admin schema design](docs/catalog-and-admin-schema-design.md) — target data model, catalog-wide SKUs, configurable admin options, and migration plan (design draft, not yet implemented)
 - [Accessory schema review](docs/accessory-schema-review.md) — proposal evaluation and rationale for the catalog design
@@ -88,6 +94,40 @@ After deployment and configuration, submit one test inquiry and confirm it
 arrives in the mailbox (including checking spam) and Reply-To points to the test
 customer. Existing production versions must be redeployed to use this handler.
 
+### Local traffic analytics
+
+The approved local **Analytics** replacement measures anonymous aggregate counts
+automatically only after enabled aggregate-only configuration. It uses no analytics
+browser/session/event/page-view IDs, raw-event/journey rows, raw request times,
+IPs, full URLs/query strings, referrer hosts or customer form text. Server-hour
+totals and independent coarse country/currency/source/campaign/device/browser
+page-view counts are not combined into a fingerprint. Per-item actions, total
+active-time estimates, coarse errors and average web vitals remain useful;
+visitors, sessions, individual journeys, session funnels/conversion/attribution
+and medians are unavailable. Saved inquiries remain independent business totals.
+
+There is no storefront consent panel, banner/modal or technical analytics status.
+An ordinary **Privacy** link to `/privacy` describes measurement.
+**Turn off usage measurement** / **Allow aggregate measurement** saves only the
+boolean `styl-analytics-exclude` preference. Prior explicit declines migrate to
+that opt-out before legacy consent/visitor/session/lease keys are removed;
+DNT/GPC/admin/internal/bot exclusions remain honored. Unreadable privacy storage
+fails closed without resetting privacy choices.
+This is noninterrupting UX, not hidden notice or a universal legal claim of
+consent exemption. Business contact records and infrastructure logs are separate
+and may contain personal data.
+
+Daily reports use **08:00 America/Los_Angeles**. The scheduled-job implementation
+and timer templates remain subject to final verification; non-production mail
+is blocked, recipients are not approved and nothing is deployed by this change.
+Admin uses Pacific date filters/manual refresh and hour-level last activity;
+email previews exclude the incomplete hour. New reports/CSV/snapshots do not read
+legacy session history. Aggregates retain 13 calendar months; existing private
+legacy data is not destructively migrated or claimed deleted and remains subject
+to its existing retention/approved cleanup. See
+[analytics operations](docs/traffic-analytics-operations.md) for local verification,
+configuration, previews, privacy review and safe production rollout.
+
 ### Frontend
 
 ```bash
@@ -149,7 +189,22 @@ ignored on read and removed on the next admin save; the original text and image
 remain usable. The banner stays hidden below 768 CSS px. Regional product prices
 continue to appear in the catalog, product details, and cart.
 
-The full home collection remains visible; Featured items appear first. Accessories
+Products and accessories follow the saved listing sequence. In each admin catalog,
+click **Arrange listing order** to reveal up/down arrows on the existing image/
+price cards. Cards move in place, show their current position, and keep keyboard
+focus on the moved card. Choose **Done arranging** to return to normal item
+editing; there is no duplicate ordering list or position dropdown.
+Changes save immediately without saving/discarding open form fields. Concurrent
+catalog/order changes require an explicit refresh and retry. New items append to
+the end; drafts and missing-market prices remain hidden without reordering the
+eligible items. The retained Featured tag no longer overrides manual ordering.
+
+Add to cart now confirms success immediately on the clicked button (a check icon
+and **Added** for 2.5 seconds), including the mobile product action bar. Failed
+storage shows **Not added**, not a false success. Cart count/live announcements
+and the ten-unit limit remain in effect; browsing position is preserved.
+
+Accessories
 support a short description, full description, features, finish/colour, included
 contents, selling unit (Each / Pair / Set), and package quantity. Quantity counts
 sale units, not individual pieces inside a pair or set. Existing entries without a

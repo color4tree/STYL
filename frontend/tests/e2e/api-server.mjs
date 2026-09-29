@@ -32,6 +32,10 @@ const child = spawn(python, ["-m", "uvicorn", "app.main:app", "--host", "127.0.0
     ...process.env, STYL_DATA_DIR: data, STYL_ADMIN_TOKEN: process.env.STYL_E2E_TOKEN,
     STYL_ALLOWED_ORIGINS: "http://127.0.0.1:3102", STYL_GEOIP_DATABASE: "", STYL_SMTP_HOST: "",
     STYL_SMTP_USERNAME: "", STYL_SMTP_PASSWORD: "",
+    STYL_ANALYTICS_ENABLED: "true", STYL_ANALYTICS_ENVIRONMENT: "test",
+    STYL_ANALYTICS_DB: path.join(data, "analytics.sqlite3"),
+    STYL_ANALYTICS_TIMEZONE: "America/Los_Angeles", STYL_ANALYTICS_CAMPAIGN_ALLOWLIST: "launch,test-campaign",
+    STYL_ANALYTICS_EMAIL_ENABLED: "false", STYL_ANALYTICS_RECIPIENTS: "",
   },
 });
 child.on("error", (error) => { console.error(error); process.exitCode = 1; });

@@ -8,6 +8,7 @@ import { useCart } from "@/lib/useCart";
 import { API_BASE } from "@/lib/api";
 import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
+import AddToCartButton from "@/components/AddToCartButton";
 import PhotoGallery from "@/components/PhotoGallery";
 import { CompatibilityDetails } from "@/components/Compatibility";
 import { getCatalogPhotos, productSpecificationFields, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
@@ -30,6 +31,7 @@ export default function ProductDetailPage() {
   const slug = params?.slug;
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resolvedSlug, setResolvedSlug] = useState<string | null>(null);
   const { cart, add, loading: cartLoading, error, notice } = useCart();
   const action = useRef<HTMLDivElement>(null);
   const [actionVisible, setActionVisible] = useState(true);
@@ -37,25 +39,29 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     if (!slug) return;
+    let active = true;
+    const controller = new AbortController();
 
     const loadProduct = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/products/${slug}`, { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/api/products/${slug}`, { cache: "no-store", signal: controller.signal });
         if (!res.ok) {
           throw new Error("Product not found");
         }
 
         const data = await res.json();
-        setProduct(data.item?.publicationStatus === "draft" ? null : data.item as Product);
+        if (active) setProduct(data.item?.publicationStatus === "draft" ? null : data.item as Product);
       } catch (error) {
+        if (!active) return;
         setProduct(null);
         console.error(error);
       } finally {
-        setLoading(false);
+        if (active) { setLoading(false); setResolvedSlug(slug); }
       }
     };
 
     loadProduct();
+    return () => { active = false; controller.abort(); };
   }, [slug, retry]);
 
   useEffect(() => {
@@ -65,7 +71,7 @@ export default function ProductDetailPage() {
     return () => observer.disconnect();
   }, [product]);
 
-  if (loading) {
+  if (loading || resolvedSlug !== slug) {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-20 text-[var(--ink)]">
         <div className="mx-auto max-w-4xl text-lg text-[var(--muted)]">Loading product...</div>
@@ -77,7 +83,7 @@ export default function ProductDetailPage() {
     return (
       <main className="min-h-screen bg-[var(--bg)] px-4 py-20 text-[var(--ink)]">
         <div className="mx-auto max-w-4xl">
-          <h1 className="text-3xl font-semibold">Product not found</h1>
+          <h1 data-analytics-event="item_unavailable" className="text-3xl font-semibold">Product not found</h1>
           <button type="button" className="mt-4 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button>
           <Link href="/" className="mt-6 inline-block rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white">
             Return home
@@ -101,28 +107,26 @@ export default function ProductDetailPage() {
     <main className="min-h-screen bg-[var(--bg)] px-4 py-6 pb-32 text-[var(--ink)] sm:px-6 lg:px-8 lg:py-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-4">
-          <Link href="/#products" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--muted)]">
+          <Link href="/#products" data-analytics-action="back_to_collection" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--muted)]">
             ← Back to collection
           </Link>
         </div>
         <CartFeedback error={error} notice={notice} />
 
-        <section className={`grid gap-6 rounded-3xl border border-[var(--line)] bg-white/70 p-4 lg:gap-10 lg:p-8 ${photos.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+        <section data-analytics-event="item_detail_open" data-analytics-item-id={product.id} data-analytics-item-type="product" className={`grid gap-6 rounded-3xl border border-[var(--line)] bg-white/70 p-4 lg:gap-10 lg:p-8 ${photos.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
           <div className={photos.length ? "lg:col-start-2 lg:row-start-1" : ""}>
             <div className="text-sm text-[var(--muted)]">{product.category}</div>
-            <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight lg:text-5xl">{product.name}</h1>
-            <div className="mt-4 text-2xl font-semibold">{priceLabel}</div>
+            <h1 data-analytics-identity className="mt-2 break-words text-3xl font-semibold tracking-tight lg:text-5xl">{product.name}</h1>
+            <div data-analytics-price className="mt-4 text-2xl font-semibold">{priceLabel}</div>
             {product.stockStatus?.trim() ? <p className="mt-3 text-sm font-medium">{product.stockStatus}</p> : null}
           </div>
-          {photos.length ? <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1"><PhotoGallery key={product.id} photos={photos} name={product.name} /></div> : null}
+          {photos.length ? <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1"><PhotoGallery key={product.id} photos={photos} name={product.name} item={{ itemType: "product", itemId: product.id }} /></div> : null}
 
           <div className="min-w-0 break-words">
             {shortDescription ? <p className="whitespace-pre-line text-base leading-7 text-[var(--muted)] lg:text-lg lg:leading-8">{shortDescription}</p> : null}
             <div ref={action} className="my-5 flex flex-wrap gap-3">
-              <button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50">
-                {atLimit ? "Maximum 10 in cart" : "Add to cart"}
-              </button>
-              <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}#contact`} scroll={false} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">
+              <AddToCartButton key={product.id} disabled={cartLoading || Boolean(error)} atLimit={atLimit} onAdd={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50" />
+              <Link href={`/?quote=product&product=${encodeURIComponent(product.name)}&itemType=product&itemId=${product.id}#contact`} data-analytics-source="product" scroll={false} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">
                 Request quote
               </Link>
             </div>
@@ -162,7 +166,7 @@ export default function ProductDetailPage() {
           </div>
         ) : null}
       </div>
-      {!actionVisible ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="font-semibold">{priceLabel}</span><button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button></div> : null}
+      {!actionVisible ? <div className="safe-action fixed inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-white p-3 lg:hidden"><span className="font-semibold">{priceLabel}</span><AddToCartButton key={product.id} disabled={cartLoading || Boolean(error)} atLimit={atLimit} onAdd={() => add(product)} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-white disabled:opacity-50" /></div> : null}
     </main>
     </>
   );

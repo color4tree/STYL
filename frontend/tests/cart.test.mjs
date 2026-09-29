@@ -24,6 +24,7 @@ function loadSource(relative) {
 }
 const cart = loadSource("src/lib/cart.ts");
 const details = loadSource("src/lib/catalogDetails.ts");
+const ordering = loadSource("src/lib/catalogOrder.ts");
 let storage;
 beforeEach(() => {
   storage = new Map();
@@ -111,4 +112,15 @@ test("USR-013: quote items have numbered blocks, explicit units and independent 
 
 test("USR-013: empty quote selection remains explicit without invented items", () => {
   assert.equal(cart.formatCartSummary([]), "No items selected yet.");
+});
+
+test("ADM-011: listing positions move without mutating IDs or dropping records", () => {
+  const ids = [1, 2, 3];
+  assert.deepEqual(ordering.moveCatalogId(ids, 3, 0), [3, 1, 2]);
+  assert.deepEqual(ordering.moveCatalogId(ids, 1, 2), [2, 3, 1]);
+  assert.deepEqual(ids, [1, 2, 3]);
+  assert.throws(() => ordering.moveCatalogId(ids, 8, 0), /existing item/);
+  assert.throws(() => ordering.moveCatalogId(ids, 1, 3), /valid listing position/);
+  assert.throws(() => ordering.moveCatalogId(ids, 1, 0.5), /valid listing position/);
+  assert.deepEqual(ordering.orderByIds([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }], [3, 1, 2]), [{ id: 3 }, { id: 1 }, { id: 2 }, { id: 4 }]);
 });

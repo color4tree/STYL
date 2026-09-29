@@ -7,8 +7,11 @@ import PhotoGallery from "@/components/PhotoGallery";
 import { CompatibilityDetails } from "@/components/Compatibility";
 import { compatibilityFields, getCatalogPhotos, saleUnitLabel, type CatalogDetails, type SellingUnit } from "@/lib/catalogDetails";
 import { formatPrice } from "@/lib/cart";
+import { trackAnalytics } from "@/lib/analytics";
+import type { AnalyticsItemType } from "@/lib/analyticsTypes";
 
 type CardItem = CatalogDetails & {
+  id: number;
   name: string;
   category: string;
   price: number;
@@ -21,8 +24,9 @@ type CardItem = CatalogDetails & {
   packageQuantity?: number | null;
 };
 
-export default function CatalogCard({ item, specifications, headingLevel, href, id, children }: {
+export default function CatalogCard({ item, itemType, specifications, headingLevel, href, id, children }: {
   item: CardItem;
+  itemType: AnalyticsItemType;
   specifications: readonly (readonly [string, string | undefined])[];
   headingLevel: 2 | 3;
   href?: string;
@@ -53,13 +57,13 @@ export default function CatalogCard({ item, specifications, headingLevel, href, 
   }, [expanded, hasDetails]);
 
   return (
-    <article id={id} className="catalog-card soft-panel min-w-0 scroll-mt-32 rounded-3xl p-4 lg:scroll-mt-24 lg:p-5">
-      <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} compact />
+    <article id={id} data-analytics-item-id={item.id} data-analytics-item-type={itemType} className="catalog-card soft-panel min-w-0 scroll-mt-32 rounded-3xl p-4 lg:scroll-mt-24 lg:p-5">
+      <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} item={{ itemType, itemId: item.id }} compact />
       <p className="mt-4 min-w-0 break-words text-sm text-[var(--muted)]">{item.category}</p>
-      <Heading className="mt-2 min-w-0 break-words text-2xl font-semibold">
-        {href ? <Link href={href} className="hover:underline">{item.name}</Link> : item.name}
+      <Heading data-analytics-identity className="mt-2 min-w-0 break-words text-2xl font-semibold">
+        {href ? <Link href={href} data-analytics-action="catalog" className="hover:underline">{item.name}</Link> : item.name}
       </Heading>
-      <p className="mt-2 min-w-0 break-words text-lg font-semibold">{formatPrice(item.price, item.currency)}{item.sellingUnit ? <span className="text-sm font-normal"> / {item.sellingUnit.toLowerCase()}</span> : null}</p>
+      <p data-analytics-price className="mt-2 min-w-0 break-words text-lg font-semibold">{formatPrice(item.price, item.currency)}{item.sellingUnit ? <span className="text-sm font-normal"> / {item.sellingUnit.toLowerCase()}</span> : null}</p>
       <div>
         {item.packageQuantity ? <p className="mt-2 text-sm">{item.packageQuantity} {item.packageQuantity === 1 ? "piece" : "pieces"} per {saleUnitLabel(item.sellingUnit) || "sale unit"}.</p> : null}
       </div>
@@ -76,7 +80,7 @@ export default function CatalogCard({ item, specifications, headingLevel, href, 
             </div>
           </div>
           {hasCompatibility ? <p className="mt-2 text-xs text-[var(--muted)]">Includes compatibility - check fit</p> : null}
-          {overflowing || expanded ? <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded(!expanded)} className="mt-3 hidden min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-black/[0.02] px-4 py-3 text-left text-[var(--muted)] hover:bg-black/[0.04] lg:flex">
+          {overflowing || expanded ? <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={() => { if (!expanded && window.innerWidth >= 1024) trackAnalytics("item_details_expand", { itemType, itemId: item.id }); setExpanded(!expanded); }} className="mt-3 hidden min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-black/[0.02] px-4 py-3 text-left text-[var(--muted)] hover:bg-black/[0.04] lg:flex">
             <span className="flex items-center gap-2">
               {!expanded ? <span aria-hidden="true" className="text-lg font-normal tracking-widest">...</span> : null}
               <span className="text-base font-normal italic underline underline-offset-4">{expanded ? "Show less" : "Show more"}</span>

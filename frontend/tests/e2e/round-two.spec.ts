@@ -89,8 +89,7 @@ for (const endpoint of ["products", "accessories"] as const) {
       await expect(date).toHaveValue("2026-09-26");
       await date.fill("");
       await page.getByRole("textbox", { name: "Internal notes", exact: true }).fill("");
-      await page.evaluate(() => {
-        const dateInput = document.querySelector<HTMLInputElement>('input[type="date"]')!;
+      await date.evaluate((dateInput: HTMLInputElement) => {
         const notes = [...document.querySelectorAll<HTMLTextAreaElement>("textarea")].find((element) =>
           element.closest("label")?.textContent?.trim().startsWith("Internal notes"))!;
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(dateInput, "2026-09-26");

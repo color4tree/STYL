@@ -12,6 +12,7 @@
 backend/app/uploads/
 backend/app/data/uploads/
 backend/app/data/inquiries/
+backend/app/data/analytics*.sqlite3*
 
 # Node / frontend build output
 frontend/node_modules/

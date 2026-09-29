@@ -9,11 +9,13 @@ import secrets
 import smtplib
 import ssl
 from contextlib import contextmanager
+from collections.abc import Mapping
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from email.message import EmailMessage
 from pathlib import Path
 from threading import Lock
+from tempfile import TemporaryFile
 from collections.abc import Iterator
 from typing import Annotated, Literal
 from uuid import uuid4
@@ -23,10 +25,13 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Resp
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.background import BackgroundTask
 from pydantic import AfterValidator, BaseModel, EmailStr, Field, TypeAdapter, field_validator, model_validator
 
 from app.media import VIDEO_FORMATS, upload_video, video_response
 from app.location import MarketContext, resolve_market
+from app.catalog_backup import BackupError, create_archive
+from app import analytics
 
 APP_PATH = Path(__file__).resolve().parent
 CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
@@ -51,6 +56,8 @@ ALLOWED_ORIGINS = [
 CATALOG_LOCK = Lock()
 ACCESSORIES_LOCK = CATALOG_LOCK
 HERO_LOCK = CATALOG_LOCK
+BACKUP_LOCK = Lock()
+PUBLIC_IMAGE_PATH = APP_PATH.parents[1] / "frontend" / "public" / "images"
 # Accessory IDs start above this so they don't collide with product IDs in the shared cart.
 ACCESSORY_ID_OFFSET = 1000
 MAX_IMAGE_SIZE = 8 * 1024 * 1024
@@ -81,6 +88,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -91,6 +99,19 @@ class InquiryRequest(BaseModel):
     company: str | None = Field(default=None, max_length=300)
     message: str = Field(min_length=1, max_length=10000)
     source: Literal["website", "inquiry", "retail"] = "website"
+    analytics: object = Field(default=None, exclude=True)
+
+
+class CatalogOrderRequest(BaseModel):
+    model_config = {"extra": "forbid"}
+    ids: list[Annotated[int, Field(strict=True, ge=1)]] = Field(max_length=10000)
+    expectedIds: list[Annotated[int, Field(strict=True, ge=1)]] = Field(max_length=10000)
+
+    @model_validator(mode="after")
+    def unique_order_ids(self) -> CatalogOrderRequest:
+        if len(set(self.ids)) != len(self.ids) or len(set(self.expectedIds)) != len(self.expectedIds):
+            raise ValueError("Listing order must not contain duplicate IDs.")
+        return self
 
 
 class CompatibilityPayload(BaseModel):
@@ -477,6 +498,57 @@ def request_market(request: Request, response: Response) -> MarketContext:
     return resolve_market(request)
 
 
+def analytics_catalog(market: Mapping[str, object]) -> list[dict[str, object]]:
+    if market.get("currency") not in ("CAD", "USD"):
+        raise ValueError("Invalid analytics market currency.")
+    result = []
+    with CATALOG_LOCK:
+        for kind, path in (("product", DATA_PATH), ("accessory", ACCESSORIES_PATH)):
+            records = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(records, list):
+                raise ValueError("Invalid saved catalog for analytics.")
+            for item in records:
+                if not isinstance(item, dict):
+                    raise ValueError("Invalid saved catalog for analytics.")
+                if item.get("publicationStatus") == "draft":
+                    continue
+                prices = item.get("prices")
+                price = prices.get(market["currency"]) if isinstance(prices, dict) else (
+                    item.get("price") if item.get("currency", "USD") == market["currency"] else None
+                )
+                if price is None:
+                    continue
+                if isinstance(price, bool) or not isinstance(price, (int, float)) or not math.isfinite(price):
+                    raise ValueError("Invalid saved analytics catalog price.")
+                cents = Decimal(str(price)) * 100
+                if cents != cents.to_integral_value() or not 0 <= cents <= 2**53 - 1:
+                    raise ValueError("Invalid saved analytics catalog price.")
+                if type(item.get("id")) is not int or not 1 <= item["id"] <= 2**53 - 1 or not isinstance(item.get("name"), str) or not isinstance(item.get("category", ""), str):
+                    raise ValueError("Invalid saved analytics catalog identity.")
+                result.append({
+                    "itemType": kind, "itemId": item["id"], "name": item["name"],
+                    "category": str(item.get("category", "")), "currency": market["currency"],
+                    "priceCents": int(cents),
+                })
+    return result
+
+
+def analytics_inquiry_summaries(directory: Path | None = None) -> list[dict[str, object]]:
+    """Keep private form fields in the inquiry layer, not the analytics store."""
+    directory = directory or INQUIRIES_PATH
+    result = []
+    if not directory.exists():
+        return result
+    for path in directory.glob("*.json"):
+        if path.stat().st_size > 512 * 1024:
+            raise ValueError("Unexpected inquiry record size.")
+        inquiry = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(inquiry, dict):
+            raise ValueError("Invalid inquiry metadata.")
+        result.append({"createdAt": inquiry.get("createdAt")})
+    return result
+
+
 def catalog_provenance(request: CatalogDetailsPayload, previous: dict[str, object]) -> dict[str, object]:
     if "provenance" not in request.model_fields_set:
         return {"provenance": previous["provenance"]} if "provenance" in previous else {}
@@ -573,6 +645,85 @@ def delete_uploaded_image(image: object) -> None:
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok", "service": "styl-api"}
+
+
+@app.get("/api/admin/catalog-backup", dependencies=[Depends(require_admin)])
+def download_catalog_backup() -> StreamingResponse:
+    if not BACKUP_LOCK.acquire(blocking=False):
+        raise HTTPException(status_code=503, detail="Another catalog backup is being prepared. Please retry shortly.")
+    archive = None
+    try:
+        archive = TemporaryFile(mode="w+b")
+        with CATALOG_LOCK:
+            create_archive(
+                archive, products_path=DATA_PATH, accessories_path=ACCESSORIES_PATH,
+                hero_path=HERO_PATH, uploads_path=UPLOAD_PATH, images_path=PUBLIC_IMAGE_PATH,
+                default_hero=DEFAULT_HERO.model_dump(), app_version=app.version,
+            )
+        archive.seek(0, 2)
+        size = archive.tell()
+        archive.seek(0)
+    except BackupError as error:
+        if archive is not None:
+            archive.close()
+        logger.warning("Catalog backup rejected: %s", error)
+        raise HTTPException(status_code=409, detail=str(error)) from None
+    except OSError:
+        if archive is not None:
+            archive.close()
+        logger.error("Unable to prepare catalog backup.")
+        raise HTTPException(status_code=503, detail="Unable to prepare the catalog backup. Check server storage and permissions, then retry.") from None
+    finally:
+        BACKUP_LOCK.release()
+
+    def chunks() -> Iterator[bytes]:
+        try:
+            while chunk := archive.read(1024 * 1024):
+                yield chunk
+        finally:
+            archive.close()
+
+    filename = f"styl-catalog-backup-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.zip"
+    return StreamingResponse(
+        chunks(), media_type="application/zip", background=BackgroundTask(archive.close),
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(size), "Cache-Control": "no-store, private",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@app.put("/api/admin/{catalog}/order", dependencies=[Depends(require_admin)])
+def update_catalog_order(catalog: Literal["products", "accessories"], request: CatalogOrderRequest, response: Response) -> dict[str, object]:
+    path = DATA_PATH if catalog == "products" else ACCESSORIES_PATH
+    with CATALOG_LOCK:
+        try:
+            records = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(records, list) or any(
+                not isinstance(item, dict) or type(item.get("id")) is not int or item["id"] < 1
+                for item in records
+            ):
+                raise ValueError("Invalid catalog identity.")
+            current_ids = [item["id"] for item in records]
+            if len(set(current_ids)) != len(current_ids):
+                raise ValueError("Duplicate catalog identity.")
+        except (OSError, ValueError):
+            logger.error("Unable to read saved %s for listing order.", catalog)
+            raise HTTPException(status_code=503, detail="Saved catalog data is unavailable or invalid. Listing order was not changed.") from None
+        if request.expectedIds != current_ids:
+            raise HTTPException(status_code=409, detail="The catalog changed in another session. Refresh listing order and try again; your open form edits are kept.")
+        if set(request.ids) != set(current_ids):
+            raise HTTPException(status_code=422, detail="Listing order must include every current item exactly once.")
+        if request.ids != current_ids:
+            by_id = {item["id"]: item for item in records}
+            try:
+                write_json_list(path, [by_id[identifier] for identifier in request.ids])
+            except OSError:
+                logger.error("Unable to save %s listing order.", catalog)
+                raise HTTPException(status_code=503, detail="Unable to save listing order. Please retry after checking server storage.") from None
+    response.headers["Cache-Control"] = "no-store, private"
+    return {"status": "saved", "ids": request.ids}
 
 
 @app.get("/api/admin/verify", dependencies=[Depends(require_admin)])
@@ -919,4 +1070,5 @@ def get_uploaded_video(filename: str, range: str | None = Header(default=None)) 
     return video_response(UPLOAD_PATH / f"{filename}.mp4", range)
 
 
+app.include_router(analytics.make_router(require_admin, ALLOWED_ORIGINS))
 app.mount("/api/uploads", StaticFiles(directory=UPLOAD_PATH), name="uploads")

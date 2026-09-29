@@ -5,10 +5,12 @@ import { ChevronLeft, ChevronRight, Expand, Play, X, ZoomIn, ZoomOut } from "luc
 import { getVideoPoster, isVideo } from "@/lib/catalogDetails";
 import CatalogImage from "@/components/CatalogImage";
 import CatalogVideo from "@/components/CatalogVideo";
+import { trackAnalytics } from "@/lib/analytics";
+import type { AnalyticsItemReference } from "@/lib/analyticsTypes";
 
 const controlClass = "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-[var(--line)] bg-white hover:bg-neutral-100 disabled:opacity-30";
 
-export default function PhotoGallery({ photos, name, compact = false }: { photos: string[]; name: string; compact?: boolean }) {
+export default function PhotoGallery({ photos, name, compact = false, item }: { photos: string[]; name: string; compact?: boolean; item?: AnalyticsItemReference }) {
   const [selected, setSelected] = useState(0);
   const [zoomed, setZoomed] = useState(false);
   const [opened, setOpened] = useState(false);
@@ -19,12 +21,14 @@ export default function PhotoGallery({ photos, name, compact = false }: { photos
   const swiped = useRef(false);
   const index = Math.min(selected, Math.max(photos.length - 1, 0));
   const active = photos[index];
-  const changePhoto = (next: number) => { setSelected(next); setZoomed(false); };
+  const reportMedia = (next: number) => { if (item && photos[next]) trackAnalytics("media_open", { ...item, mediaType: isVideo(photos[next]) ? "video" : "image", mediaIndex: next }); };
+  const changePhoto = (next: number) => { if (next !== index) reportMedia(next); setSelected(next); setZoomed(false); };
   const open = () => {
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.querySelectorAll("video").forEach((video) => video.pause());
     setOpened(true);
     dialog.current?.showModal();
+    reportMedia(index);
   };
   const startTouch = (event: TouchEvent<HTMLDivElement>) => {
     swiped.current = false;
@@ -63,7 +67,7 @@ export default function PhotoGallery({ photos, name, compact = false }: { photos
   );
 
   return (
-    <div className="min-w-0" role="group" aria-label={`${name} photos and videos`}>
+    <div className="min-w-0" role="group" aria-label={`${name} photos and videos`} onPlayCapture={() => { if (active && isVideo(active)) reportMedia(index); }} onErrorCapture={() => trackAnalytics("site_error", { errorCode: "media" })}>
       <div {...swipeHandlers} className={`overflow-hidden rounded-lg bg-neutral-100 ${compact ? "h-52" : "aspect-[4/3]"}`} style={{ touchAction: "pan-y pinch-zoom" }}>
         {opened ? <div className="flex h-full items-center justify-center text-sm">Media open in enlarged view</div> :
           active && isVideo(active) ? <CatalogVideo key={active} src={active} name={name} preload={compact ? "none" : "metadata"} className="h-full w-full object-contain" /> :

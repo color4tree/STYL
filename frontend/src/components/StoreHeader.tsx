@@ -46,7 +46,7 @@ export default function StoreHeader({ cartCount }: { cartCount: number }) {
       <dialog ref={dialog} aria-label="Site navigation" className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-md rounded-2xl bg-white p-5 text-[var(--ink)] backdrop:bg-black/60" onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }} onClose={() => { setOpen(false); trigger.current?.focus(); }}>
         <div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Explore STYL</h2><button type="button" onClick={() => dialog.current?.close()} className="min-h-11 px-3">Close</button></div>
         <nav aria-label="Mobile navigation" className="mt-4 grid gap-2">
-          {links.map((link) => <Link key={link.href} href={link.href} scroll={link.href !== "/#contact"} className="rounded-lg px-3 py-4 hover:bg-neutral-100" onClick={() => dialog.current?.close()}>{link.label}</Link>)}
+          {links.map((link) => <Link key={link.href} href={link.href} data-analytics-action="menu" scroll={link.href !== "/#contact"} className="rounded-lg px-3 py-4 hover:bg-neutral-100" onClick={() => dialog.current?.close()}>{link.label}</Link>)}
         </nav>
       </dialog>
     </header>

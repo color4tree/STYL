@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import CatalogCard from "@/components/CatalogCard";
 import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
+import AddToCartButton from "@/components/AddToCartButton";
 import { quantityLabel } from "@/lib/catalogDetails";
 import { fetchAccessories, type Accessory } from "@/lib/accessories";
 import { getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
@@ -30,8 +31,8 @@ export default function AccessoriesPage() {
       <p className="mt-4 max-w-2xl leading-7 text-[var(--muted)]">Attachments and accessories for your training space. Contact us for fit confirmation and bundle pricing.</p>
       <CartFeedback error={cartError} notice={notice} />
       {loading ? <p role="status" className="mt-8">Loading accessories...</p>
-        : error ? <div role="alert" className="mt-8"><p>{error}</p><button type="button" onClick={() => { setLoading(true); setRetry(retry + 1); }} className="mt-3 min-h-11 rounded-full border px-5">Retry</button></div>
-          : !accessories.length ? <p className="mt-8">No accessories are currently available.</p>
+        : error ? <div role="alert" data-analytics-event="site_error" className="mt-8"><p>{error}</p><button type="button" onClick={() => { setLoading(true); setRetry(retry + 1); }} className="mt-3 min-h-11 rounded-full border px-5">Retry</button></div>
+          : !accessories.length ? <p data-analytics-event="catalog_empty" data-analytics-list="accessories" className="mt-8">No accessories are currently available.</p>
             : <div className="mt-8 grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
               {accessories.map((item) => {
                 const remaining = MAX_ITEM_QUANTITY - (cart.find((entry) => entry.id === item.id)?.quantity ?? 0);
@@ -40,7 +41,7 @@ export default function AccessoriesPage() {
                   ["Dimensions", item.dimensions], ["Material", item.material], ["Weight", item.weight],
                   ["Finish / colour", item.colourOptions], ["What's included", item.included],
                 ] as const;
-                return <CatalogCard id={`accessory-${item.id}`} key={item.id} item={item} specifications={specs} headingLevel={2}>
+                return <CatalogCard id={`accessory-${item.id}`} key={item.id} item={item} itemType="accessory" specifications={specs} headingLevel={2}>
                   <div>
                     <p className="mb-2 text-sm" aria-live="polite">Quantity: {quantityLabel(quantity, item.sellingUnit)}</p>
                     <div className="flex flex-wrap gap-3">
@@ -49,7 +50,11 @@ export default function AccessoriesPage() {
                         <span className="min-w-6 text-center">{quantity}</span>
                         <button type="button" aria-label={`Increase quantity for ${item.name}`} disabled={quantity >= remaining} onClick={() => setQuantities({ ...quantities, [item.id]: quantity + 1 })} className="h-11 w-11 rounded-full disabled:opacity-40">+</button>
                       </div>
-                      <button type="button" disabled={remaining <= 0 || cartLoading || Boolean(cartError)} onClick={() => { if (add(item, quantity)) setQuantities({ ...quantities, [item.id]: 1 }); }} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{remaining <= 0 ? "Maximum 10 in cart" : "Add to cart"}</button>
+                      <AddToCartButton disabled={cartLoading || Boolean(cartError)} atLimit={remaining <= 0} onAdd={() => {
+                        const saved = add(item, quantity);
+                        if (saved) setQuantities({ ...quantities, [item.id]: 1 });
+                        return saved;
+                      }} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50" />
                     </div>
                   </div>
                 </CatalogCard>;

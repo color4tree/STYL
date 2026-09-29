@@ -46,7 +46,9 @@ must remain optimized rather than adopting stretched phone layouts.
   existing currency defaults, support, symbol-only formatting, and separate totals.
 - Prices must accept up to two decimal places and display two decimal places;
   reject negative prices and excess precision with clear errors.
-- Keep every product in the home collection; Featured means show first.
+- Keep every eligible product in the home collection. The original Featured-first
+  ordering is superseded by the 2026-09-28 decision: manual admin sequence is the
+  exact storefront order; Featured remains metadata only.
 - Start accessory long-form content with inline expansion, not a new route.
 - Add private source tracking without exposing it in public API responses.
 - Keep the customer-value business principle prominent in the homepage
@@ -276,13 +278,30 @@ Keep `/#contact` working for existing links.
 - Separate media controls from Details and Add to cart. Do not make the whole
   card clickable when it contains other interactive controls.
 - After Add to cart, keep the browsing position, update the count, and announce
-  a concise confirmation with View cart. Do not force a redirect.
+  a concise confirmation with View cart. The clicked button immediately shows a
+  check icon and "Added" for 2.5 seconds only after the cart write succeeds.
+  A failed add shows "Not added"; do not report a capped/no-change operation as
+  successful. Apply this to product/accessory cards, detail actions and the
+  mobile sticky action. Do not force a redirect.
+- Wrap long unbroken item names in cart notices and let cart grid children shrink
+  within the viewport; moving a long-named item to the top must not make mobile
+  feedback, cart totals or Clear cart unreachable.
 - Preserve the existing maximum of 10 per item and visibly explain the limit.
 - Use horizontal `[-] quantity [+]` controls, with labeled 44 px targets.
 - Product and accessory listing cards share aligned media, category, name, price,
   contents, detail-preview, and purchase-control rows. Cards in each desktop/
   tablet row stay equal-height, including when one card is expanded; mobile
   single-column cards keep their natural content height.
+- Admin catalogs have a visual arrange mode: click "Arrange listing order" to
+  show keyboard/touch-friendly up/down buttons directly on each existing listing
+  card, retaining its image, name, prices and status. Do not show a duplicate list
+  or position selector. Cards visibly move in the list after each successful
+  save; retain focus on the moved card and show its position. "Done arranging"
+  returns to normal card selection/editing. Each move saves only the ordered ID
+  sequence, preserving all record fields and current unsaved editor values.
+  New items append; a stale order or changed item set requires refresh/retry.
+  Draft/missing-market items retain their saved positions but are filtered from
+  customer lists. This explicitly replaces Featured-first sorting.
 - Keep full names, prices, selling units, and package quantities visible.
   The 2026-09-27 clarification supersedes the initial closed-accordion design:
   details are visible by default, not hidden behind a heading. Show the summary,
@@ -316,6 +335,12 @@ Long technical values should stack under labels instead of compressing into narr
 left/right columns.
 
 ### 5.3 Media: useful on touch, inexpensive on mobile data
+
+Future customer support: the separate
+[AI/human support architecture](customer-service-ai-architecture.md#8-customer-ux)
+defines a desktop panel/mobile sheet, focus ownership, and collision rules for
+chat alongside menus, enlarged media and sticky cart/quote actions. It is a draft,
+not a change to the current storefront.
 
 Retain the shared gallery instead of creating separate product/accessory versions.
 
@@ -635,14 +660,34 @@ keyboards, native playback, and touch gestures.
 
 ### Measurement after release
 
-If analytics is approved, measure the discovery-to-inquiry funnel:
-collection view -> detail/media interaction -> add to cart -> quote start ->
-inquiry accepted. Segment by viewport/device and compare with the baseline.
+The original discovery-to-inquiry funnel and device-segmented conversion proposal
+is **superseded** by the owner's 2026-09-28
+[anonymous aggregate-only contract](traffic-analytics-requirements.md). Compare
+page views and separate detail/media/cart/quote action totals, not the progress
+of linked visitors through stages. Device/browser/source/campaign/country page-view
+breakdowns stay independent; they cannot be joined to item or inquiry histories.
+Saved inquiries remain authoritative, separate business counts. No visitors,
+sessions, individual journeys, per-session conversions/attribution or medians.
 
-Use aggregate events and product identifiers only. Do not collect message text,
-names, email addresses, phone numbers, admin tokens, or uploaded file contents.
-Consent and retention requirements must be agreed before introducing tooling.
-Do not add analytics as a hidden dependency of the mobile redesign.
+After enabled aggregate-only configuration, eligible pages measure automatically
+with bounded in-memory best-effort delivery and no browser/session/event/page-view
+IDs or raw-event storage. Persist server-hour totals and independent coarse
+dimensions for 13 calendar months, not raw request times, IPs, full URLs/query
+strings, referrer hosts, form/contact text or combined fingerprints.
+
+Desktop and mobile storefronts have **no consent panel, banner/modal or technical
+analytics status**. The ordinary footer **Privacy** link opens `/privacy`, whose
+information and **Turn off usage measurement** / **Allow aggregate measurement**
+buttons use only a boolean opt-out. Preserve prior explicit declines and
+DNT/GPC/admin/internal/bot exclusions; unreadable privacy storage fails closed.
+Do not obstruct navigation, cart controls, inquiry actions or keyboard focus.
+
+Local implementation/final verification is ongoing, not a production rollout.
+The notice and served-market privacy/legal review remain release gates; this
+design does not assert universal exemption from consent rules. Infrastructure
+logs and business contact records have separate personal-data obligations.
+City/postal remains deferred. Analytics must never become a dependency of basic
+mobile/desktop shopping; see [operations](traffic-analytics-operations.md).
 
 ### Review deliverables before implementation
 

@@ -9,6 +9,8 @@ import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility } from "@/lib/catalogDetails";
 import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, inputClass, parseMarketPrices, priceError, type AdminMessage } from "./AdminFields";
 import { getMarketPrices, priceInputs } from "@/lib/pricing";
+import CatalogOrderControls from "./CatalogOrderControls";
+import { orderByIds } from "@/lib/catalogOrder";
 
 type AccessoryForm = Omit<Accessory, "id">;
 
@@ -72,6 +74,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   const [message, setMessage] = useState<AdminMessage | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -85,9 +88,9 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   };
 
   useEffect(() => {
-    onBusyChange(loading || saving || uploading);
+    onBusyChange(loading || saving || uploading || ordering);
     return () => onBusyChange(false);
-  }, [loading, saving, uploading, onBusyChange]);
+  }, [loading, saving, uploading, ordering, onBusyChange]);
 
   const onUploadBusyChange = useCallback((busy: boolean) => {
     setUploading(busy);
@@ -236,8 +239,8 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   return (
     <>
     <AdminNotice message={message} />
-    <fieldset disabled={saving || uploading} className="grid min-w-0 gap-8 lg:grid-cols-[0.8fr_1.2fr]">
-      <aside className={`${showEditor ? "hidden lg:block" : ""} rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
+    <fieldset disabled={saving || uploading || ordering} className="grid min-w-0 gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+      <aside className={`${showEditor ? "hidden lg:block" : ""} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Accessories ({accessories.length})</h2>
           <button type="button" onClick={resetForm} className="rounded-full border border-[var(--line)] px-3 py-1.5 text-sm font-medium">
@@ -245,27 +248,23 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
           </button>
         </div>
 
-        <div className="space-y-3">
-          {accessories.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => selectAccessory(item)}
-              className={`w-full rounded-[22px] border p-3 text-left transition ${selectedId === item.id ? "border-[var(--ink)] bg-[#f5f1ea]" : "border-[var(--line)] bg-white"}`}
-            >
+        <CatalogOrderControls catalog="accessories" items={accessories} adminToken={adminToken}
+          onReordered={(ids) => setAccessories((current) => orderByIds(current, ids))}
+          onRefresh={async () => setAccessories(await fetchAdminAccessories(adminToken))}
+          onBusyChange={setOrdering} selectedId={selectedId} onSelect={selectAccessory}>
+          {(item) => (
               <div className="flex items-center gap-3">
                 <img src={resolveProductImage(item.image)} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">{item.name}</div>
+                  <div className="text-sm font-semibold [overflow-wrap:anywhere]">{item.name}</div>
                   <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
                     {item.category} · {item.publicationStatus === "draft" ? "Draft" : "Published"}
                   </div>
                   <MarketPriceSummary prices={getMarketPrices(item)} />
                 </div>
               </div>
-            </button>
-          ))}
-        </div>
+          )}
+        </CatalogOrderControls>
       </aside>
 
       <section className={`${showEditor ? "" : "hidden lg:block"} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4 sm:p-6`}>

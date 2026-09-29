@@ -7,11 +7,13 @@ import { useCart } from "@/lib/useCart";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
+import AddToCartButton from "@/components/AddToCartButton";
 import InquiryForm from "@/components/InquiryForm";
 import CatalogCard from "@/components/CatalogCard";
 import { productSpecificationFields, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 import { useQuoteNavigation } from "@/lib/useQuoteNavigation";
+import { trackAnalytics } from "@/lib/analytics";
 
 type Product = CatalogDetails & ProductSpecifications & {
   id: number;
@@ -49,7 +51,7 @@ export default function Home() {
       const data = await response.json();
       if (!Array.isArray(data.items)) throw new Error("Invalid catalog response.");
       if (active) {
-        setProducts((data.items as Product[]).sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured))));
+        setProducts(data.items as Product[]);
         setCatalogError(false);
       }
     }).catch((error) => { console.error(error); if (active) setCatalogError(true); })
@@ -103,16 +105,16 @@ export default function Home() {
           </div>
           <CartFeedback error={error} notice={notice} />
           {loading ? <p role="status" className="rounded-2xl bg-white/60 p-8">Loading equipment...</p>
-            : catalogError ? <div role="alert"><p>Products are unavailable right now.</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button></div>
-              : !products.length ? <p>No products are currently available.</p>
+            : catalogError ? <div role="alert" data-analytics-event="site_error"><p>Products are unavailable right now.</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button></div>
+              : !products.length ? <p data-analytics-event="catalog_empty" data-analytics-list="products">No products are currently available.</p>
                 : <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
                   {products.map((product) => {
                     const atLimit = (cart.find((item) => item.id === product.id)?.quantity ?? 0) >= MAX_ITEM_QUANTITY;
-                    return <CatalogCard key={product.id} item={product} headingLevel={3} href={`/products/${product.slug}`}
+                    return <CatalogCard key={product.id} item={product} itemType="product" headingLevel={3} href={`/products/${product.slug}`}
                       specifications={[...productSpecificationFields.map((field) => [field.label, product[field.key]] as const), ["Availability", product.stockStatus]]}>
                       <div className="flex flex-wrap gap-3">
-                        <button type="button" disabled={atLimit || cartLoading || Boolean(error)} onClick={() => add(product)} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{atLimit ? "Maximum 10 in cart" : "Add to cart"}</button>
-                        <Link href={`/products/${product.slug}`} className="inline-flex min-h-12 items-center rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium">Details</Link>
+                        <AddToCartButton disabled={cartLoading || Boolean(error)} atLimit={atLimit} onAdd={() => add(product)} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50" />
+                        <Link href={`/products/${product.slug}`} data-analytics-action="details" className="inline-flex min-h-12 items-center rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium">Details</Link>
                       </div>
                     </CatalogCard>;
                   })}
@@ -140,7 +142,7 @@ export default function Home() {
         </section>
 
         <section id="gallery" className="container scroll-mt-32 pb-12 lg:scroll-mt-24">
-          <details className="rounded-3xl border border-[var(--line)] bg-white/60 p-5 lg:p-7">
+          <details onToggle={(event) => { if (event.currentTarget.open) trackAnalytics("media_open", { mediaType: "image" }); }} className="rounded-3xl border border-[var(--line)] bg-white/60 p-5 lg:p-7">
             <summary className="min-h-11 text-xl font-semibold">Explore our engineering details</summary>
             <p className="mt-3 text-[var(--muted)]">Our mark, engineered into every piece.</p>
             <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

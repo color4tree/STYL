@@ -1,6 +1,408 @@
 # STYL project history and handoff
 
-Last recorded: 2026-09-27
+Last recorded: 2026-09-28
+
+## Aggregate-only analytics without a customer agreement - 2026-09-28
+
+The user explicitly replaced the earlier opt-in/session requirement with
+aggregate-only analytics and no storefront consent panel. This supersedes both
+the original identified-session MVP and the customer-visible status/consent
+guidance recorded below; the change is not merely hiding the old tracker.
+
+Implemented:
+
+- Storefront tracking renders no agreement, banner or technical status. A normal
+  footer Privacy link leads to plain-language information and an optional boolean
+  measurement opt-out. Prior declines are preserved as opt-outs; old analytics
+  consent/session/visitor/lease keys are removed. Admin, DNT/GPC, internal and bot
+  exclusions remain. Storage failures fail closed without breaking shopping.
+- Automatic first-party page/action measurement sends no browser/session/event
+  IDs, exact timestamps, full referrers/queries or form contents. Fetches omit
+  credentials and referrers. Initial page counts send promptly; subsequent
+  bounded batches normally send every 15 seconds. Ambiguous deliveries are not
+  retried because there are no deduplication IDs. Active-time estimates use a
+  static exclusive Web Lock, not a saved per-tab identifier.
+- The backend immediately stores independent hourly dimension and item/currency
+  totals, not raw events or individual journeys. Legacy session creation returns
+  410; identified/timestamped legacy event bodies are rejected. Invalid/private
+  item references reject the entire batch. New reports exclude old session data.
+- Dashboard, CSV and version-2 email previews use occurrence counts and average
+  performance measurements. Unique/returning visitors, sessions, individual
+  journeys, per-session funnels/rates and medians are explicitly not measured.
+  Saved inquiries are separate business totals without new analytics attribution;
+  unavailable totals, including displayed daily counts, are N/A rather than
+  confirmed zeros. Dashboard includes the current hour; previews use completed
+  hours. The 08:00 Pacific schedule and production-only mail safeguards remain.
+- English/Chinese requirements, operations, architecture references, responsive
+  and deployment guidance, README and AN-001..014 assertions were updated.
+  Aggregate-only measurement is not claimed universally consent-exempt; privacy
+  review remains a production activation gate.
+
+Final automated candidate: dirty `main` on `d874a8e`, with SHA-256 prefixes
+`607b9703bf60101f` (backend analytics), `c8f54c9de6097708` (report job),
+`40d897a46681f624` (browser tracker), `dd79997374521b10` (dashboard) and
+`020a287b8db676445` (analytics E2E).
+
+Verification:
+
+- Backend focused analytics: **49 passed**; complete backend unittest discovery:
+  **149 passed**. Pylance/editor checks were clean and the ingest signature was
+  checked against its resolved call sites.
+- Frontend `npm --prefix frontend test`: **33 passed**, including 23 aggregate
+  analytics/privacy cases and the preserved cart/unit coverage.
+- Targeted analytics E2E: **27 passed**. Final complete
+  `npm --prefix frontend run test:e2e`: **181 passed** across desktop Chromium,
+  phone Chromium and phone WebKit, one worker and no test retries. Production
+  build/TypeScript passed, including existing quote-frame, media, cart, admin,
+  ordering and recovery regressions. Full lint: zero errors and the same five
+  pre-existing image warnings; changed-file lint/editor checks clean.
+- The first full frontend attempt was blocked by OneDrive's read-only/reparse
+  attribute on one generated Next build-ID directory. Inspected and removed only
+  that exact generated directory, then the complete final run passed in 5.2 min.
+- Restarted only the verified local API. Real local health/config advertise
+  enabled aggregate-only collection with email disabled. Authenticated local
+  dashboard and customer/footer/Privacy layouts were checked at desktop/320px.
+  Those visual checks used DNT, so they did not inflate local traffic. Actual
+  automatic collection -> stored counts -> dashboard/CSV/preview was verified
+  against the real isolated E2E API. Temporary local verification script removed;
+  screenshots remain private session artifacts.
+
+Legacy private analytics data was not destructively migrated: maintenance bounds
+old raw/session data to 30 days and old rollups/new aggregates to 13 calendar
+months. Existing inquiry JSON and protected backups, including any historical
+attribution fields, were not rewritten and require separately approved cleanup
+or expiry. User catalog data and existing edits were preserved.
+
+Full automated baseline passed; this does not certify every operational/manual
+plan clause. Physical devices, production privacy/activation, real email inbox
+delivery, production-volume performance and deletion/backup replay remain
+unverified. No commit, push, production deployment or real email was performed.
+
+## Local zero-traffic diagnosis and clearer status - 2026-09-28
+
+Investigated the user's all-zero analytics report against the running local API,
+authenticated current-day/seven-day reports and safe flags from the shared
+localhost browser. Collection was enabled in the local/Pacific environment, but
+the inspected browser had no saved consent or analytics session and the report
+had no retained browsing events. Its storage was readable and no admin token,
+internal exclusion, DNT or GPC was present. This evidence does not establish the
+state of a different browser/hostname. No collector/report counting defect was
+reproduced: a separate opted-in customer context increased stored page views
+from 0 to 1 through the normal automatic batch timer, without forcing a flush.
+Only that synthetic session was revoked afterward; user consent/catalog/data
+were unchanged and synthetic traffic was not left in business totals.
+
+Added persistent footer collection status, a zero-visit dashboard guide covering
+consent, admin exclusion, separate customer windows, hostname storage, date
+ranges, the 15-second batch timer and manual refresh. Disabled collection has
+its own explanation. The report displays generation/last-event timestamps in
+the report timezone and clarifies that server exclusion counts cannot measure
+visits stopped before sending a request. Malformed timestamp/timezone responses
+are rejected with the existing explicit invalid-report error, not a render crash.
+Consent/exclusion/collection policies were not changed.
+
+Final targeted verification on the dirty `d874a8e` candidate:
+
+- `npm --prefix frontend run test:e2e -- analytics.spec.ts`: **24 passed**,
+  desktop Chromium, phone Chromium and phone WebKit, real isolated collector,
+  no retries. Includes ordinary timer -> stored count -> refreshed dashboard,
+  no pre-consent IDs, same-tab admin exclusion, disabled-collection guidance,
+  malformed date/timezone responses and an actual 320px document-width check.
+  The harness production build and TypeScript validation passed.
+- `npm --prefix frontend test`: **37 passed**. Scoped ESLint for the three changed
+  frontend/test files: zero errors/warnings; editor diagnostics clear.
+- Real local dev public/admin UI verified at 1440px and 320px without changing
+  the user's browser. The initial headless visual probe was correctly excluded;
+  the positive probe then used the regression suite's realistic test UA.
+  The existing shared tab needs reload to pick up the new footer/status UI.
+- Candidate SHA-256 prefixes: AnalyticsManager `99676dfa23db3198`,
+  AnalyticsTracker `dc881d087b0a4812`, analytics E2E `34133aecef4dff84`.
+  Updated AN-001/007/009/010 and local operations guidance. Screenshots remain
+  private session artifacts; temporary verification scripts were removed.
+
+This was targeted analytics verification, not a new full-system regression,
+physical-device test or production rollout. No commits, pushes, production
+changes or real emails were made.
+
+## Visual arrange mode on existing catalog cards - 2026-09-28
+
+The user found the separate ordering list confusing and requested up/down
+controls directly on each listing card. Replaced it with Arrange listing order /
+Done arranging mode for both products and accessories. The existing image, name,
+prices and publication state remain on the same cards; there is no duplicate
+list or position dropdown. A successful move changes the actual list position,
+highlights/focuses the moved card and retains immediate saving, boundary buttons,
+conflict handling and unsaved editor fields. Done restores normal item selection.
+
+The user also requested a skill to avoid routine testing permission questions.
+Added [styl-autonomous-testing](../.github/skills/styl-autonomous-testing/SKILL.md)
+and linked it in project instructions. This governs already-authorized execution
+and explicitly cannot bypass native VS Code/organization tool confirmations.
+The npm command was already allowlisted in both inspected User and workspace
+settings; no claim was made that adding a skill disabled the platform prompt.
+
+Validation: all 15 initial arrange-mode cases passed. A broader run exposed
+long-name overflow when an arranged item reached the cart: a reproduced 390px
+phone layout widened to 1,918px, and its add notice also overflowed. Added minimum
+width constraints to cart grid children and wrapping to feedback; the same local
+probe then remained at 390px. Regression assertions compare against the configured
+viewport, not a mobile layout viewport that can itself expand.
+
+Final targeted regression: **108 browser executions passed** across catalog
+editing, arrangement/cart feedback, backup, dates and analytics, including desktop
+Chromium, phone Chromium and phone WebKit. Production build/TypeScript passed;
+37 frontend unit tests passed; scoped lint had no errors and two pre-existing
+image warnings. Local visual checks confirmed a single card list, per-card arrows,
+Done mode and 320px layout without changing the user's saved catalog order.
+Updated ADM-011/USR-016 and the responsive/README guidance. This was targeted
+frontend validation, not a new full backend/physical-device/production run.
+No commit, push, deployment, real email or user catalog edit was performed.
+
+## Country-level traffic analytics completed locally - 2026-09-28
+
+Completed the missing analytics backend directly after the delegated backend
+worker was cancelled. The integrated local MVP now includes:
+
+- Explicit opt-in before behavioral identifiers/events, separate optional
+  30-day remembered-browser choice, DNT/GPC/internal/admin/bot exclusions,
+  consent withdrawal and deletion of linked raw history.
+- Private environment-separated SQLite collection with server-derived country/
+  currency and market-eligible public item metadata, strict event/size/rate
+  validation, event/page/impression deduplication and sanitized diagnostics.
+  No raw IP, full query string, customer form contents or raw session bearer
+  token is persisted in the analytics store.
+- Page/navigation/item/media/cart/quote tracking, active-time interval unions
+  across tabs, cross-midnight allocation, ordered funnel, source/campaign/device
+  breakdowns, current-item interest and hourly/daily aggregates.
+- Optional server-validated inquiry attribution, business receipt totals and
+  idempotent reconciliation without copying private customer fields. Lost
+  browser batches or analytics write failures do not lose a saved inquiry.
+  Revocation prevents the old private inquiry association being reattached.
+- Admin Analytics date-range reports, item filters, aggregate CSV, daily email
+  previews, delivery history, data-quality warnings and explicit unavailable
+  states. Open catalog editors and the existing Backup view remain intact.
+- Daily report generation for 08:00 America/Los_Angeles, five-minute ingestion
+  cutoff, per-recipient durable claims, bounded retries and ambiguous-send review.
+  Production-only email enablement and separate recipients are required. Local
+  sending is disabled; service/timer templates are provided but not installed.
+- Retention maintenance, historical daily rollups with honest unique-count/rate
+  limitations, and consistent private SQLite backups. City/ZIP, raw individual
+  session drill-down, AI chat and CRM/revenue attribution remain deferred.
+
+Final current-working-tree automated baseline on `d874a8e`:
+**141 backend tests, 37 frontend unit tests and all 166 configured browser
+executions passed**, including the 21 previously unfinished analytics integration
+executions across desktop Chromium, phone Chromium and phone WebKit. Production
+build/TypeScript passed; lint had zero errors and the same five image warnings.
+Pylance/editor diagnostics for the new implementation were clear.
+
+The new backend checks cover consent and safe identifiers, forged country data,
+private/draft exclusion, source/campaign minimization, no form/token leakage,
+same-ID and semantic page/impression retries, overlapping active intervals,
+23/25-hour DST days, midnight splits and seven-day daily averages, retention,
+withdrawal without attribution resurrection, failed-inquiry reconciliation,
+auth/CSV/HTML handling, real-store disabled job execution and SQLite backup.
+The report tests additionally cover per-recipient/case/version deduplication,
+concurrency, definite/ambiguous SMTP outcomes and bounded retries.
+
+Actual localhost checks exercised opt-in collection -> stored page view ->
+authenticated admin report -> daily preview, including 320 px layout. The daily
+job ran with sending disabled and maintenance succeeded. The synthetic local
+visitor history was revoked afterward; no catalog edits or actual inquiry/email
+sends were made in that smoke test. Only the local API was restarted.
+
+One intermediate browser test used an ambiguous alert selector and was corrected
+to the admin main content. A specific inspected OneDrive-generated manifest
+directory blocked a build and was safely removed before the successful reruns.
+The emitted chunk containing tracker/consent code (including shared code) measured
+13,885 gzip bytes; this does not establish total incremental JS or field performance.
+
+Analytics integration fingerprint:
+`62116e820871e9de4c47629d7ac46c1f0331b5ff5888cfdd1c6f8b2a0e2cf583`.
+Ordered inputs were backend app analytics/analytics_reports/main, backend tests
+test_analytics/test_analytics_reports, frontend lib analytics/analyticsTypes,
+AnalyticsTracker, admin AnalyticsManager/page and E2E analytics.spec. The verifier
+hashes each relative filename, a NUL, its bytes and a NUL. Temporary verification
+and smoke scripts were cleaned up after validation.
+Promoted AN-001..014 to the active local regression map and updated
+[operations](traffic-analytics-operations.md) plus the English/Chinese requirements.
+
+This is completion of local implementation and the automated code baseline, not
+the full manual/production plan. Actual production collection, report recipients,
+mailbox delivery, timer operation, physical devices, field/load measurements,
+external alerts and production backup restore/deletion replay remain separately
+gated. No commit, push, deployment or production tracking was enabled by this task.
+
+## Immediate cart confirmation and manual listing sequence - 2026-09-28
+
+The user requested visible add-to-cart feedback and admin position controls.
+They explicitly chose manual order as the exact display order for both catalogs,
+replacing the previous Featured-first homepage sort.
+
+Added a shared Add to cart control on product/accessory cards, product detail and
+its mobile sticky action. A successful write shows a check icon and Added for
+2.5 seconds; a failed add shows Not added. Accessible cart notices include the
+updated sale-unit count, and a capped/no-quantity-change operation is not claimed
+as an addition. The ten-unit limit and existing cart behavior remain.
+
+Each admin catalog has Arrange listing order with position selectors and
+keyboard/touch-friendly up/down buttons. Moves save immediately without saving
+or discarding open editor fields. The protected API validates a full permutation
+and expected prior order under the shared catalog lock; stale order/item-set
+changes return 409 rather than overwriting another session. Record fields are
+preserved, new items append, and customer market/draft filtering retains relative
+order. Featured remains an explicit metadata tag, not a sorting override.
+
+Validation:
+
+- Eight new backend ordering tests passed; the current complete backend runner
+  passed 118 tests (including existing backup and isolated report-job tests).
+- All 37 current frontend unit tests passed.
+- The final established storefront/admin browser set plus new feedback/order
+  cases passed **145 executions** across configured projects, including 21 new
+  feedback/order executions. Production build/TypeScript passed.
+- Lint had zero errors and the five existing image warnings; edited files had
+  no editor errors. Backend's existing contextmanager annotation hint is unchanged.
+- Fixed a genuine narrow WebKit overflow with long item names by allowing the
+  admin list grid items to shrink and wrap. Tightened a date test to target the
+  named Captured date input rather than the first (now possibly hidden analytics)
+  date input. Corrected a sticky-action test fixture so it has enough detail
+  content to scroll the inline action offscreen.
+- Actual localhost browser checks confirmed immediate feedback at desktop/phone
+  widths and both admin ordering panels without horizontal overflow at 320 px.
+  Test cart data lived in isolated browser storage; real saved catalog ordering
+  and other user data were not changed.
+
+Important scope boundary: the prior analytics storage/API worker was cancelled
+without a completed backend. Analytics frontend/report code remains work in
+progress. Its integration spec was explicitly excluded from the 145-test run;
+this is not a full analytics pass or a claim that analytics is operational.
+Added SYS-019, ADM-011 and USR-016 coverage and updated the current ordering oracle.
+Only the local API was restarted; no production changes, email, commit, push or
+deployment occurred.
+
+## Admin catalog ZIP and offline crash recovery implemented locally - 2026-09-28
+
+The user requested catalog download in admin, deferred upload/import, and recovery
+after loss of the production server. They confirmed catalog-only scope: saved
+products/accessories including drafts, IDs/slugs, prices and private metadata,
+banner and all referenced local/static images, videos and posters. Inquiries,
+credentials, machine configuration and application code/build remain separate.
+
+Added an authenticated Backup view with privacy/saved-data notices, progress,
+duplicate-click prevention, filename handling, explicit errors/retry and retained
+editor state. The API builds a disk-backed, no-store/private ZIP under the shared
+catalog mutation lock. It uses strict saved-data reads rather than seed fallbacks,
+deduplicates shared media and rejects missing/external/unsafe media instead of
+claiming an incomplete backup is recoverable.
+
+Each version-1 archive includes SHA256/size metadata, RESTORE.txt and a standalone
+standard-library Python recovery tool. Verify/restore checks entries, schemas,
+references, checksums, limits, unsupported versions and unsafe ZIP paths/types.
+Restore refuses an existing destination and publishes a verified staged recovery
+to a new directory. Browser upload/import remains unimplemented.
+See [catalog backup and recovery](catalog-backup-and-recovery.md).
+
+Verification against `d874a8e` plus the reviewed working-tree backup changes:
+
+- Final full automated baseline: **92 backend tests, 9 frontend unit tests and
+  124 production-build browser executions passed**. Build/TypeScript passed;
+  lint had zero errors and the five pre-existing image warnings.
+- The backup-specific suite includes 20 backend cases and 21 browser executions
+  across desktop Chromium, phone Chromium and phone WebKit.
+- The cold-recovery test downloaded the real API ZIP, removed the original
+  fixture catalog/media, executed the bundled tool without the original server,
+  compared recovered bytes and started a fresh API process on restored storage.
+  IDs, private metadata, drafts, market visibility, banner, images/posters and
+  video byte ranges were verified. Fixture video data tests byte preservation,
+  not actual visual playback quality.
+- The actual local admin UI downloaded a 369,342-byte archive containing 4
+  products, 11 accessories and 16 referenced media files. Independent verify and
+  restore into a private temporary directory succeeded; a 320 px UI check passed.
+  The temporary copies were removed and the user's saved data was not edited.
+- Intermediate test fixtures were corrected to use the real /api/uploads/ prefix
+  and UUID-style uploaded-video paths. A narrowly inspected generated .next
+  directory was removed after a Windows build-cache error; no source was deleted.
+
+Code/test candidate SHA256:
+`f206cf0cd8785cb7188e1fa656f46eba810b64a72c5dc0ce6abaea1cae57ba91`
+(ordered filenames and bytes: backend main/catalog_backup/test_catalog_backup,
+frontend admin page/CatalogBackup/catalog-backup.spec, Playwright config).
+Added SYS-017/018, ADM-010, OPS-011 and deferred FUT-008.
+
+This passes the automated code baseline, not the entire manual operational plan.
+Real production archive recovery, large-volume/mobile download limits, physical
+file-save behavior and video playback on a replacement installation remain manual
+checks. Only the local API was restarted. No production download/restore, email,
+commit, push, deployment or backup-branch update was performed.
+
+## Chinese AI customer-service architecture copy - 2026-09-28
+
+Added a separate [Simplified Chinese architecture copy](customer-service-ai-architecture.zh-CN.md)
+at the user's request. Translated all seventeen sections, three architecture/
+sequence diagrams, two UX wireframes, ten readiness gates and twenty acceptance
+cases, preserving technical endpoints/state codes and draft approval boundaries.
+Added plain-language terminology explanations and a README link. The English
+source remains unchanged; no application, service, provider or deployment change.
+
+## Chinese traffic-analytics requirements copy - 2026-09-28
+
+At the user's request, created a separate
+[Simplified Chinese translation](traffic-analytics-requirements.zh-CN.md) of the
+traffic-analytics requirements, using plain-language explanations for readers
+with basic English. Preserved all twelve sections, TA-001..014, AN-001..016,
+proposed defaults, Phase 2 city/postal priority and privacy/approval limits.
+Added a reading glossary and README link. The English source is unchanged;
+this is documentation only, with no application or deployment changes.
+
+## AI-assisted customer-service architecture drafted - 2026-09-28
+
+The user requested a current/future architecture for AI-led customer chat with
+human fallback, UX and prerequisites; MUSE/CoWork/other provider choice remains
+undecided. Added [the architecture draft](customer-service-ai-architecture.md)
+with current STYL components, provider-neutral boundaries, approved knowledge
+and read-only tools, a durable human queue, named staff access, takeover fencing,
+offline follow-up, desktop/mobile wireframes, privacy, cost/operational controls,
+phased delivery and twenty future acceptance cases.
+
+Linked optional aggregate support outcomes to the analytics/daily-email draft
+without permitting transcripts or contact data in analytics. City/postal analytics
+remains Phase 2 / P2 and is not a chat dependency. Recorded FUT-007 and AN-016 as
+future-only cases. No AI provider was selected or contacted, no real customer
+data was shared, and no chat code, service, tracking, emails or deployment were
+enabled. Existing catalog edits and local development settings were preserved.
+
+## City and postal analytics deferred to second priority - 2026-09-28
+
+The user requested city/ZIP information for traffic reporting, with second
+priority if another MaxMind package is required. Updated the
+[requirements draft](traffic-analytics-requirements.md) to place approximate
+city/region/postal-area enrichment in Phase 2 / P2 (TA-014, future AN-015).
+It requires the additional GeoLite2 City database, not a mandatory paid
+subscription. Country analytics and daily email remain first-release scope.
+Documented missing/partial postal data, accuracy limitations, aggregate privacy,
+and preservation of the existing Country/CAD/USD path. No database download,
+application change, tracking, purchase or deployment was performed.
+
+## Traffic analytics and daily summary requirements drafted - 2026-09-27
+
+The user requested a requirements draft for access timing, IP/country, item
+interest, navigation, active time and daily usage emails. Added
+[traffic analytics requirements](traffic-analytics-requirements.md), covering
+business questions, event/metric definitions, quote attribution, admin reporting,
+consent/privacy, retention, exclusions, reliability and a daily scheduled summary.
+
+Recommendations include country lookup without raw-IP business histories,
+separate optional restricted security logs, visible/active-time estimates,
+server-confirmed inquiry conversion, and aggregate-only daily email. Proposed
+delivery time, timezone, recipients, consent mode and retention require owner
+review. First-party collection and a separate SQLite analytics store are proposed,
+not implemented. Future acceptance cases AN-001..014 are linked as FUT-006.
+
+Documentation only: no tracking code, visitor collection, database, scheduled
+report, real email, application configuration, deployment or commit was enabled
+by this drafting task. Existing catalog edits and development instructions remain
+untouched.
 
 ## Production GeoIP activated and US pricing verified - 2026-09-27
 
