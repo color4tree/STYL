@@ -2,6 +2,38 @@
 
 Last recorded: 2026-09-29
 
+## Concise daily email deployed - 2026-09-29
+
+Deployed application **`dbccf7a69d61bdd15bab0c78b150646d67f0366f`** using the
+verified kenny-daily Lightsail SSH session. Activation completed at
+`2026-09-29T17:47:06Z`. The protected backup is
+`/var/backups/styl/release-dbccf7a`; current data, original environment, previous
+source and frontend build were preserved before an isolated build.
+
+The production host passed **156 backend tests** and the production
+build/TypeScript check. No dependency versions changed. Only web/API services
+were briefly switched; the maintenance timer was paused during the switch and
+resumed. Rollback was prepared but not needed. The environment file was
+byte-identical afterward, including SMTP and disabled-email settings; customer
+data checksums matched. All five application/maintenance/GeoIP services or timers
+were active. Staging output and deployment logs/scripts were moved into the
+protected release backup, and transient transfer files were removed.
+
+The actual authenticated production preview returned **template version 3**:
+22 lines for the measured day, key business metrics present, screenshot technical
+block absent, concise HTML table present, and email sending false. Both text and
+HTML outputs were saved privately for release evidence, without printing tokens
+or sending an email. Desktop Chromium, phone Chromium and phone WebKit live
+public/admin-entry smoke checks passed with no runtime errors or server writes;
+DNT avoided synthetic analytics traffic. Local preview layout was also verified
+at 320px, and HTML at 390px.
+
+Current verification: 156 complete backend tests, 33 frontend unit tests,
+27 affected analytics/browser executions, build/TypeScript and scoped lint/
+Pylance checks passed. This was a targeted email rollout, not another full
+181-browser/physical-device/operational regression. Actual recipient approval,
+email enablement and inbox delivery remain separate.
+
 ## IAM daily access and concise daily email - 2026-09-29
 
 Verified the existing `kenny-daily` user already had console access and the

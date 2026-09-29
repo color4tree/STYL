@@ -4,7 +4,8 @@ Status: **Aggregate-only collection deployed in release `a611b4e`.**
 Production collection and the 15-minute maintenance timer are enabled. Actual
 daily email remains disabled; recipients and a real-mail test are not approved.
 See [project history](project-history.md) for exact release/test evidence and the
-subsequent concise version-3 email rollout. No mailbox-delivery claim is made.
+concise version-3 email rollout (`dbccf7a`, deployed 2026-09-29).
+No mailbox-delivery claim is made.
 
 Scope: automatic first-party country-level aggregate measurement, a protected
 admin dashboard, CSV and daily-email preview/job. City/postal, AI chat, CRM/revenue

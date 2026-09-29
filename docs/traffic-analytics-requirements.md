@@ -3,8 +3,8 @@
 Status: **Aggregate-only collection deployed in release `a611b4e`.**
 Production collection and retention maintenance are enabled; real daily email
 remains disabled until recipients and sending are separately approved.
-The concise version-3 email template below is the current approved requirement;
-its deployment evidence is recorded in [project history](project-history.md).
+The concise version-3 email template below was deployed as `dbccf7a`;
+its verification is recorded in [project history](project-history.md).
 
 Date: 2026-09-27
 
