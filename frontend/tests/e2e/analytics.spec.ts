@@ -228,6 +228,13 @@ test("AN-010 AN-011 AN-013: aggregate dashboard/CSV/email preserve unsaved edito
   await expect(preview).toContainText("STYL daily usage");
   await expect(preview).not.toContainText("Tracked sessions:");
   await expect(preview).not.toContainText("opted-in");
+  await expect(preview).not.toContainText("No browser identities");
+  await expect(preview).not.toContainText("Hourly storage");
+  await expect(preview).not.toContainText("Warning:");
+  await expect(preview).not.toContainText("cross-tab");
+  await expect(preview).not.toContainText("13 calendar months");
+  await expect(preview).toContainText("Page views");
+  await expect(preview).toContainText("Saved inquiries");
   await expect(page.getByText(/Real email: disabled/)).toBeVisible();
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download aggregate CSV", exact: true }).click();
@@ -248,13 +255,16 @@ test("AN-009: unavailable or invalid aggregate report never becomes successful z
   await expect(page.locator("main").getByRole("alert")).toContainText("Analytics storage unavailable");
   await expect(page.getByTestId("analytics-page-view-count")).toHaveCount(0);
   await page.unroute("**/api/admin/analytics/report?*");
+  const refresh = page.getByRole("button", { name: "Refresh analytics", exact: true });
   for (const invalid of [{ generatedAt: "invalid-date" }, { timezone: "invalid-zone" }, { coverage: { mode: "raw" } }]) {
     await page.route("**/api/admin/analytics/report?*", async route => {
       const response = await route.fetch();
       const value: AnalyticsReport = await response.json();
       await route.fulfill({ response, json: { ...value, ...invalid, coverage: { ...value.coverage, ...invalid.coverage } } });
     });
-    await page.getByRole("button", { name: "Refresh analytics", exact: true }).click();
+    await expect(refresh).toBeEnabled();
+    // Keep response-validation checks independent of the alert's focus-driven scroll.
+    await refresh.press("Enter");
     await expect(page.locator("main").getByRole("alert")).toContainText("analytics response is invalid");
     await expect(page.getByTestId("analytics-page-view-count")).toHaveCount(0);
     await page.unroute("**/api/admin/analytics/report?*");
@@ -268,7 +278,8 @@ test("AN-009: unavailable or invalid aggregate report never becomes successful z
       coverage: { ...value.coverage, warnings: ["Saved-inquiry reconciliation is unavailable; receipt totals are not confirmed."] },
     } });
   });
-  await page.getByRole("button", { name: "Refresh analytics", exact: true }).click();
+  await expect(refresh).toBeEnabled();
+  await refresh.press("Enter");
   await expect(page.getByText(/N\/A inquiries/)).toBeVisible();
   await expect(page.getByText(/receipt totals are not confirmed/)).toBeVisible();
 });

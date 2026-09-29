@@ -23,8 +23,9 @@ NOW = datetime(2026, 9, 28, 15, tzinfo=timezone.utc)
 def fixture_report() -> dict[str, object]:
     return {
         "timezone": "America/Los_Angeles", "environment": "test",
+        "collectionEnabled": True,
         "generatedAt": NOW.isoformat(), "cutoffAt": NOW.isoformat(),
-        "coverage": {"mode": "aggregate-only", "warnings": ["Anonymous occurrence counts only."]},
+        "coverage": {"mode": "aggregate-only", "rejected": 0, "warnings": ["Anonymous occurrence counts only."]},
         "summary": {
             "pageViews": 350, "activeSeconds": 2100, "savedInquiries": 10,
         },
@@ -100,17 +101,28 @@ class AnalyticsReportTests(unittest.TestCase):
         with self.assertRaises(reports.ReportError):
             reports.next_run_at(datetime(2026, 9, 28))
 
-    def test_an010_plain_text_html_coverage_and_aggregate_counts(self) -> None:
+    def test_an010_concise_business_summary_omits_technical_block_and_escapes_html(self) -> None:
         rendered = reports.render_report(fixture_report(), "2026-09-27")
-        self.assertIn("Page-view change versus baseline: 250%", rendered["text"])
-        self.assertIn("Data cutoff:", rendered["text"])
-        self.assertIn("Anonymous occurrence counts only.", rendered["text"])
-        for obsolete in ("Tracked sessions:", "Estimated browser visitors:", "Median active seconds:", "Tracked quote conversion:", "\nFunnel\n", "opted-in"):
+        self.assertIn("Page views: 350 (7-day average: 100/day; +250%)", rendered["text"])
+        self.assertIn("Saved inquiries: 10", rendered["text"])
+        self.assertIn("Active time (estimated): 35 min", rendered["text"])
+        self.assertIn("Cart adds: 3", rendered["text"])
+        self.assertIn("Countries: US (350 views)", rendered["text"])
+        for obsolete in (
+            "Tracked sessions:", "Estimated browser visitors:", "Median active seconds:", "Tracked quote conversion:",
+            "\nFunnel\n", "opted-in", "Warning:", "Anonymous occurrence counts only.", "Data cutoff:", "Generated:",
+            "No browser identities", "Hourly storage", "cross-tab", "13 calendar months", "Quotes are saved inquiries",
+        ):
             self.assertNotIn(obsolete, rendered["text"])
+            self.assertNotIn(obsolete, rendered["html"])
+        self.assertIn("Attention\n- Catalog errors: 1.", rendered["text"])
         self.assertIn("<script>", rendered["text"])
         self.assertNotIn("<script>", rendered["html"])
         self.assertIn("&lt;script&gt;", rendered["html"])
         self.assertIn("admin sign-in required", rendered["text"])
+        self.assertIn("<table", rendered["html"])
+        self.assertNotIn("<pre", rendered["html"])
+        self.assertLess(len(rendered["text"].splitlines()), 25)
 
     def test_an010_unavailable_metrics_are_not_normal_zero_results(self) -> None:
         report = fixture_report()
@@ -121,10 +133,77 @@ class AnalyticsReportTests(unittest.TestCase):
         comparison["pageViewsChangePercent"] = None
         text = reports.render_report(report, "2026-09-27")["text"]
         self.assertIn("Saved inquiries: N/A", text)
+        self.assertIn("Inquiry totals are unavailable", text)
         self.assertIn("no comparable baseline", text)
         report.pop("summary")
         with self.assertRaises(reports.ReportError):
             reports.render_report(report, "2026-09-27")
+
+    def test_an010_partial_day_is_labelled_without_comparing_it_to_a_whole_day(self) -> None:
+        report = fixture_report()
+        text = reports.render_report(report, "2026-09-28")["text"]
+        self.assertIn("Through 08:00", text)
+        self.assertIn("7-day average: 100/day", text)
+        self.assertNotIn("+250%", text)
+        report["cutoffAt"] = "2026-09-27T06:00:00+00:00"
+        self.assertIn("Not started", reports.render_report(report, "2026-09-27")["text"])
+
+    def test_an010_top_three_lists_are_ranked_and_other_details_stay_in_dashboard(self) -> None:
+        report = fixture_report()
+        original = report["items"][0]
+        report["items"] = [{**original, "name": f"Equipment {index}", "cartAdds": index} for index in range(5)]
+        report["countries"] = [{"label": f"Country {index}", "pageViews": index} for index in range(5)]
+        report["sources"] = [{"label": f"Source {index}", "pageViews": index} for index in range(5)]
+        text = reports.render_report(report, "2026-09-27")["text"]
+        for prefix in ("Equipment", "Country", "Source"):
+            for index in (4, 3, 2):
+                self.assertIn(f"{prefix} {index}", text)
+            self.assertNotIn(f"{prefix} 1", text)
+            self.assertLess(text.index(f"{prefix} 4"), text.index(f"{prefix} 3"))
+        for section in ("Campaigns", "Devices", "Browsers", "Actions (occurrences)", "Observations"):
+            self.assertNotIn(section, text)
+
+    def test_an009_real_collection_and_data_problems_remain_actionable(self) -> None:
+        report = fixture_report()
+        report["collectionEnabled"] = False
+        report["summary"]["savedInquiries"] = None
+        report["coverage"]["rejected"] = 4
+        text = reports.render_report(report, "2026-09-27")["text"]
+        for message in ("Collection is off", "Inquiry totals are unavailable", "4 measurements rejected", "Catalog errors: 1"):
+            self.assertIn(message, text)
+        self.assertNotIn("Saved inquiries: 0", text)
+        self.assertNotIn("Warning:", text)
+
+    def test_an010_empty_data_is_short_without_empty_sections_or_false_error_assurance(self) -> None:
+        report = fixture_report()
+        report["summary"] = {"pageViews": 0, "activeSeconds": 0, "savedInquiries": 0}
+        report["comparison"] = {"days": 7, "pageViewsDailyAverage": 0, "pageViewsChangePercent": None}
+        for field in ("countries", "sources", "items", "actions", "errors"):
+            report[field] = []
+        rendered = reports.render_report(report, "2026-09-27")
+        self.assertIn("Page views: 0", rendered["text"])
+        self.assertIn("Active time (estimated): 0 min", rendered["text"])
+        for section in ("Attention", "Top equipment", "\nTraffic", "No recorded errors", "No tracked data"):
+            self.assertNotIn(section, rendered["text"])
+        self.assertLessEqual(len(rendered["text"].splitlines()), 10)
+
+    def test_an010_active_time_is_human_readable_and_does_not_claim_per_visitor_time(self) -> None:
+        for seconds, expected in ((30, "<1 min"), (60, "1 min"), (3600, "1 hr"), (3720, "1 hr 2 min")):
+            report = fixture_report()
+            report["summary"]["activeSeconds"] = seconds
+            self.assertIn(f"Active time (estimated): {expected}", reports.render_report(report, "2026-09-27")["text"])
+
+    def test_an009_invalid_metrics_and_coverage_cannot_render_as_a_successful_summary(self) -> None:
+        for field, invalid in (("pageViews", -1), ("activeSeconds", float("nan")), ("pageViews", True)):
+            report = fixture_report()
+            report["summary"][field] = invalid
+            with self.assertRaises(reports.ReportError):
+                reports.render_report(report, "2026-09-27")
+        for field, invalid in (("timezone", "Invalid/Zone"), ("cutoffAt", "invalid"), ("cutoffAt", "2026-09-27T12:00:00"), ("collectionEnabled", None)):
+            report = fixture_report()
+            report[field] = invalid
+            with self.assertRaises(reports.ReportError):
+                reports.render_report(report, "2026-09-27")
 
     def test_an010_legacy_report_contract_cannot_render_under_new_privacy_wording(self) -> None:
         report = fixture_report()
@@ -206,8 +285,26 @@ class AnalyticsReportTests(unittest.TestCase):
         self.assertEqual(result["acceptedRecipients"], 2)
         send.assert_called_once()
         self.assertEqual(send.call_args.args[1], "sales@example.com")
-        self.assertIn("anonymous aggregate-only", send.call_args.args[0]["text"])
+        self.assertIn("Page views: 350", send.call_args.args[0]["text"])
         self.assertNotIn("opted-in tracked sessions", send.call_args.args[0]["text"])
+
+    def test_an011_version_three_replaces_old_warning_snapshot_without_resending_uncertain_mail(self) -> None:
+        with self.store.connection() as connection:
+            reports._ensure_tables(connection)
+            connection.execute("INSERT INTO analytics_report_snapshot VALUES(?,?,?,?,?,?,?)",
+                               ("2026-09-27", "America/Los_Angeles", 2, "old", "Warning: Hourly storage", "<p>Warning:</p>", NOW.isoformat()))
+            for address, status in (("owner@example.com", "ambiguous"), ("sales@example.com", "failed")):
+                connection.execute("INSERT INTO analytics_report_delivery VALUES(?,?,?,?,?,?,?,?,?)",
+                                   ("2026-09-27", "America/Los_Angeles", 2, address, status, 1, NOW.isoformat(), None, None))
+        with patch.dict(os.environ, {"STYL_ANALYTICS_RECIPIENTS": "owner@example.com,sales@example.com"}), \
+                patch.object(reports, "preview_report", side_effect=self.preview), \
+                patch.object(reports, "_send", return_value=("accepted", None)) as send:
+            reports.run_due(NOW)
+        self.assertEqual(reports.REPORT_VERSION, 3)
+        send.assert_called_once()
+        self.assertEqual(send.call_args.args[1], "sales@example.com")
+        self.assertNotIn("Warning:", send.call_args.args[0]["text"])
+        self.assertIn("Saved inquiries: 10", send.call_args.args[0]["text"])
 
     def test_an011_definite_failures_have_a_bounded_retry_budget(self) -> None:
         with patch.object(reports, "preview_report", side_effect=self.preview), \

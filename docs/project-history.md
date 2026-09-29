@@ -1,6 +1,140 @@
 # STYL project history and handoff
 
-Last recorded: 2026-09-28
+Last recorded: 2026-09-29
+
+## IAM daily access and concise daily email - 2026-09-29
+
+Verified the existing `kenny-daily` user already had console access and the
+Lightsail-only customer-managed policy through `LightsailDailyUsers`; no
+AWS-wide IAM permissions or programmatic access keys were needed. The user chose
+a passkey and completed the native enrollment privately. AWS then showed MFA
+enabled and one passkey. The subsequent signed-in identity was independently
+confirmed as kenny-daily, with Ubuntu-1 visible and an SSH connection that returned
+the expected hostname/ubuntu user and active STYL web/API services. IAM-dashboard
+denials were out-of-scope IAM administration, not a Lightsail permission defect.
+No password or permission expansion was performed.
+
+The user requested removal of the screenshot's technical email explanations and
+a simpler business summary, then explicitly authorized deploying it after tests.
+The background tasks had been cancelled without implementing that change, so the
+parent completed it directly rather than treating earlier aggregate tests as
+verification of the new template.
+
+Version 3 renders both plain text and HTML with date/Pacific time, page views and
+seven-day baseline, saved inquiries, estimated active minutes/hours, cart adds and
+quote opens, up to three ranked equipment items and country/source entries, and
+the dashboard link. Static privacy/retention/cutoff/first-tracking paragraphs,
+redundant observations and empty sections are removed from email only; full
+dashboard coverage remains. Real disabled-collection, unavailable-inquiry,
+rejected-measurement and error conditions retain concise Attention messages.
+Partial days show Through HH:00 and do not compare a partial count to a whole-day
+percentage. HTML uses a compact table/headings and escapes catalog text.
+Cross-version accepted/ambiguous delivery protections and disabled-email guards
+remain unchanged; version 3 prevents reuse of warning-heavy version-2 snapshots.
+
+Verification: **56 focused analytics/report tests, 156 full backend tests,
+33 frontend unit tests and the final 27 analytics E2E executions passed**.
+Production build/TypeScript and scoped lint/editor/Pylance checks passed.
+An initial WebKit response-validation test clicked during focus-driven scrolling
+and sent no new request; its preserved trace demonstrated this. That test now
+waits for the button to be enabled and uses keyboard activation, without retries
+or weakening the report/error assertions. The complete affected browser matrix
+then passed. Local admin preview at desktop/320px and HTML at 390px were inspected;
+the API returned the concise content with sending disabled. No real email was sent.
+
+Prior a611b4e deployment-status documentation was also brought up to date. This
+does not retroactively certify physical devices, legal review or mailbox delivery.
+
+## Production release: aggregate analytics, catalog recovery and ordering - 2026-09-28
+
+The user explicitly authorized deployment after sharing the signed-in Lightsail
+console. Navigating the SSH terminal inside that same authenticated tab succeeded;
+new tabs had redirected to sign-in. No passwords, admin tokens, SMTP credentials
+or GeoIP license contents were copied into browser input or output.
+
+Application release **`a611b4ee5a8b7ccd4d8b48de7734e0a87cb35066`** was committed
+and pushed on main, then deployed to Ubuntu-1 / `54.156.37.31`. It includes the
+previously local catalog recovery ZIP, visual per-card listing order, immediate
+cart feedback, and the final aggregate-only analytics/Privacy UI. The local
+products/accessories edits and untracked hero data were deliberately excluded.
+The historical backup branch was not moved.
+
+### Protection and preparation
+
+- Prior runtime was `bc45b22`; web/API/Caddy and GeoIP timer were healthy. The only
+  server worktree changes were executable modes on the two existing deploy shell
+  scripts; both were preserved.
+- Created protected root-only `/var/backups/styl/release-a611b4e`, containing
+  catalog/uploads/inquiries, source revision and mode patch, protected original
+  environment and service/Caddy files, previous frontend output and backend
+  virtual environment. Gzip integrity and data/GeoIP hashes were verified.
+- Extracted the exact candidate to a separate staging directory, checked unchanged
+  package-lock contents, reused matching frontend dependencies, and installed the
+  newly declared tzdata dependency. On production Node 22.23.2 / Python 3.12.3:
+  **149 backend tests, 33 frontend unit tests and production build/TypeScript
+  passed** while the existing application remained serving.
+- Activation prechecked current source/config/data, then performed a short
+  web/API stop, fast-forward and build-directory replacement. The reviewed script
+  included code/config/venv/build rollback on failed health checks; rollback was
+  not needed. Runtime returned successfully at approximately
+  `2026-09-29T06:52Z` (September 28, 23:52 Pacific).
+
+### Activated configuration
+
+- `STYL_ANALYTICS_ENABLED=true`, aggregate-only production mode, private
+  `/var/lib/styl-analytics/analytics.sqlite3`, America/Los_Angeles timezone.
+  Directory is 0700 and SQLite file 0600, owned by styl.
+- Daily-email sending remains explicitly **disabled**; no recipients or SMTP
+  settings were changed. The 15-minute report/retention timer was installed and
+  enabled; both its first manual run and next scheduled run completed with
+  sending disabled. The target daily schedule remains 08:00 Pacific.
+- No domain/DNS/Caddy changes, server reboot, catalog edits or test inquiry/email
+  sends were performed. Production data and GeoIP database/config hashes remained
+  unchanged; all non-analytics environment lines were preserved.
+
+### Live verification
+
+- HTTPS health and analytics config returned success. US/USD location remained
+  correct and forged country/forwarding headers did not change pricing.
+  www redirects to the HTTPS root domain; DNT/GPC disable measurement.
+  Unauthenticated admin/analytics/catalog-backup endpoints return 401.
+  Retired session creation returns 410.
+- Fresh desktop Chromium, 390px phone Chromium and phone WebKit passed live
+  catalog/detail/cart-add feedback/cart/quote prefill/accessories/Privacy/admin
+  sign-in-page checks, with **zero runtime and console errors** in this run.
+  No agreement or technical tracker status was present and there was no horizontal
+  overflow. Checks used DNT, produced no behavioral writes or inquiry submission,
+  and did not change any user's saved browser choices.
+- After moving the isolated build into protected release artifacts, one repeat
+  automation run missed the transient Added label. An instrumented rerun of all
+  three browsers passed with zero runtime/console errors. The intermittent miss
+  was not reproduced with diagnostic output and is not claimed fixed; distinguish
+  these smoke results from a guarantee that brief feedback can never be missed.
+- Server-local authenticated report/preview/delivery checks passed without
+  printing credentials. Aggregate DTO contains no session/visitor/funnel fields;
+  times are hour-rounded, delivery history empty and real email disabled.
+  Raw visitor/session/event rows were confirmed absent/empty.
+- Downloaded the actual protected catalog recovery ZIP: **3 products,
+  16 accessories, 100 media files**. Verified the archive, ran its included
+  standalone recovery tool with system Python into a new protected directory,
+  and matched restored source bytes/checksums. This is a same-server isolated
+  recovery drill, not an off-server disaster-recovery certification.
+- A consistent SQLite backup was created through the supplied backup command,
+  separate from catalog backup and the existing catalog-only periodic backup.
+  Automatic off-server analytics backups are not configured by this release.
+- Two verification-tool issues were corrected without changing the release:
+  an initial compressed script transfer failed its integrity step and was not
+  executed; the first private recovery check needed an explicit backend import
+  path. Its corrected rerun passed. Protected deployment/recovery artifacts are
+  retained; transient transfer files and local verification scripts were removed.
+
+Pre-release complete automated baseline remains **149 backend / 33 unit /
+181 browser executions**, with zero lint errors and five pre-existing image
+warnings. Production manual gaps remain: physical devices, independent Canadian
+egress, jurisdiction-specific privacy review, actual approved email recipients/
+inbox delivery, off-server restores and longer-term capacity/performance. The
+successful short WebKit run does not establish that the earlier intermittent
+RSC-prefetch warning can never recur.
 
 ## Aggregate-only analytics without a customer agreement - 2026-09-28
 

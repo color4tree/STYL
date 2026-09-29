@@ -1,13 +1,14 @@
 # STYL traffic analytics and daily usage email
 
-Status: **Approved anonymous aggregate-only contract; local implementation and
-verification in progress. Not deployed.** Production collection and real daily
-email remain disabled. This document defines the current acceptance requirements,
-not a claim that the revised tests or production release have passed.
+Status: **Aggregate-only collection deployed in release `a611b4e`.**
+Production collection and retention maintenance are enabled; real daily email
+remains disabled until recipients and sending are separately approved.
+The concise version-3 email template below is the current approved requirement;
+its deployment evidence is recorded in [project history](project-history.md).
 
 Date: 2026-09-27
 
-Updated: 2026-09-28
+Updated: 2026-09-29
 
 The owner approved replacing optional identified-session analytics with automatic,
 first-party, aggregate-only measurement. There is **no storefront consent panel,
@@ -36,9 +37,9 @@ acquisition patterns, item interest, shopping actions, estimated active time and
 coarse usability problems. Report **counts**, not people or individual journeys.
 Provide protected admin reports and an aggregate daily email.
 
-This approval covers local implementation and testing, not deployment, real
-mail, recipient approval, or a determination that consent is unnecessary in every
-jurisdiction. Privacy/legal review for the served markets is a release gate.
+The owner separately authorized production deployment. Real mail and recipient
+approval remain separate, as does a determination of the applicable privacy rules.
+Served-market privacy/legal review is not certified by the deployment.
 City and ZIP/postal-area analysis remains **Phase 2 / P2**.
 
 ## 2. Business questions and priorities
@@ -344,11 +345,24 @@ authenticated dashboard link. Preview never sends mail.
 
 ### Required content: TA-011
 
-Include report date/timezone, completed-hour cutoff, generation time, page/event
-counts, total active estimate, independent coarse page-view breakdowns, per-item
-action counts, coarse errors, average web vitals/sample counts, separate saved
-business inquiries, prior completed-day comparisons, coverage warnings and job
-status. Up to three rule-based observations must be supported by counts.
+Keep the email and preview short and business-focused:
+
+- Date in Pacific time; a partial-day preview says "Through HH:00".
+- Page views, prior seven-day average and change for completed days only.
+- Saved inquiries, estimated active time in minutes/hours, cart adds and quote opens.
+- Up to three equipment items ranked by cart adds, details and impressions;
+  retain each item's market currency.
+- Up to three countries and traffic sources. Omit empty detail sections.
+- An **Attention** section only for actionable problems: collection disabled,
+  unavailable inquiry totals, rejected measurements or recorded errors.
+- A link to the full authenticated analytics dashboard.
+
+Remove the long privacy/identifier, retention, cutoff-implementation and
+first-tracking explanations shown in the earlier email. Do not repeat general
+coverage warnings or technical observations in the message. They remain in the
+full dashboard/operations documentation, not lost from the underlying report.
+The HTML version uses headings and a small summary table rather than a large
+monospaced text block. Genuine unavailable totals stay N/A, never zero.
 
 No visitors/sessions, median time, ordered funnels, attributed inquiry rates,
 raw identifiers or person-level paths in text, HTML, CSV or new snapshots.
@@ -373,7 +387,7 @@ support; city/postal sections remain absent until separately approved.
 - Freeze aggregate-only snapshots for recipient retries; do not load a legacy
   session-based snapshot for a new-mode delivery. Generation/run/send timestamps
   are operational metadata, not retained browsing timestamps.
-- Version 2 mail reports use the new aggregate-only format. Previously accepted
+- Version 3 mail reports use the concise aggregate-only format. Previously accepted
   or ambiguous deliveries still constrain sending across report versions:
   changing formats must not resend an accepted recipient or bypass an
   ambiguous-send hold, even though legacy snapshot content is not reused.

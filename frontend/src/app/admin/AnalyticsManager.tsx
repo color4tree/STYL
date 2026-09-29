@@ -314,15 +314,15 @@ export default function AnalyticsManager({ adminToken, active }: { adminToken: s
       <button type="button" disabled={exportBusy || loading} onClick={downloadCsv} className="min-h-12 rounded-full border border-[var(--ink)] px-5 text-sm disabled:opacity-50">{exportBusy ? "Preparing CSV..." : "Download aggregate CSV"}</button>
     </> : !loading ? <p className="text-sm">Analytics data is unavailable. Refresh after resolving the reported problem.</p> : null}
     <Section title="Daily usage email preview">
-      <p className="mt-2 text-sm leading-6">Schedule target: 8:00 AM America/Los_Angeles, covering the previous local calendar day. Previews include completed hours only and never send email. Actual delivery requires separate recipients, production enablement and the server timer.</p>
+      <p className="mt-2 text-sm leading-6">A short daily business summary, scheduled for 8:00 AM Pacific. Previewing does not send email.</p>
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="min-w-0 text-sm">Report date<input aria-label="Email report date" type="date" required value={previewDate} onChange={(event) => setPreviewDate(event.target.value)} className="mt-1 block min-h-11 max-w-full rounded-lg border border-[var(--line)] px-3" /></label>
         <button type="button" onClick={showPreview} disabled={previewBusy || !previewDate} className="min-h-11 rounded-full border border-[var(--ink)] px-4 text-sm disabled:opacity-50">{previewBusy ? "Generating preview..." : "Preview daily email"}</button>
       </div>
       {preview ? <div className="mt-4 min-w-0">
         <p className="text-sm">Real email: {preview.emailEnabled ? "enabled by production configuration" : "disabled"} · Recipients: {preview.recipientsConfigured ? "configured" : "not configured"}.</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">Next configured schedule target: {new Date(preview.nextRunAt).toLocaleString("en-US", { timeZone: preview.timezone })} ({preview.timezone}). SMTP acceptance does not prove inbox delivery.</p>
-        <pre aria-label="Daily email preview" className="mt-3 max-h-[36rem] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-neutral-50 p-4 text-sm leading-6">{preview.text}</pre>
+        <p className="mt-1 text-xs text-[var(--muted)]">Next scheduled time: {new Date(preview.nextRunAt).toLocaleString("en-US", { timeZone: preview.timezone })} ({preview.timezone}).</p>
+        <pre aria-label="Daily email preview" className="mt-3 max-h-[36rem] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-neutral-50 p-4 font-sans text-sm leading-6">{preview.text}</pre>
       </div> : null}
     </Section>
     <Section title="Report delivery history">

@@ -5,7 +5,7 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 ## Project structure
 
 - [Project history and handoff](docs/project-history.md) — implementation milestones, agreed decisions, verification results, and remaining work
-- [Traffic analytics and daily email requirements](docs/traffic-analytics-requirements.md) — approved anonymous aggregate-only replacement, local implementation/verification in progress; no production collection/email, City/postal deferred
+- [Traffic analytics and daily email requirements](docs/traffic-analytics-requirements.md) — aggregate-only production collection, concise daily summaries and admin reports; actual email sending disabled, City/postal deferred
   - [简体中文版：网站流量分析与每日使用情况邮件](docs/traffic-analytics-requirements.zh-CN.md)
 - [Traffic analytics local use and operations](docs/traffic-analytics-operations.md) — automatic first-party aggregates with Privacy-page opt-out, private hour-based counts, admin reports and guarded daily email jobs
 - [AI-assisted customer-service architecture](docs/customer-service-ai-architecture.md) — current/future system design, grounded AI, human handoff, desktop/mobile chat UX and rollout prerequisites (draft; provider undecided)

@@ -49,11 +49,11 @@ Also confirm:
 
 ### Analytics activation is a separate release gate
 
-The approved analytics replacement is **anonymous aggregate-only**, with local
-implementation/final verification ongoing; it has not been deployed. Do not
-enable production collection or daily email simply by following this storefront
-deployment guide. Keep both switches disabled until their separate rollout is
-approved; analytics recipients and a real-mail test are not yet approved.
+The approved analytics replacement is **anonymous aggregate-only**, deployed and
+enabled with the owner's separate `a611b4e` rollout authorization. Its maintenance
+timer is active; daily email remains disabled because analytics recipients and a
+real-mail test are not yet approved. For a new installation, do not enable these
+switches merely by following the storefront guide; obtain the appropriate approval.
 
 The revised storefront uses an ordinary **Privacy** link to `/privacy`, with
 informative policy and a boolean measurement opt-out, not a consent banner/modal

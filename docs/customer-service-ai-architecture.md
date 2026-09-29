@@ -89,7 +89,7 @@ are proposed defaults requiring review, not existing service promises.
 | Inquiries | Save request JSON before SMTP; customer email is Reply-To | Existing inquiry endpoint is not a support conversation, agent inbox or delivery/read receipt |
 | Admin access | Shared bearer-token access | Not sufficient for accountable multi-agent support; named identities/roles are a prerequisite |
 | Hosting | One AWS Lightsail Ubuntu instance, Caddy HTTPS, frontend :3000 and API :8000 on loopback | Start small; isolate AI work and bound load so the storefront remains responsive |
-| Traffic analytics | Anonymous aggregate-only replacement approved; local implementation/verification in progress, not deployed; real daily email disabled | Future support may supply optional unlinked aggregate counts only; no browser/session/conversation correlation in traffic analytics |
+| Traffic analytics | Aggregate-only collection deployed in a611b4e; real daily email disabled | Future support may supply optional unlinked aggregate counts only; no browser/session/conversation correlation in traffic analytics |
 | AI/live support | Not implemented | No provider, trained knowledge base, queue, staffing schedule or live-chat SLA exists yet |
 
 Current source references:

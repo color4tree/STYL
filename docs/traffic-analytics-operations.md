@@ -1,9 +1,10 @@
 # Traffic analytics: local use and operations
 
-Status: **Approved anonymous aggregate-only replacement; local implementation
-and verification in progress. Not deployed.** Production collection and real
-daily email remain disabled. This guide describes the revised operating contract;
-it does not certify pending code/tests, installed production jobs or mailbox delivery.
+Status: **Aggregate-only collection deployed in release `a611b4e`.**
+Production collection and the 15-minute maintenance timer are enabled. Actual
+daily email remains disabled; recipients and a real-mail test are not approved.
+See [project history](project-history.md) for exact release/test evidence and the
+subsequent concise version-3 email rollout. No mailbox-delivery claim is made.
 
 Scope: automatic first-party country-level aggregate measurement, a protected
 admin dashboard, CSV and daily-email preview/job. City/postal, AI chat, CRM/revenue
@@ -247,11 +248,20 @@ in full; a current day's incomplete hour is excluded. Raw event times do not
 exist to provide five-minute precision. Frozen new-mode text/HTML snapshots
 contain aggregates only and must not reuse legacy snapshots.
 
+The daily message is a short business digest: page views and a seven-day baseline,
+saved inquiries, estimated active minutes/hours, cart/quote actions, top-three
+equipment and country/source lists, and a dashboard link. Full-day changes are
+not applied to a partial day; its header says "Through HH:00". General technical
+coverage/retention/privacy explanations stay in the full dashboard, not the email.
+Only actionable collection/data/error issues appear under **Attention**.
+Unavailable inquiry totals stay N/A. Empty breakdowns and routine no-error text
+are omitted. HTML uses headings and a compact table; previewing still sends nothing.
+
 ### Delivery states and retries
 
 - Report date/timezone/version/recipient has durable operational delivery state;
   these job identifiers are not browsing identifiers.
-- Version 2 mail uses aggregate-only snapshots. Cross-version accepted/ambiguous
+- Version 3 mail uses concise aggregate-only snapshots. Cross-version accepted/ambiguous
   delivery protections remain: a format change cannot resend an already accepted
   recipient or bypass an uncertain-send hold. Do not load old privacy/session
   snapshot content into the new report.
@@ -275,14 +285,17 @@ It requires production email enablement and a currently configured approved
 recipient, and cannot resend an already accepted delivery. Review delivery
 history/mailbox before any authorized retry. No real send is authorized here.
 
-## Production schedule: not installed by this change
+## Production schedule
 
 Existing templates:
 [service](../deploy/styl-analytics-report.service) /
 [timer](../deploy/styl-analytics-report.timer).
-They require review against the final implementation before deployment.
+They were installed during the approved `a611b4e` production rollout.
 The timer checks every 15 minutes; the job handles the 08:00 Pacific boundary,
 mail retry rules, retention and restart catch-up without sending on every tick.
+The first manual run and next scheduled run succeeded with email sending disabled.
+No recipient delivery has been attempted. Before enabling actual mail, retain the
+remaining privacy/recipient/inbox-verification gates below.
 
 Release checklist:
 
@@ -352,11 +365,11 @@ new reports. A real production restore remains a verification gate.
 
 Existing test locations remain `backend/tests/test_analytics.py`,
 `backend/tests/test_analytics_reports.py`, `frontend/tests/analytics.test.mjs` and
-`frontend/tests/e2e/analytics.spec.ts`. The frontend unit assertions have been
-rewritten for aggregate-only privacy, Web Lock/idle behavior and batching, and
-revised E2E cases are prepared. Backend implementation is complete; final
-integrated verification remains pending. This documentation update records
-**no new execution counts or passed outcomes**.
+`frontend/tests/e2e/analytics.spec.ts`. The aggregate-only release passed
+149 backend, 33 frontend unit and 181 configured browser executions. Live
+desktop/phone smoke checks, private report/preview/auth boundaries, a consistent
+SQLite backup and a same-server catalog recovery drill were completed.
+The concise email revision has its own tests and release evidence in project history.
 Use isolated test data with SMTP disabled and record the final candidate/results
 in project history through the implementation/testing owner.
 

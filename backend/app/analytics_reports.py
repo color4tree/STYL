@@ -22,7 +22,7 @@ from pydantic import EmailStr, TypeAdapter, ValidationError
 
 
 logger = logging.getLogger(__name__)
-REPORT_VERSION = 2
+REPORT_VERSION = 3
 MAX_ATTEMPTS = 3
 EMAILS = TypeAdapter(list[EmailStr])
 
@@ -105,6 +105,22 @@ def _label(value: object) -> str:
     return value
 
 
+def _metric(value: object, *, signed: bool = False) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or (value < 0 and not signed):
+        raise ReportError("Report metrics are invalid.")
+    return float(value)
+
+
+def _active_time(seconds: float) -> str:
+    if 0 < seconds < 60:
+        return "<1 min"
+    minutes = round(seconds / 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours} hr" + (f" {minutes} min" if minutes else "")
+    return f"{minutes} min"
+
+
 def _dashboard_url() -> str:
     production = os.getenv("STYL_ANALYTICS_ENVIRONMENT", "local") == "production"
     url = os.getenv("STYL_ANALYTICS_DASHBOARD_URL", "https://stylfitness.com/admin" if production else "http://127.0.0.1:3000/admin")
@@ -117,12 +133,19 @@ def _dashboard_url() -> str:
 
 
 def render_report(report: dict[str, object], report_date: str) -> dict[str, str]:
-    date.fromisoformat(report_date)
+    day = date.fromisoformat(report_date)
     summary = _mapping(report.get("summary"))
     coverage = _mapping(report.get("coverage"))
     comparison = _mapping(report.get("comparison"))
-    zone = _label(report.get("timezone"))
-    subject = f"STYL daily usage | {report_date} | {zone}"
+    try:
+        zone = ZoneInfo(_label(report.get("timezone")))
+        cutoff = datetime.fromisoformat(_label(report.get("cutoffAt")).replace("Z", "+00:00"))
+    except (ValueError, ZoneInfoNotFoundError) as error:
+        raise ReportError("Report time information is invalid.") from error
+    if cutoff.tzinfo is None or not isinstance(report.get("collectionEnabled"), bool):
+        raise ReportError("Report coverage is incomplete.")
+    local_cutoff = cutoff.astimezone(zone)
+    subject = f"STYL daily usage | {report_date}"
     if coverage.get("mode") != "aggregate-only" or set(summary) != {"pageViews", "activeSeconds", "savedInquiries"}:
         raise ReportError("Only the aggregate-only report contract can be rendered.")
     warnings = coverage.get("warnings")
@@ -131,57 +154,92 @@ def render_report(report: dict[str, object], report_date: str) -> dict[str, str]
         raise ReportError("Report coverage is missing.")
     if not isinstance(observations, list) or not all(isinstance(value, str) for value in observations):
         raise ReportError("Report observations are invalid.")
-    lines = [
-        subject, "",
-        f"Environment: {_label(report.get('environment'))}",
-        f"Generated: {_label(report.get('generatedAt'))}",
-        f"Data cutoff: {_label(report.get('cutoffAt'))}",
-        "Coverage: anonymous aggregate-only occurrences, not distinct visitors or people.",
-        "No browser identities, unique/returning visitors, session funnels or inquiry attribution.",
-        "Active seconds are summed estimates; browser limitations, blocked/lost batches and cross-tab coordination affect accuracy.",
-        "Hourly storage cannot support minute-level cutoffs. Email previews exclude the incomplete hour.",
-        "Quotes are saved inquiries, not sales. Amounts are not revenue.",
-        *[f"Warning: {warning}" for warning in warnings], "",
-        f"Page views: {_number(summary.get('pageViews'))}",
-        f"Active seconds: {_number(summary.get('activeSeconds'))}",
-        f"Saved inquiries: {_number(summary.get('savedInquiries'))}",
-        f"Prior seven-day average page views: {_number(comparison.get('pageViewsDailyAverage'))}",
-        f"Page-view change versus baseline: {_number(comparison.get('pageViewsChangePercent'))}" + ("%" if comparison.get("pageViewsChangePercent") is not None else " (no comparable baseline)"),
+    page_views = _metric(summary.get("pageViews"))
+    active_seconds = _metric(summary.get("activeSeconds"))
+    inquiries = summary.get("savedInquiries")
+    if inquiries is not None:
+        inquiries = _metric(inquiries)
+    baseline = _metric(comparison.get("pageViewsDailyAverage"))
+    change = comparison.get("pageViewsChangePercent")
+    if change is not None:
+        change = _metric(change, signed=True)
+    partial = local_cutoff.date() <= day
+    zone_label = "Pacific time" if zone.key == "America/Los_Angeles" else zone.key
+    period = f"{day:%b %d, %Y} | {zone_label}"
+    if local_cutoff.date() == day:
+        period += f" | Through {local_cutoff:%H:%M}"
+    elif local_cutoff.date() < day:
+        period += " | Not started"
+    environment = _label(report.get("environment"))
+    if environment != "production":
+        period += f" | {environment} preview"
+    comparison_text = f"7-day average: {_number(baseline)}/day"
+    if not partial:
+        comparison_text += f"; {change:+.0f}%" if change is not None else "; no comparable baseline"
+    metrics = [
+        ("Page views", f"{_number(page_views)} ({comparison_text})"),
+        ("Saved inquiries", _number(inquiries)),
+        ("Active time (estimated)", _active_time(active_seconds)),
     ]
-    for title, key in (("Countries", "countries"), ("Sources", "sources"), ("Campaigns", "campaigns"), ("Devices", "devices"), ("Browsers", "browsers")):
-        lines.extend(["", title])
-        rows = _rows(report.get(key))
-        lines.extend(f"- {_label(row.get('label'))}: {_number(row.get('pageViews'))} page views" for row in rows[:5])
-        if not rows:
-            lines.append("No tracked data.")
-    lines.extend(["", "Top items", "Item | Currency | Impressions | Detail views | Expansions | Media opens | Cart adds | Quote opens"])
-    items = _rows(report.get("items"))
-    for item in items[:5]:
-        lines.append(" | ".join([
-            _label(item.get("name")), _label(item.get("currency")),
-            *[_number(item.get(metric)) for metric in ("impressions", "detailViews", "expansions", "mediaOpens", "cartAdds", "quoteOpens")],
+    actions: dict[str, float] = {}
+    for row in _rows(report.get("actions")):
+        name = _label(row.get("name"))
+        actions[name] = actions.get(name, 0) + _metric(row.get("count"))
+    metrics.extend([
+        ("Cart adds", _number(actions.get("cart_add", 0))),
+        ("Quote opens", _number(actions.get("quote_open", 0))),
+    ])
+    sections: list[tuple[str, list[str]]] = []
+    items = sorted(_rows(report.get("items")), key=lambda item: (
+        _metric(item.get("cartAdds")), _metric(item.get("detailViews")), _metric(item.get("impressions")),
+    ), reverse=True)
+    if items:
+        sections.append(("Top equipment", [
+            f"{' '.join(_label(item.get('name')).split())} ({_label(item.get('currency'))}): "
+            f"{_number(item.get('impressions'))} impressions, {_number(item.get('detailViews'))} details, {_number(item.get('cartAdds'))} cart adds"
+            for item in items[:3]
         ]))
-    if not items:
-        lines.append("No tracked item interest.")
-    lines.extend(["", "Actions (occurrences)"])
-    lines.extend(f"- {_label(row.get('name'))}: {_number(row.get('count'))}" for row in _rows(report.get("actions")))
-    lines.extend(["", "Errors / attention"])
-    errors = _rows(report.get("errors"))
-    lines.extend(f"- {_label(row.get('code'))}: {_number(row.get('count'))}" for row in errors[:5])
-    if not errors:
-        lines.append("No recorded errors; this does not guarantee there were no failures.")
-    if observations:
-        lines.extend(["", "Observations", *[f"- {value}" for value in observations[:3]]])
+    traffic = []
+    for title, key in (("Countries", "countries"), ("Sources", "sources")):
+        rows = sorted(_rows(report.get(key)), key=lambda row: _metric(row.get("pageViews")), reverse=True)
+        if rows:
+            traffic.append(f"{title}: " + "; ".join(
+                f"{' '.join(_label(row.get('label')).split())} ({_number(row.get('pageViews'))} views)" for row in rows[:3]
+            ))
+    if traffic:
+        sections.append(("Traffic", traffic))
+    attention = []
+    if report["collectionEnabled"] is False:
+        attention.append("Collection is off. Check analytics settings.")
+    if inquiries is None:
+        attention.append("Inquiry totals are unavailable. Check saved-inquiry storage.")
+    rejected = _metric(coverage.get("rejected"))
+    if rejected:
+        attention.append(f"{_number(rejected)} measurements rejected. Check the collector.")
+    for row in _rows(report.get("errors")):
+        count = _metric(row.get("count"))
+        if count:
+            attention.append(f"{_label(row.get('code')).capitalize()} errors: {_number(count)}. Review in the dashboard.")
+    if attention:
+        sections.append(("Attention", attention))
+    lines = ["STYL daily usage", period, "", *[f"{label}: {value}" for label, value in metrics]]
+    for title, entries in sections:
+        lines.extend(["", title, *[f"- {entry}" for entry in entries]])
     dashboard = _dashboard_url()
     lines.extend(["", f"Open analytics (admin sign-in required): {dashboard}"])
     text = "\n".join(lines)
-    markup = (
-        "<!doctype html><html><body>"
-        f"<h1 style=\"font-size:20px\">{html.escape(subject)}</h1>"
-        f"<pre style=\"white-space:pre-wrap;font:14px/1.5 Arial,sans-serif\">{html.escape(text)}</pre>"
-        f"<p><a href=\"{html.escape(dashboard, quote=True)}\">Open STYL analytics</a></p>"
-        "</body></html>"
-    )
+    markup = '<!doctype html><html><body style="margin:0;padding:24px;font:15px/1.6 Arial,sans-serif;color:#171717">'
+    markup += '<div style="max-width:640px;margin:auto;overflow-wrap:anywhere">'
+    markup += f'<h1 style="margin:0;font-size:24px">STYL daily usage</h1><p style="color:#555">{html.escape(period)}</p>'
+    markup += '<table style="width:100%;border-collapse:collapse">'
+    for label, value in metrics:
+        markup += f'<tr><th scope="row" style="padding:8px;text-align:left;border-bottom:1px solid #eee">{html.escape(label)}</th>'
+        markup += f'<td style="padding:8px;border-bottom:1px solid #eee">{html.escape(value)}</td></tr>'
+    markup += "</table>"
+    for title, entries in sections:
+        markup += f'<h2 style="margin:24px 0 8px;font-size:18px">{html.escape(title)}</h2><ul style="padding-left:20px">'
+        markup += "".join(f"<li>{html.escape(entry)}</li>" for entry in entries) + "</ul>"
+    markup += f'<p style="margin-top:24px"><a href="{html.escape(dashboard, quote=True)}">Open STYL analytics</a></p></div></body></html>'
     return {"subject": subject, "text": text, "html": markup}
 
 
