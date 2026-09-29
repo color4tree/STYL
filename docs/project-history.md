@@ -2,6 +2,23 @@
 
 Last recorded: 2026-09-29
 
+## Equipment-detail width found during live release verification - 2026-09-29
+
+After deploying the settings/Equipment release `e91f28a`, the public detail-flow
+phone check exposed an existing gallery sizing issue with the actual production
+item's seven images: a 390px viewport had a 473px document. The gallery/title grid
+children retained intrinsic minimum widths, letting the thumbnail strip widen
+the implicit single-column grid. No customer data was changed to hide the issue.
+
+An isolated seven-image fixture reproduced the exact 473px failure before the
+fix. Added an explicit shrinkable single-column track and `min-w-0` on the two
+detail grid children; the desktop two-column layout remains. New USR-003 coverage
+checks 7 and 12 photos at 320/390/768/1440px, selecting the last thumbnail,
+enlarging/closing media and asserting document width against the configured
+viewport. All **76 affected layout/quote/navigation executions passed** across
+desktop/phone Chromium and phone WebKit; build/TypeScript/scoped lint and editor
+diagnostics passed. Backend and email settings are unchanged by this correction.
+
 ## Admin email settings and Equipment catalog UX - 2026-09-29 (local)
 
 Completed the owner's five new requests. The owner clarified that Products

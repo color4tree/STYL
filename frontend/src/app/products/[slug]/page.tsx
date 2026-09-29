@@ -113,14 +113,14 @@ export default function ProductDetailPage() {
         </div>
         <CartFeedback error={error} notice={notice} />
 
-        <section data-analytics-event="item_detail_open" data-analytics-item-id={product.id} data-analytics-item-type="product" className={`grid gap-6 rounded-3xl border border-[var(--line)] bg-white/70 p-4 lg:gap-10 lg:p-8 ${photos.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
-          <div className={photos.length ? "lg:col-start-2 lg:row-start-1" : ""}>
+        <section data-analytics-event="item_detail_open" data-analytics-item-id={product.id} data-analytics-item-type="product" className={`grid grid-cols-1 gap-6 rounded-3xl border border-[var(--line)] bg-white/70 p-4 lg:gap-10 lg:p-8 ${photos.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
+          <div className={`min-w-0 ${photos.length ? "lg:col-start-2 lg:row-start-1" : ""}`}>
             <div className="text-sm text-[var(--muted)]">{product.category}</div>
             <h1 data-analytics-identity className="mt-2 break-words text-3xl font-semibold tracking-tight lg:text-5xl">{product.name}</h1>
             <div data-analytics-price className="mt-4 text-2xl font-semibold">{priceLabel}</div>
             {product.stockStatus?.trim() ? <p className="mt-3 text-sm font-medium">{product.stockStatus}</p> : null}
           </div>
-          {photos.length ? <div className="lg:col-start-1 lg:row-span-2 lg:row-start-1"><PhotoGallery key={product.id} photos={photos} name={product.name} item={{ itemType: "product", itemId: product.id }} /></div> : null}
+          {photos.length ? <div className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1"><PhotoGallery key={product.id} photos={photos} name={product.name} item={{ itemType: "product", itemId: product.id }} /></div> : null}
 
           <div className="min-w-0 break-words">
             {shortDescription ? <p className="whitespace-pre-line text-base leading-7 text-[var(--muted)] lg:text-lg lg:leading-8">{shortDescription}</p> : null}

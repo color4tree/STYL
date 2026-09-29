@@ -42,6 +42,30 @@ async function expectAlignedRows(cards: Locator) {
   }
 }
 
+test("USR-003: equipment detail contains seven and twelve thumbnails without widening the page", async ({ page }) => {
+  for (const count of [7, 12]) {
+    const name = "Heavy-duty equipment with multiple gallery images";
+    const item = { ...items[0], name, slug: `detail-gallery-${count}`, photos: Array.from({ length: count }, (_, index) => `/images/pro-elite.svg?gallery=${index}`) };
+    await page.route(`**/api/products/${item.slug}`, route => route.fulfill({ json: { item } }));
+    await page.goto(`/products/${item.slug}`);
+    const gallery = page.getByRole("group", { name: `${name} photos and videos`, exact: true });
+    await expect(gallery).toBeVisible();
+    await expect.poll(() => gallery.locator("img").first().evaluate(image => (image as HTMLImageElement).complete)).toBe(true);
+    for (const width of [390, 320, 768, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth), `${count} images at ${width}px`).toBeLessThanOrEqual(width);
+      const last = gallery.getByRole("button", { name: `Show ${name} photo ${count}`, exact: true });
+      await last.click();
+      await expect(last).toHaveAttribute("aria-pressed", "true");
+      await expect(gallery.getByRole("status")).toHaveText(`${count} / ${count}`);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await gallery.getByRole("button", { name: `Enlarge ${name} media ${count}`, exact: true }).click();
+      await expect(page.getByRole("dialog", { name: `${name} enlarged media`, exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "Close enlarged media", exact: true }).click();
+    }
+  }
+});
+
 for (const catalog of ["products", "accessories"] as const) {
   test(`USR-014: ${catalog} use taller desktop previews and show all details below desktop width`, async ({ page }) => {
     await page.route(`**/api/${catalog}`, (route) => route.fulfill({ json: { items } }));
