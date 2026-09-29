@@ -73,7 +73,8 @@ function clearDiagnostics(...codes: DiagnosticCode[]) {
 export function canonicalAnalyticsPath(path: string): string {
   const pathname = path.split(/[?#]/, 1)[0].replace(/\/+$/, "") || "/";
   if (["/", "/accessories", "/cart"].includes(pathname)) return pathname;
-  return /^\/products\/[^/]+$/.test(pathname) ? "/products/[slug]" : "other";
+  if (/^\/products\/[^/]+$/.test(pathname)) return "/products/[slug]";
+  return /^\/accessories\/[1-9]\d*$/.test(pathname) ? "/accessories/[id]" : "other";
 }
 
 export function safeReferrerHost(referrer: string): string | undefined {

@@ -10,6 +10,7 @@ export type CatalogDetails = {
   image?: string;
   photos?: string[];
   compatibility?: Compatibility;
+  msrp?: number | null;
 };
 
 export type Provenance = {

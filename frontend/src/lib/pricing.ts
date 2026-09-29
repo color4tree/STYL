@@ -14,6 +14,10 @@ export function getMarketPrices(item: { prices?: MarketPrices; price?: number | 
   };
 }
 
+export function getMarketMsrps(item: { msrps?: Partial<MarketPrices> | null }): MarketPrices {
+  return { CAD: item.msrps?.CAD ?? null, USD: item.msrps?.USD ?? null };
+}
+
 export function priceInputs(prices: MarketPrices): Record<MarketCurrency, string> {
   return { CAD: prices.CAD?.toFixed(2) ?? "", USD: prices.USD?.toFixed(2) ?? "" };
 }

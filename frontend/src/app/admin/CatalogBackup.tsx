@@ -124,7 +124,7 @@ export default function CatalogBackup({ adminToken, hasUnsavedChanges, onBusyCha
         Recover the saved catalog on a clean STYL installation. This is a catalog recovery archive, not a machine or full website backup.
       </p>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6">
-        <li>All equipment and accessories, including drafts, private provenance, CAD and USD prices, and record IDs.</li>
+        <li>All equipment and accessories, including drafts, private provenance, CAD and USD prices and optional MSRPs, and record IDs.</li>
         <li>Home banner settings and referenced local images, videos, and video posters.</li>
         <li>No admin tokens, secrets, customer inquiries, or AWS configuration.</li>
       </ul>

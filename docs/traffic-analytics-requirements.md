@@ -103,7 +103,7 @@ have separate purposes; this change must not remove or repurpose them.
 | Section navigation | An intentional allowlisted anchor/navigation action, separate from a page view |
 | Item impression | At least 50% of the item's identity/price summary visible for one continuous second; local in-memory suppression once per item per rendered page |
 | Detail view | Successfully rendered product detail, not a URL request or loading state |
-| Expansion | A real desktop Show more action; automatic full details on mobile are not an expansion |
+| Expansion | A real Show more action on desktop or mobile compact cards; rendering, resizing or collapse is not an expansion |
 | Cart/quote action | A named action total; a cart write must succeed before its success action is counted |
 | Saved inquiry | A successfully persisted business inquiry, counted from business records, never inferred from a browser event |
 | Inquiry email accepted | SMTP accepted the notification, not proof of inbox delivery/read status |

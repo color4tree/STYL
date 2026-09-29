@@ -103,8 +103,19 @@ test("AN-002 AN-003 AN-006: item/media/cart counts and saved inquiry totals stay
       return (await report(request)).items.find(row => row.itemType === "product" && row.itemId === item.id)?.impressions ?? 0;
     }, { timeout: 20000, intervals: [1000] }).toBeGreaterThan(0);
     const more = card.getByRole("button", { name: "Show more", exact: true });
-    if (await more.isVisible()) await more.click();
-    await card.getByRole("link", { name: "Details", exact: true }).click();
+    await expect(card.locator(".catalog-details-preview")).toBeHidden();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+    await more.click();
+    await expect(card.locator(".catalog-details-preview")).toBeVisible();
+    await expect.poll(async () => {
+      await flush(page);
+      return (await report(request)).items.find(row => row.itemType === "product" && row.itemId === item.id)?.expansions ?? 0;
+    }, { timeout: 20000, intervals: [1000] }).toBeGreaterThan(0);
+    const details = card.getByRole("link", { name: "Details", exact: true });
+    if (page.viewportSize()!.width < 1024) {
+      await expect(details).toBeHidden();
+      await card.getByRole("link", { name: item.name, exact: true }).click();
+    } else await details.click();
     await expect(page.getByRole("heading", { level: 1, name: item.name, exact: true })).toBeVisible();
     await noAgreement(page);
     await page.getByRole("button", { name: `Enlarge ${item.name} media 1`, exact: true }).click();
@@ -129,7 +140,7 @@ test("AN-002 AN-003 AN-006: item/media/cart counts and saved inquiry totals stay
     await expect.poll(async () => {
       await flush(page);
       const row = (await report(request)).items.find(value => value.itemType === "product" && value.itemId === item.id);
-      return Boolean(row && row.detailViews > 0 && row.cartAdds > 0 && row.mediaOpens > 0);
+      return Boolean(row && row.expansions > 0 && row.detailViews > 0 && row.cartAdds > 0 && row.mediaOpens > 0);
     }, { timeout: 20000, intervals: [1000] }).toBe(true);
     const after = await report(request);
     expect(after.summary.savedInquiries).toBe((before.summary.savedInquiries ?? 0) + 1);
@@ -263,8 +274,10 @@ test("AN-009: unavailable or invalid aggregate report never becomes successful z
       await route.fulfill({ response, json: { ...value, ...invalid, coverage: { ...value.coverage, ...invalid.coverage } } });
     });
     await expect(refresh).toBeEnabled();
+    const refreshed = page.waitForResponse(response => response.url().includes("/api/admin/analytics/report?") && response.request().method() === "GET");
     // Keep response-validation checks independent of the alert's focus-driven scroll.
     await refresh.press("Enter");
+    expect((await refreshed).status()).toBe(200);
     await expect(page.locator("main").getByRole("alert")).toContainText("analytics response is invalid");
     await expect(page.getByTestId("analytics-page-view-count")).toHaveCount(0);
     await page.unroute("**/api/admin/analytics/report?*");
@@ -279,7 +292,9 @@ test("AN-009: unavailable or invalid aggregate report never becomes successful z
     } });
   });
   await expect(refresh).toBeEnabled();
+  const unavailableTotals = page.waitForResponse(response => response.url().includes("/api/admin/analytics/report?") && response.request().method() === "GET");
   await refresh.press("Enter");
+  expect((await unavailableTotals).status()).toBe(200);
   await expect(page.getByText(/N\/A inquiries/)).toBeVisible();
   await expect(page.getByText(/receipt totals are not confirmed/)).toBeVisible();
 });

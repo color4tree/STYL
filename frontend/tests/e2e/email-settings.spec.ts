@@ -84,6 +84,32 @@ test("AN-017: validation keeps edits and prevents enabled mail without recipient
   expect(await settings(request)).toMatchObject({ enabled: false, recipients: [] });
 });
 
+test("ADM-009 AN-017: focused error feedback is stable before the next action", async ({ page }) => {
+  const panel = await openSettings(page);
+  await expect(page.getByTestId("analytics-page-view-count")).toBeVisible();
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await panel.getByRole("checkbox", { name: "Enable daily summary emails", exact: true }).check();
+  const samples = page.evaluate(() => new Promise<number[]>((resolve, reject) => {
+    const timeout = window.setTimeout(() => { document.removeEventListener("focusin", onFocus); reject(new Error("Error feedback did not receive focus.")); }, 5000);
+    function onFocus(event: FocusEvent) {
+      if (!(event.target instanceof HTMLElement) || event.target.getAttribute("role") !== "alert") return;
+      document.removeEventListener("focusin", onFocus);
+      const positions: number[] = [];
+      const frame = () => {
+        positions.push(window.scrollY);
+        if (positions.length < 24) requestAnimationFrame(frame);
+        else { clearTimeout(timeout); resolve(positions); }
+      };
+      requestAnimationFrame(frame);
+    }
+    document.addEventListener("focusin", onFocus);
+  }));
+  await panel.getByRole("button", { name: "Save email settings", exact: true }).click();
+  await expect(panel.getByRole("alert")).toBeFocused();
+  const positions = await samples;
+  expect(Math.max(...positions) - Math.min(...positions), "automatic error scrolling must be settled before focus is announced").toBeLessThanOrEqual(1);
+});
+
 test("AN-017: unsaved recipients survive tab changes; a stale save requires an explicit reload", async ({ page, request }) => {
   const panel = await openSettings(page);
   const recipients = panel.getByLabel("Daily email recipients", { exact: true });
@@ -100,8 +126,18 @@ test("AN-017: unsaved recipients survive tab changes; a stale save requires an e
   await expect(panel.getByRole("alert")).toContainText("changed in another session");
   await expect(recipients).toHaveValue("my-edit@example.com");
   expect((await settings(request)).recipients).toEqual(["other-admin@example.com"]);
-  page.once("dialog", dialog => dialog.accept());
-  await panel.getByRole("button", { name: "Discard changes and reload", exact: true }).click();
+  const reload = panel.getByRole("button", { name: "Discard changes and reload", exact: true });
+  await expect(reload).toBeEnabled();
+  await reload.focus();
+  await expect(reload).toBeFocused();
+  const confirmation = page.waitForEvent("dialog");
+  const refreshed = page.waitForResponse(response => response.url() === endpoint && response.request().method() === "GET");
+  const activate = reload.press("Enter");
+  const dialog = await confirmation;
+  expect(dialog.type()).toBe("confirm");
+  await dialog.accept();
+  await activate;
+  expect((await refreshed).status()).toBe(200);
   await expect(recipients).toHaveValue("other-admin@example.com");
   await expect(panel.getByText("Unsaved changes", { exact: true })).toHaveCount(0);
 });

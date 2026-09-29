@@ -79,6 +79,16 @@ class AnalyticsTests(unittest.TestCase):
         with analytics.get_store().connection() as connection:
             return "\n".join(connection.iterdump())
 
+    def test_an009_accessory_detail_uses_only_canonical_path(self) -> None:
+        response = self.post([
+            self.event(path="/accessories/[id]"),
+            self.event("navigation_click", {"toPath": "/accessories/[id]"}),
+        ])
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"accepted": 2})
+        self.assertIn({"path": "/accessories/[id]", "pageViews": 1, "activeSeconds": 0}, self.report()["pages"])
+        self.assertNotIn("/accessories/1001", self.dump())
+
     def test_an007_config_is_exact_anonymous_contract_without_opening_store(self) -> None:
         response = self.client.get("/api/analytics/config")
         self.assertEqual(response.json(), {
@@ -134,6 +144,8 @@ class AnalyticsTests(unittest.TestCase):
             self.event(path="/admin"), self.event(path="/?email=PRIVATE_QUERY"),
             self.event(properties={"email": "PRIVATE_FORM"}), self.event(name="inquiry_received"),
             self.event("navigation_click", {"toPath": "/products/safe-rack"}),
+            self.event(path="/accessories/1001"),
+            self.event("navigation_click", {"toPath": "/accessories/1001"}),
             self.event("cart_add", {"itemType": "product", "itemId": True}),
             self.event("cart_add", {"itemType": "product", "itemId": 1.0}),
             self.event("cart_add", {"itemType": "product", "itemId": 0}),

@@ -13,7 +13,7 @@ It is not a full AWS instance, application-source, credential or inquiry backup.
 Included:
 
 - Saved products and accessories, including Draft/Published state, record IDs,
-  product slugs, independent CAD/USD prices, legacy fields, specifications,
+  product slugs, independent CAD/USD prices and optional MSRPs, legacy fields, specifications,
   compatibility and private provenance/admin notes.
 - Home banner configuration. If it has never been saved, the current default
   configuration is materialized in the archive without changing the source.
@@ -173,7 +173,8 @@ instructions and the standalone tool.
    prices to make the recovered store look populated.
 7. Build/start the frontend and API, then inspect:
    - Admin product/accessory counts, IDs/slugs and private metadata.
-   - CAD and USD prices independently, including missing-market hiding.
+   - CAD/USD prices and optional MSRPs independently, including missing-selling-price
+     hiding, higher-only MSRP display and cart/quote totals based on selling Price.
    - Draft privacy and published detail links.
    - Home banner, images, all video/poster references and byte-range seeking.
    - Save/reload and service restart persistence.

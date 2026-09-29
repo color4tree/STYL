@@ -26,6 +26,7 @@ export type Accessory = CatalogDetails & {
 export type AdminAccessory = Omit<Accessory, "price"> & {
   price: number | null;
   prices: MarketPrices;
+  msrps?: MarketPrices;
   publicationStatus?: "" | "draft" | "published";
   missingPriceMarkets?: string[];
 };

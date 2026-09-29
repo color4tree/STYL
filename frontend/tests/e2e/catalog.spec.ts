@@ -96,10 +96,13 @@ test("accessory create, validation, reload, public detail, selling units, cart a
   await page.goto("/accessories");
   const card = page.locator("article").filter({ hasText: name });
   await expect(card).toContainText("CAD $19.95 / pair");
-  await expect(card.getByText("Full description distinct from public use.", { exact: true })).toBeVisible();
+  await expect(card.getByText("Full description distinct from public use.", { exact: true })).toBeHidden();
+  await expect(card.getByRole("button", { name: `Increase quantity for ${name}`, exact: true })).toBeHidden();
   const showMore = card.getByRole("button", { name: "Show more", exact: true });
-  if (await showMore.isVisible()) await showMore.click();
+  await showMore.click();
+  await expect(card.getByText("Full description distinct from public use.", { exact: true })).toBeVisible();
   await expect(card.getByText("Cable exercise use.", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: `Increase quantity for ${name}`, exact: true })).toBeVisible();
   await expect(card.getByText("Dimensions", { exact: true })).toHaveCount(0);
   await expect(card.getByText("Weight", { exact: true })).toHaveCount(0);
   await card.getByRole("button", { name: "Add to cart", exact: true }).click();
@@ -165,7 +168,7 @@ test("product media upload, reorder, cover, real video conversion/seek and manua
   expect(item.photos).toHaveLength(3);
   expect(item.photos[0]).toMatch(/\.mp4$/);
   expect(item.image).toBe(item.photos[1]);
-  await page.goto("/");
+  await page.goto("/?catalog=equipment");
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   const names = await page.locator("#products article > h3").allTextContents();
   const publicItems = (await (await request.get(`${api}/api/products`)).json()).items;
@@ -260,18 +263,19 @@ test("quote form retains failed input, prevents duplicate active requests and st
 test("responsive navigation, desktop grids, narrow widths and cart quantity limits", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.locator("#products article").first()).toBeVisible();
-  const browseAccessories = page.locator('#products a[href="/accessories"]');
+  await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "all");
   for (const width of [320, 390, 768, 1023, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (width >= 1024) {
-      const navigation = page.getByRole("navigation", { name: "Main navigation", exact: true });
-      await expect(navigation).toBeVisible();
-      await expect(navigation.getByRole("link", { name: "Accessories", exact: true })).toBeVisible();
-      await expect(browseAccessories).toBeHidden();
-    } else {
-      await expect(browseAccessories).toBeVisible();
-      await expect(browseAccessories).toHaveAttribute("href", "/accessories");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    const navigation = page.getByRole("navigation", { name: width >= 1024 ? "Main navigation" : "Catalog navigation", exact: true });
+    await expect(navigation).toBeVisible();
+    for (const [label, href] of [["All products", "/#products"], ["Equipment", "/?catalog=equipment#products"], ["Accessories", "/?catalog=accessories#products"]]) {
+      const link = navigation.getByRole("link", { name: label, exact: true });
+      await expect(link).toBeVisible();
+      await expect(link).toHaveAttribute("href", href);
+      expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+    }
+    if (width < 1024) {
       await page.getByRole("button", { name: "Menu", exact: true }).click();
       await expect(page.getByRole("dialog", { name: "Site navigation" })).toBeVisible();
       await page.getByRole("button", { name: "Close", exact: true }).click();
@@ -308,7 +312,7 @@ test("business principle is prominent in the introduction without delaying mobil
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await expect(principle).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("link", { name: "Shop equipment", exact: true })).toBeInViewport({ ratio: 1 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (width === 390) {
       const firstProduct = await page.locator("#products article h3").first().boundingBox();
       expect(firstProduct).not.toBeNull();
@@ -331,7 +335,7 @@ test("home banner is hidden on phones and preserved on tablet and desktop", asyn
     await expect(introduction.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(introduction.locator("blockquote")).toBeVisible();
     await expect(introduction.getByRole("link", { name: "Shop equipment", exact: true })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });
 
@@ -382,7 +386,7 @@ test("home banner custom content and upload persist without any price informatio
 
 test("catalog retry, unavailable images and empty cart recover visibly", async ({ page }) => {
   await page.route("**/api/products", (route) => route.fulfill({ status: 503, body: "unavailable" }));
-  await page.goto("/");
+  await page.goto("/?catalog=equipment");
   await expect(page.locator("#products").getByRole("alert")).toContainText("unavailable");
   await page.unroute("**/api/products");
   await page.getByRole("button", { name: "Retry", exact: true }).click();

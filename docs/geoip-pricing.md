@@ -16,6 +16,16 @@ The unknown-location fallback changed from USD to CAD on 2026-09-26 while databa
 provisioning is pending. Located US/other-country pricing remains USD. A missing
 CAD price still hides an item; the USD amount is never relabeled or converted.
 
+Optional MSRP follows the same trusted market selection, independently from
+selling Price. Admin uses `msrps: {CAD, USD}` with nullable amounts; public list,
+equipment/accessory detail and selection responses expose only the selected
+`msrp`, not the other market's map. Legacy records without MSRP remain valid.
+Omitting MSRP during updates preserves it; a partial map updates only supplied
+markets and null clears that market. Nonnegative exact-cent validation applies.
+Unknown currencies and a null map are rejected. No copying or conversion occurs.
+MSRP never makes an item with missing selling Price visible or affects cart/quote
+arithmetic. The storefront strikes MSRP only when it is greater than selling Price.
+
 Only `country.iso_code` is used. `registered_country` describes registration, not necessarily the user's location, so it is **not** a fallback. VPNs, proxies, mobile networks and database inaccuracies can misidentify a visitor's actual location. This is a display/pricing hint, not proof of residence, tax jurisdiction or eligibility.
 
 The application uses only `request.client.host` after Uvicorn's trusted-proxy processing. It never reads country headers, `X-Forwarded-For`, `Forwarded` or `X-Real-IP` itself. Invalid, private, loopback, link-local, multicast and other non-global addresses remain unknown, including local development requests. IPv4-mapped IPv6 addresses are checked as IPv4.

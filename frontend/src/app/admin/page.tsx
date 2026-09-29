@@ -14,8 +14,8 @@ import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications, type Provenance } from "@/lib/catalogDetails";
 import { fetchCatalogCategories } from "@/lib/accessories";
-import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, parseMarketPrices, priceError, type AdminMessage } from "./AdminFields";
-import { getMarketPrices, priceInputs, type MarketPrices } from "@/lib/pricing";
+import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
+import { getMarketPrices, getMarketMsrps, priceInputs, type MarketPrices } from "@/lib/pricing";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
 type Product = CatalogDetails & ProductSpecifications & {
@@ -25,6 +25,7 @@ type Product = CatalogDetails & ProductSpecifications & {
   category: string;
   price: number | null;
   prices: MarketPrices;
+  msrps?: MarketPrices;
   currency: string;
   shortDescription: string;
   description: string;
@@ -34,6 +35,8 @@ type Product = CatalogDetails & ProductSpecifications & {
   provenance?: Provenance;
 };
 
+type ProductForm = Omit<Product, "id" | "slug"> & { msrps: MarketPrices };
+
 type AdminTab = "products" | "accessories" | "banner";
 
 const adminTabs: { id: AdminTab; label: string; heading: string }[] = [
@@ -42,12 +45,13 @@ const adminTabs: { id: AdminTab; label: string; heading: string }[] = [
   { id: "banner", label: "Home banner", heading: "Home banner" },
 ];
 
-const emptyProduct: Omit<Product, "id" | "slug"> = {
+const emptyProduct: ProductForm = {
   ...getProductSpecifications({}),
   name: "",
   category: "",
   price: null,
   prices: { CAD: null, USD: null },
+  msrps: { CAD: null, USD: null },
   currency: "CAD",
   publicationStatus: "draft",
   shortDescription: "",
@@ -82,13 +86,14 @@ async function verifyAdminToken(token: string): Promise<void> {
   }
 }
 
-function toFormState(product: Product): Omit<Product, "id" | "slug"> {
+function toFormState(product: Product): ProductForm {
   return {
     ...getProductSpecifications(product),
     name: product.name,
     category: product.category,
     price: product.price,
     prices: getMarketPrices(product),
+    msrps: getMarketMsrps(product),
     currency: product.currency,
     shortDescription: product.shortDescription ?? "",
     description: product.description ?? "",
@@ -107,9 +112,10 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [form, setForm] = useState<Omit<Product, "id" | "slug">>(emptyProduct);
+  const [form, setForm] = useState<ProductForm>(emptyProduct);
   const [baseline, setBaseline] = useState(JSON.stringify(emptyProduct));
   const [priceText, setPriceText] = useState(priceInputs(emptyProduct.prices));
+  const [msrpText, setMsrpText] = useState(priceInputs(emptyProduct.msrps));
   const [categories, setCategories] = useState<string[]>([]);
   const [showEditor, setShowEditor] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -124,14 +130,15 @@ export default function AdminPage() {
   const [backupBusy, setBackupBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) : childDirty;
+  const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps)) : childDirty;
   const busy = saving || uploading || accessoryBusy || backupBusy || orderBusy;
   const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
 
-  const loadForm = (next: Omit<Product, "id" | "slug">) => {
+  const loadForm = (next: ProductForm) => {
     setForm(next);
     setBaseline(JSON.stringify(next));
     setPriceText(priceInputs(next.prices));
+    setMsrpText(priceInputs(next.msrps));
   };
 
   const verifyAccess = async (token = adminToken) => {
@@ -253,6 +260,11 @@ export default function AdminPage() {
       setMessage({ type: "error", text: priceError });
       return;
     }
+    const msrps = parseMarketPrices(msrpText);
+    if (msrps === null) {
+      setMessage({ type: "error", text: msrpError });
+      return;
+    }
     if (!form.name.trim() || !form.category.trim()) {
       setMessage({ type: "error", text: "Name and category are required." });
       return;
@@ -262,7 +274,6 @@ export default function AdminPage() {
       return;
     }
 
-    setPriceText(priceInputs(prices));
     setSaving(true);
     setMessage(null);
 
@@ -272,6 +283,7 @@ export default function AdminPage() {
         name: form.name.trim(),
         category: form.category.trim(),
         prices,
+        msrps,
         features: form.features.map((feature) => feature.trim()).filter(Boolean),
       };
 
@@ -470,7 +482,7 @@ export default function AdminPage() {
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold [overflow-wrap:anywhere]">{product.name}</div>
                       <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">{product.category}</div>
-                      <MarketPriceSummary prices={getMarketPrices(product)} />
+                      <MarketPriceSummary prices={getMarketPrices(product)} msrps={getMarketMsrps(product)} />
                       <div className="mt-1 text-xs text-[var(--muted)]">{product.publicationStatus === "draft" ? "Draft" : "Published"}</div>
                     </div>
                   </div>
@@ -512,6 +524,7 @@ export default function AdminPage() {
               </label>
 
               <MarketPriceInputs prefix="product-price" value={priceText} onChange={setPriceText} />
+              <MarketPriceInputs prefix="product-msrp" kind="msrp" value={msrpText} onChange={setMsrpText} />
 
               <label className="block text-sm font-medium">
                 Publication status

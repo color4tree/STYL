@@ -189,11 +189,29 @@ ignored on read and removed on the next admin save; the original text and image
 remain usable. The banner stays hidden below 768 CSS px. Regional product prices
 continue to appear in the catalog, product details, and cart.
 
-Customer/admin labels use **Equipment** (previously Products) and **Accessories**
-as separate catalogs. The home page offers **Shop equipment** and
-**Shop accessories**, alongside the existing quote action. This is presentation
-only: `/api/products`, `/products/[slug]`, `#products`, IDs and saved JSON fields
-remain compatible.
+Customer/admin labels use **Equipment** (an uncountable noun, not "equipments")
+and **Accessories**. The home page and header put **All products** first; it is
+the default combined view, with equipment followed by accessories in each
+catalog's saved order. **Shop equipment** and **Shop accessories** filter that
+same home catalog using `?catalog=equipment` / `?catalog=accessories`; reload and
+browser history preserve the choice. Existing `/accessories`, `/products/[slug]`,
+`/api/products`, `#products` and saved identifiers stay compatible.
+
+Both kinds use the same compact card: gallery, category, name, selling price,
+**... Show more**, Add to cart and (at desktop widths >=1024px) Details.
+Descriptions, specifications, compatibility, contents and quantity controls are
+collapsed initially on **all** widths, including mobile. Show more/less reveals
+or hides the full content without a clipped preview. Mobile has no separate
+Details button; the item title can still open its full page. Equipment and new
+`/accessories/[id]` pages share the same complete detail/gallery layout.
+This approved 2026-09-29 change supersedes the earlier visible-detail/desktop-cap
+and automatic-full-mobile behavior.
+
+Both admin editors support optional independent **CAD MSRP** / **USD MSRP**
+alongside Price. Empty MSRP is valid; public MSRP is crossed out only when
+strictly greater than the current market's selling price. Missing/equal/lower
+MSRP does not show a discount. No currency copying/conversion occurs, and MSRP
+never affects market visibility, cart totals or quote prices.
 
 Equipment and accessories follow the saved listing sequence. In each admin catalog,
 the toolbar order is **Catalog → Arrange listing order → New**. Click
@@ -299,7 +317,8 @@ inquiry errors and storage, navigation, responsive layouts, prominent homepage
 business-principle placement, custom price-free banners, regional prices and
 missing-price visibility, date persistence across timezones, upload batch history,
 quote-anchor landing and frame-stable navigation during delayed content without overriding user interaction,
-aligned product/accessory cards with taller desktop previews and full mobile details,
+combined/filtered catalogs, compact aligned cards with explicit expansion on
+desktop/mobile, matching accessory details and optional regional MSRP,
 multiline quote-message persistence,
 and unavailable-media recovery. Quote-navigation and catalog-layout cases run in
 desktop/phone Chromium and mobile WebKit. Controlled failure responses are injected only

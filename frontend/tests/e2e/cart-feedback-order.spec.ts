@@ -38,7 +38,7 @@ async function expectToolbar(page: Page, catalog: "products" | "accessories", ar
 
 for (const catalog of ["products", "accessories"] as const) {
   test(`USR-016: ${catalog} Add to cart confirms immediately and respects the quantity cap`, async ({ page }) => {
-    await page.goto(catalog === "products" ? "/" : "/accessories");
+    await page.goto(catalog === "products" ? "/?catalog=equipment" : "/accessories");
     const card = page.locator(catalog === "products" ? "#products article" : "main article").first();
     const add = card.locator("[data-cart-feedback]");
     await expect(add).toBeEnabled();
@@ -58,7 +58,7 @@ for (const catalog of ["products", "accessories"] as const) {
     await page.clock.fastForward(2501);
     await expect(add).toHaveText("Maximum 10 in cart");
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("styl-cart")!)[0].quantity)).toBe(10);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
   });
 }
 
@@ -153,7 +153,10 @@ for (const catalog of ["products", "accessories"] as const) {
     const saved = (await (await request.get(`${api}/api/admin/${catalog}`, { headers })).json()).items;
     expect(saved[0].id).toBe(target.id);
     expect(saved.some((item: { name: string }) => item.name === "Unsaved edit retained during ordering")).toBe(false);
-    await targetCard.getByRole("button", { name: `Move ${target.name} down`, exact: true }).focus();
+    const moveDown = targetCard.getByRole("button", { name: `Move ${target.name} down`, exact: true });
+    await expect(moveDown).toBeEnabled();
+    await moveDown.focus();
+    await expect(moveDown).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(targetCard).toHaveAttribute("data-position", "2");
     await expect(targetCard).toBeFocused();
@@ -173,12 +176,12 @@ for (const catalog of ["products", "accessories"] as const) {
     await expect(cards.last().getByRole("button", { name: / down$/ })).toBeDisabled();
     await page.setViewportSize({ width: 320, height: 844 });
     await expectToolbar(page, catalog, true);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     await targetCard.getByRole("button", { name: `Move ${target.name} down`, exact: true }).click();
     await expect(targetCard).toHaveAttribute("data-position", "2");
     await targetCard.getByRole("button", { name: `Move ${target.name} up`, exact: true }).click();
     await expect(targetCard).toHaveAttribute("data-position", "1");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     const doneArranging = page.getByRole("button", { name: "Done arranging", exact: true });
     await expect(doneArranging).toBeEnabled();
     await doneArranging.focus();
@@ -191,7 +194,7 @@ for (const catalog of ["products", "accessories"] as const) {
     await expect(field).toHaveValue(target.name);
     await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: catalog === "products" ? "Delete equipment" : "Delete accessory", exact: true })).toBeEnabled();
-    await page.goto(catalog === "products" ? "/" : "/accessories");
+    await page.goto(catalog === "products" ? "/?catalog=equipment" : "/accessories");
     const publicCards = page.locator(catalog === "products" ? "#products article" : "main article");
     await expect(publicCards.first().locator(catalog === "products" ? ":scope > h3" : ":scope > h2")).toHaveText(target.name);
     if (catalog === "products") {

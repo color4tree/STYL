@@ -115,7 +115,7 @@ test("ADM-010 SYS-017: real private ZIP download, progress, duplicate guard, fil
   await signIn(page);
   await openBackup(page);
   await expect(page.getByText("Private, unencrypted archive", { exact: true })).toBeVisible();
-  await expect(page.getByText("All equipment and accessories, including drafts, private provenance, CAD and USD prices, and record IDs.", { exact: true })).toBeVisible();
+  await expect(page.getByText("All equipment and accessories, including drafts, private provenance, CAD and USD prices and optional MSRPs, and record IDs.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Saved changes only\./)).toBeVisible();
   await expect(page.getByText(/Browser upload\/import is not implemented/)).toBeVisible();
   await expect(page.getByText(/not a machine or full website backup/)).toBeVisible();

@@ -134,8 +134,11 @@ browser country headers or submitted prices.
 - Actual rendered route entries and allowlisted navigation actions; not prefetch,
   rerenders, API calls or media downloads.
 - Item impressions after the identity/price area reaches 50% visibility for one
-  continuous second; separate loaded detail, desktop expansion and media actions.
-  Full mobile details do not manufacture Show more clicks.
+  continuous second; separate loaded detail, explicit Show more and media actions.
+  The compact cards now require explicit expansion on every viewport; real mobile
+  Show more clicks count, but rendering/resizing/collapse does not manufacture one.
+  Accessory detail paths are normalized to `/accessories/[id]`, without storing
+  raw IDs in navigation paths.
 - Successful cart actions and quote open/start/attempt/error counts. A quote
   action is not a saved inquiry or proof of an individual conversion.
 - Visible/focused, non-idle bounded active-time increments, summed as a

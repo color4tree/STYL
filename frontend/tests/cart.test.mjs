@@ -45,6 +45,14 @@ test("prices consistently show their currency and two decimals", () => {
   }
 });
 
+test("SYS-020: MSRP never replaces selling price in cart totals or quote text", () => {
+  const next = cart.addProductToCart({ id: 777, name: "MSRP fixture", price: 19.95, msrp: 99, currency: "CAD" }, 2);
+  assert.deepEqual(cart.getCartTotals(next), [["CAD", 39.90]]);
+  assert.equal(next[0].price, 19.95);
+  assert.match(cart.formatCartSummary(next), /CAD \$19\.95/);
+  assert.doesNotMatch(cart.formatCartSummary(next), /99\.00/);
+});
+
 test("saved cart is repriced and unavailable regional items are removed", () => {
   const saved = [
     { id: 1, name: "Rack", price: 4000, currency: "USD", quantity: 2 },

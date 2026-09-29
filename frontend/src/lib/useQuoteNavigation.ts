@@ -42,6 +42,8 @@ export function useQuoteNavigation(layoutReady: boolean) {
         return;
       }
       event.preventDefault();
+      const catalog = new URLSearchParams(window.location.search).get("catalog");
+      if (!url.search && (catalog === "equipment" || catalog === "accessories")) url.searchParams.set("catalog", catalog);
       if (url.href !== window.location.href) window.history.pushState(null, "", url);
       state.pending = true;
       state.interrupted = false;

@@ -1,32 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
+import { Suspense, useEffect, useState } from "react";
+import { getCartCount } from "@/lib/cart";
 import { useCart } from "@/lib/useCart";
-import { API_BASE, resolveProductImage } from "@/lib/api";
+import { resolveProductImage } from "@/lib/api";
 import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
-import AddToCartButton from "@/components/AddToCartButton";
 import InquiryForm from "@/components/InquiryForm";
-import CatalogCard from "@/components/CatalogCard";
-import { productSpecificationFields, type CatalogDetails, type ProductSpecifications } from "@/lib/catalogDetails";
+import CatalogGrid from "@/components/CatalogGrid";
+import CatalogViewSync from "@/components/CatalogViewSync";
+import { catalogViews, fetchPublicCatalog, type CatalogEntry, type CatalogView, type PublicCatalogItem } from "@/lib/publicCatalog";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 import { useQuoteNavigation } from "@/lib/useQuoteNavigation";
 import { trackAnalytics } from "@/lib/analytics";
-
-type Product = CatalogDetails & ProductSpecifications & {
-  id: number;
-  slug: string;
-  name: string;
-  category: string;
-  price: number;
-  currency: string;
-  shortDescription: string;
-  description?: string;
-  features?: string[];
-  featured?: boolean;
-};
 
 const brandAssets = [
   { name: "Signature shield", description: "Laser-etched into brushed stainless steel on every frame upright.", file: "/images/brand/logo-plate.jpg" },
@@ -36,27 +23,33 @@ const brandAssets = [
 ];
 
 export default function Home() {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<PublicCatalogItem[]>([]);
+  const [accessories, setAccessories] = useState<PublicCatalogItem[]>([]);
+  const [view, setView] = useState<CatalogView>("all");
   const [catalogError, setCatalogError] = useState(false);
+  const [accessoryError, setAccessoryError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [accessoryLoading, setAccessoryLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [hero, setHero] = useState<Hero>(defaultHero);
   const [heroLoading, setHeroLoading] = useState(true);
   const { cart, add, loading: cartLoading, error, notice } = useCart();
-  useQuoteNavigation(!loading && !heroLoading && !cartLoading);
+  useQuoteNavigation(!loading && !accessoryLoading && !heroLoading && !cartLoading);
   useEffect(() => {
     let active = true;
-    fetch(`${API_BASE}/api/products`, { cache: "no-store" }).then(async (response) => {
-      if (!response.ok) throw new Error("Unable to load equipment.");
-      const data = await response.json();
-      if (!Array.isArray(data.items)) throw new Error("Invalid catalog response.");
+    const controller = new AbortController();
+    fetchPublicCatalog("products", controller.signal).then((items) => {
       if (active) {
-        setProducts(data.items as Product[]);
+        setProducts(items);
         setCatalogError(false);
       }
-    }).catch((error) => { console.error(error); if (active) setCatalogError(true); })
+    }).catch((error) => { if (active) { console.error(error); setCatalogError(true); } })
       .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    fetchPublicCatalog("accessories", controller.signal).then((items) => {
+      if (active) { setAccessories(items); setAccessoryError(false); }
+    }).catch((error) => { if (active) { console.error(error); setAccessoryError(true); } })
+      .finally(() => { if (active) setAccessoryLoading(false); });
+    return () => { active = false; controller.abort(); };
   }, [retry]);
   useEffect(() => {
     let active = true;
@@ -66,8 +59,17 @@ export default function Home() {
     return () => { active = false; };
   }, []);
 
+  const entries: CatalogEntry[] = [
+    ...(view !== "accessories" ? products.map(item => ({ item, itemType: "product" as const })) : []),
+    ...(view !== "equipment" ? accessories.map(item => ({ item, itemType: "accessory" as const })) : []),
+  ];
+  const selectedLoading = (view !== "accessories" && loading) || (view !== "equipment" && accessoryLoading);
+  const selectedError = (view !== "accessories" && catalogError) || (view !== "equipment" && accessoryError);
+  const label = catalogViews.find(entry => entry.view === view)!.label;
+
   return (
     <>
+      <Suspense fallback={null}><CatalogViewSync onChange={setView} /></Suspense>
       <StoreHeader cartCount={getCartCount(cart)} />
       <main className="min-h-screen bg-[var(--bg)] text-[var(--ink)]">
         <section className="container grid gap-5 py-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-center lg:gap-12 lg:py-20">
@@ -84,8 +86,10 @@ export default function Home() {
               </p>
             </blockquote>
             <div className="mt-5 flex flex-wrap gap-3 lg:mt-8">
-              <a href="#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 py-3 font-medium text-white">Shop equipment</a>
-              <Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium">Shop accessories</Link>
+              {catalogViews.map(entry => <Link key={entry.view} href={entry.href} aria-current={view === entry.view ? "page" : undefined}
+                className={`inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium ${view === entry.view ? "bg-[var(--ink)] text-white" : ""}`}>
+                {entry.view === "all" ? "All products" : `Shop ${entry.label.toLowerCase()}`}
+              </Link>)}
             </div>
           </div>
           <aside aria-label="Home banner" className="hidden rounded-3xl bg-[linear-gradient(135deg,#1c1c1c,#504639)] p-4 text-white md:block lg:p-7">
@@ -98,27 +102,15 @@ export default function Home() {
           </aside>
         </section>
 
-        <section id="products" className="container scroll-mt-32 py-8 lg:scroll-mt-24 lg:py-12">
+        <section id="products" data-catalog-view={view} aria-busy={selectedLoading} className="container scroll-mt-32 py-8 lg:scroll-mt-24 lg:py-12">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3 lg:mb-10">
-            <div><p className="text-sm text-[var(--muted)]">Equipment collection</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] lg:text-5xl">Precision-built for real routines.</h2></div>
-            <Link href="/accessories" className="inline-flex min-h-11 items-center text-sm font-medium underline lg:hidden">Browse accessories</Link>
+            <div><p className="text-sm text-[var(--muted)]">{label}</p><h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] lg:text-5xl">Precision-built for real routines.</h2></div>
           </div>
           <CartFeedback error={error} notice={notice} />
-          {loading ? <p role="status" className="rounded-2xl bg-white/60 p-8">Loading equipment...</p>
-            : catalogError ? <div role="alert" data-analytics-event="site_error"><p>Equipment is unavailable right now.</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setRetry(retry + 1); }}>Retry</button></div>
-              : !products.length ? <p data-analytics-event="catalog_empty" data-analytics-list="products">No equipment is currently available.</p>
-                : <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
-                  {products.map((product) => {
-                    const atLimit = (cart.find((item) => item.id === product.id)?.quantity ?? 0) >= MAX_ITEM_QUANTITY;
-                    return <CatalogCard key={product.id} item={product} itemType="product" headingLevel={3} href={`/products/${product.slug}`}
-                      specifications={[...productSpecificationFields.map((field) => [field.label, product[field.key]] as const), ["Availability", product.stockStatus]]}>
-                      <div className="flex flex-wrap gap-3">
-                        <AddToCartButton disabled={cartLoading || Boolean(error)} atLimit={atLimit} onAdd={() => add(product)} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50" />
-                        <Link href={`/products/${product.slug}`} data-analytics-action="details" className="inline-flex min-h-12 items-center rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium">Details</Link>
-                      </div>
-                    </CatalogCard>;
-                  })}
-                </div>}
+          {selectedLoading ? <p role="status" className="rounded-2xl bg-white/60 p-8">Loading {label.toLowerCase()}...</p>
+            : selectedError ? <div role="alert" data-analytics-event="site_error"><p>{view === "all" ? "The complete catalog is unavailable right now. Please retry or choose a specific catalog." : `${label} ${view === "equipment" ? "is" : "are"} unavailable right now.`}</p><button type="button" className="mt-3 min-h-11 rounded-full border px-5" onClick={() => { setLoading(true); setAccessoryLoading(true); setRetry(retry + 1); }}>Retry</button></div>
+              : !entries.length ? <p data-analytics-event="catalog_empty" data-analytics-list={view === "accessories" ? "accessories" : "products"}>No {view === "all" ? "products" : view} {view === "equipment" ? "is" : "are"} currently available.</p>
+                : <CatalogGrid entries={entries} cart={cart} add={add} disabled={cartLoading || Boolean(error)} />}
         </section>
 
         <section id="about" className="scroll-mt-32 bg-[#171717] py-10 text-white lg:my-10 lg:scroll-mt-24 lg:py-16">

@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import BrandLogo from "./BrandLogo";
+import { catalogViews } from "@/lib/publicCatalog";
 
 const links = [
-  { href: "/#products", label: "Equipment" },
-  { href: "/accessories", label: "Accessories" },
+  ...catalogViews,
   { href: "/#about", label: "About" },
   { href: "/#contact", label: "Request a quote" },
 ];
@@ -40,8 +40,8 @@ export default function StoreHeader({ cartCount }: { cartCount: number }) {
           <button ref={trigger} type="button" className="min-h-11 rounded-full border border-[var(--line)] px-3 text-sm lg:hidden" aria-haspopup="dialog" aria-expanded={open} onClick={() => { dialog.current?.showModal(); setOpen(true); }}>Menu</button>
         </div>
       </div>
-      <nav aria-label="Catalog navigation" className="container flex min-h-12 items-center gap-6 pb-1 text-sm lg:hidden">
-        {links.slice(0, 2).map((link) => <Link key={link.href} href={link.href} className="inline-flex min-h-12 items-center px-1 font-medium hover:underline">{link.label}</Link>)}
+      <nav aria-label="Catalog navigation" className="container flex min-h-12 flex-wrap items-center gap-x-3 pb-1 text-sm lg:hidden">
+        {catalogViews.map((link) => <Link key={link.href} href={link.href} className="inline-flex min-h-12 items-center px-1 font-medium hover:underline">{link.label}</Link>)}
       </nav>
       <dialog ref={dialog} aria-label="Site navigation" className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-md rounded-2xl bg-white p-5 text-[var(--ink)] backdrop:bg-black/60" onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }} onClose={() => { setOpen(false); trigger.current?.focus(); }}>
         <div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Explore STYL</h2><button type="button" onClick={() => dialog.current?.close()} className="min-h-11 px-3">Close</button></div>

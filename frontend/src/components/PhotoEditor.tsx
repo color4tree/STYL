@@ -139,7 +139,7 @@ export default function PhotoEditor({ photos, onChange, adminToken, disabled, on
       </div>
       <label onDragOver={(event) => event.preventDefault()} onDrop={dropFiles} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-[var(--line)] bg-neutral-50 p-4 text-sm font-medium">
         <Upload size={18} aria-hidden="true" /> Upload files (photos 8 MiB / videos 50 MiB)
-        <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v,video/x-matroska,video/x-msvideo,.mov,.mp4,.m4v,.webm,.mkv,.avi" disabled={photos.length >= MAX_PHOTOS} onChange={upload} className="min-h-11 min-w-0 flex-1 text-xs file:mr-2 file:min-h-11 file:rounded-md file:border file:border-[var(--line)] file:bg-white file:px-2 file:py-2" />
+        <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm,video/x-m4v,video/x-matroska,video/x-msvideo,.mov,.mp4,.m4v,.webm,.mkv,.avi" disabled={photos.length >= MAX_PHOTOS} onChange={upload} className="min-h-11 w-full min-w-0 shrink-0 basis-full text-xs file:mr-2 file:min-h-11 file:rounded-md file:border file:border-[var(--line)] file:bg-white file:px-2 file:py-2" />
       </label>
       <p className="mt-2 text-xs text-[var(--muted)]">JPG, PNG, WebP, GIF; MP4, MOV, M4V, WebM, MKV, AVI. Uploaded videos convert to H.264/AAC MP4 (up to 1280 px), with audio retained and a poster generated. Export SDR for reliable color. Originals are discarded—keep your own copy. URL media is not converted. Keep important information available as text, not only audio.</p>
       <div className="mt-3 flex items-end gap-2">

@@ -1,28 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import CatalogCard from "@/components/CatalogCard";
+import CatalogGrid from "@/components/CatalogGrid";
 import StoreHeader from "@/components/StoreHeader";
 import CartFeedback from "@/components/CartFeedback";
-import AddToCartButton from "@/components/AddToCartButton";
-import { quantityLabel } from "@/lib/catalogDetails";
-import { fetchAccessories, type Accessory } from "@/lib/accessories";
-import { getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
+import { fetchPublicCatalog, type PublicCatalogItem } from "@/lib/publicCatalog";
+import { getCartCount } from "@/lib/cart";
 import { useCart } from "@/lib/useCart";
 
 export default function AccessoriesPage() {
-  const [accessories, setAccessories] = useState<Accessory[]>([]);
+  const [items, setItems] = useState<PublicCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [quantities, setQuantities] = useState<Record<number, number>>({});
   const { cart, add, loading: cartLoading, error: cartError, notice } = useCart();
   useEffect(() => {
     let active = true;
-    fetchAccessories().then((items) => { if (active) { setAccessories(items); setError(null); } })
-      .catch(() => { if (active) setError("Accessories are unavailable right now. Please try again."); })
+    const controller = new AbortController();
+    fetchPublicCatalog("accessories", controller.signal).then(items => {
+      if (active) { setItems(items); setError(false); }
+    }).catch(failure => { if (active) { console.error(failure); setError(true); } })
       .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    return () => { active = false; controller.abort(); };
   }, [retry]);
   return <>
     <StoreHeader cartCount={getCartCount(cart)} />
@@ -30,36 +29,12 @@ export default function AccessoriesPage() {
       <h1 className="text-3xl font-semibold tracking-tight lg:text-5xl">Accessories</h1>
       <p className="mt-4 max-w-2xl leading-7 text-[var(--muted)]">Attachments and accessories for your training space. Contact us for fit confirmation and bundle pricing.</p>
       <CartFeedback error={cartError} notice={notice} />
-      {loading ? <p role="status" className="mt-8">Loading accessories...</p>
-        : error ? <div role="alert" data-analytics-event="site_error" className="mt-8"><p>{error}</p><button type="button" onClick={() => { setLoading(true); setRetry(retry + 1); }} className="mt-3 min-h-11 rounded-full border px-5">Retry</button></div>
-          : !accessories.length ? <p data-analytics-event="catalog_empty" data-analytics-list="accessories" className="mt-8">No accessories are currently available.</p>
-            : <div className="mt-8 grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
-              {accessories.map((item) => {
-                const remaining = MAX_ITEM_QUANTITY - (cart.find((entry) => entry.id === item.id)?.quantity ?? 0);
-                const quantity = Math.min(quantities[item.id] ?? 1, Math.max(1, remaining));
-                const specs = [
-                  ["Dimensions", item.dimensions], ["Material", item.material], ["Weight", item.weight],
-                  ["Finish / colour", item.colourOptions], ["What's included", item.included],
-                ] as const;
-                return <CatalogCard id={`accessory-${item.id}`} key={item.id} item={item} itemType="accessory" specifications={specs} headingLevel={2}>
-                  <div>
-                    <p className="mb-2 text-sm" aria-live="polite">Quantity: {quantityLabel(quantity, item.sellingUnit)}</p>
-                    <div className="flex flex-wrap gap-3">
-                      <div className="flex items-center rounded-full border border-[var(--line)] bg-white">
-                        <button type="button" aria-label={`Decrease quantity for ${item.name}`} disabled={quantity <= 1 || remaining <= 0} onClick={() => setQuantities({ ...quantities, [item.id]: quantity - 1 })} className="h-11 w-11 rounded-full disabled:opacity-40">−</button>
-                        <span className="min-w-6 text-center">{quantity}</span>
-                        <button type="button" aria-label={`Increase quantity for ${item.name}`} disabled={quantity >= remaining} onClick={() => setQuantities({ ...quantities, [item.id]: quantity + 1 })} className="h-11 w-11 rounded-full disabled:opacity-40">+</button>
-                      </div>
-                      <AddToCartButton disabled={cartLoading || Boolean(cartError)} atLimit={remaining <= 0} onAdd={() => {
-                        const saved = add(item, quantity);
-                        if (saved) setQuantities({ ...quantities, [item.id]: 1 });
-                        return saved;
-                      }} className="min-h-12 flex-1 rounded-full bg-[var(--ink)] px-4 py-3 text-sm font-medium text-white disabled:opacity-50" />
-                    </div>
-                  </div>
-                </CatalogCard>;
-              })}
-            </div>}
+      <div className="mt-8">
+        {loading ? <p role="status">Loading accessories...</p>
+          : error ? <div role="alert" data-analytics-event="site_error"><p>Accessories are unavailable right now. Please try again.</p><button type="button" onClick={() => { setLoading(true); setRetry(value => value + 1); }} className="mt-3 min-h-12 rounded-full border px-5">Retry</button></div>
+            : !items.length ? <p data-analytics-event="catalog_empty" data-analytics-list="accessories">No accessories are currently available.</p>
+              : <CatalogGrid entries={items.map(item => ({ item, itemType: "accessory" }))} cart={cart} add={add} disabled={cartLoading || Boolean(cartError)} headingLevel={2} />}
+      </div>
       <p className="mt-6 text-sm text-[var(--muted)]">Specifications may vary slightly by production batch.</p>
     </main>
   </>;

@@ -42,8 +42,8 @@ async function expectAlignedRows(cards: Locator) {
   }
 }
 
-test("USR-003: equipment detail contains seven and twelve thumbnails without widening the page", async ({ page }) => {
-  for (const count of [7, 12]) {
+for (const count of [7, 12]) {
+  test(`USR-003: equipment detail contains ${count} thumbnails without widening the page`, async ({ page }) => {
     const name = "Heavy-duty equipment with multiple gallery images";
     const item = { ...items[0], name, slug: `detail-gallery-${count}`, photos: Array.from({ length: count }, (_, index) => `/images/pro-elite.svg?gallery=${index}`) };
     await page.route(`**/api/products/${item.slug}`, route => route.fulfill({ json: { item } }));
@@ -63,47 +63,36 @@ test("USR-003: equipment detail contains seven and twelve thumbnails without wid
       await expect(page.getByRole("dialog", { name: `${name} enlarged media`, exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Close enlarged media", exact: true }).click();
     }
-  }
-});
+  });
+}
 
 for (const catalog of ["products", "accessories"] as const) {
-  test(`USR-014: ${catalog} use taller desktop previews and show all details below desktop width`, async ({ page }) => {
+  test(`USR-014: ${catalog} keep compact cards and explicit expansion at every width`, async ({ page }) => {
     await page.route(`**/api/${catalog}`, (route) => route.fulfill({ json: { items } }));
-    await page.goto(catalog === "products" ? "/" : "/accessories");
+    await page.goto(catalog === "products" ? "/?catalog=equipment" : "/accessories");
     const cards = page.locator(catalog === "products" ? "#products article" : "article");
     await expect(cards).toHaveCount(4);
     const longCard = cards.nth(1);
-    await expect(cards.first().getByText("Complete short details.", { exact: true })).toBeVisible();
-    await expect(cards.first().getByText("Steel", { exact: true })).toBeVisible();
-    await expect(cards.first().getByRole("button", { name: "Show more", exact: true })).toHaveCount(0);
+    const shortCard = cards.first();
+    const preview = longCard.locator(".catalog-details-preview");
+    const toggle = longCard.getByRole("button", { name: /Show more|Show less/ });
+    await expect(shortCard.getByText("Complete short details.", { exact: true })).toBeHidden();
+    await expect(shortCard.getByText("Steel", { exact: true })).toBeHidden();
+    await expect(shortCard.getByRole("button", { name: "Show more", exact: true })).toBeVisible();
     for (const width of [1440, 1280, 1024, 1023, 768, 767, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
-      const more = longCard.getByRole("button", { name: "Show more", exact: true });
-      if (width >= 1024) await expect(more).toBeVisible();
-      else await expect(more).not.toBeVisible();
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(preview).toBeHidden();
+      await expect(preview).toHaveAttribute("hidden", "");
+      await expect(preview.getByText("2 pieces per pair.", { exact: true })).toBeHidden();
+      await expect(preview.getByRole("button", { name: `Increase quantity for ${items[1].name}`, exact: true })).toBeHidden();
+      await expect(longCard.getByText(longSummary.trim(), { exact: true })).toBeHidden();
       await expectAlignedRows(cards);
-      const preview = longCard.locator(".catalog-details-preview");
-      const size = await preview.evaluate((element) => ({
-        height: element.clientHeight, full: element.scrollHeight,
-        limit: getComputedStyle(element).maxHeight,
-        mask: getComputedStyle(element).maskImage,
-      }));
-      expect(size.height).toBeGreaterThan(100);
-      if (width >= 1024) {
-        expect(size.limit).toBe("336px");
-        expect(size.height).toBe(336);
-        expect(size.full).toBeGreaterThan(size.height);
-      } else {
-        expect(size.limit).toBe("none");
-        expect(size.mask).toBe("none");
-        expect(Math.abs(size.full - size.height)).toBeLessThanOrEqual(1);
-        await expect(preview.getByText("Two matching parts", { exact: true })).toBeVisible();
-      }
-      await expect(longCard.getByText(longSummary.trim(), { exact: true })).toBeVisible();
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
-    const toggle = longCard.getByRole("button", { name: /Show more|Show less/ });
+    const collapsedHeight = (await longCard.boundingBox())!.height;
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(toggle).toHaveAccessibleName("Show more");
     const overflowCue = toggle.getByText("...", { exact: true });
@@ -116,27 +105,41 @@ for (const catalog of ["products", "accessories"] as const) {
     await expect(toggle).toHaveCSS("border-top-color", "rgba(22, 22, 22, 0.08)");
     expect((await toggle.boundingBox())!.height).toBeGreaterThanOrEqual(48);
     await expect(toggle.locator("svg")).toBeVisible();
-    await expect(longCard.getByText("Includes compatibility - check fit", { exact: true })).toBeVisible();
-    expect(await toggle.getAttribute("aria-controls")).toBe(await longCard.locator(".catalog-details-preview").getAttribute("id"));
+    expect(await toggle.getAttribute("aria-controls")).toBe(await preview.getAttribute("id"));
+    expect(await toggle.evaluate(button => button.nextElementSibling?.classList.contains("catalog-details-preview"))).toBe(true);
     await toggle.focus();
+    await expect(toggle).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(toggle).toHaveText("Show less");
     await expect(toggle.getByText("Show less", { exact: true })).toHaveCSS("font-style", "italic");
     await expect(overflowCue).toHaveCount(0);
-    const expanded = longCard.locator(".catalog-details-preview");
+    const expanded = preview;
+    await expect(expanded).toBeVisible();
+    expect((await longCard.boundingBox())!.height).toBeGreaterThan(collapsedHeight);
+    await expect(expanded).toHaveCSS("max-height", "none");
+    await expect(expanded).toHaveCSS("mask-image", "none");
     expect(await expanded.evaluate((element) => Math.abs(element.clientHeight - element.scrollHeight))).toBeLessThanOrEqual(1);
     for (const text of [longSummary.trim(), "Complete overview.", "Adjustable setup", "75 x 75 mm", "120 x 50 cm", "Steel", "25 kg", "Black", "Two matching parts"]) {
       await expect(expanded.getByText(text, { exact: true })).toBeVisible();
     }
     await expect(expanded.getByText(/Fit must be confirmed/)).toBeVisible();
+    await expect(expanded.getByText("2 pieces per pair.", { exact: true })).toBeVisible();
+    await expect(expanded.getByRole("button", { name: `Increase quantity for ${items[1].name}`, exact: true })).toBeVisible();
     if (catalog === "accessories") await expect(longCard.getByText("Distinct public use.", { exact: true })).toBeVisible();
     else for (const text of ["LAYOUT-002", "One year", "In stock"]) await expect(expanded.getByText(text, { exact: true })).toBeVisible();
     await expectAlignedRows(cards);
     await expect(cards.first().getByRole("button", { name: "Show less", exact: true })).toHaveCount(0);
-    await page.setViewportSize({ width: 1023, height: 1000 });
-    await expect(toggle).not.toBeVisible();
-    expect(await expanded.evaluate((element) => Math.abs(element.clientHeight - element.scrollHeight))).toBeLessThanOrEqual(1);
+    for (const width of [1023, 768, 390, 320, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await expect(expanded).toBeVisible();
+      await expect(shortCard.locator(".catalog-details-preview")).toBeHidden();
+      expect(await expanded.evaluate((element) => Math.abs(element.clientHeight - element.scrollHeight))).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await expectAlignedRows(cards);
+    }
     await page.setViewportSize({ width: 1024, height: 1000 });
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await toggle.focus();
@@ -145,25 +148,35 @@ for (const catalog of ["products", "accessories"] as const) {
     await expect(toggle).toBeFocused();
     await expect(overflowCue).toBeVisible();
     await expectAlignedRows(cards);
-    await expect(cards.nth(2).locator(".catalog-details")).toHaveCount(0);
-    await expect(cards.nth(2).getByRole("button", { name: /Show more|Show less/ })).toHaveCount(0);
+    await expect(expanded).toBeHidden();
+    await expect(cards.nth(2).getByRole("button", { name: "Show more", exact: true })).toBeVisible();
+    await expect(cards.nth(2).getByRole("button", { name: `Increase quantity for ${items[2].name}`, exact: true })).toBeHidden();
     await expect(cards.nth(2).getByRole("button", { name: "Add to cart", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(toggle).not.toBeVisible();
+    await expect(expanded).toBeHidden();
+    const shortHeight = (await shortCard.boundingBox())!.height;
+    await shortCard.getByRole("button", { name: "Show more", exact: true }).click();
+    await expect(shortCard.getByText("Complete short details.", { exact: true })).toBeVisible();
+    await expect(shortCard.getByText("Steel", { exact: true })).toBeVisible();
+    expect((await shortCard.boundingBox())!.height).toBeGreaterThan(shortHeight);
+    await expect(expanded).toBeHidden();
+    await toggle.click();
     await expect(expanded.getByText("Complete overview.", { exact: true })).toBeVisible();
     await page.evaluate(() => { document.documentElement.style.fontSize = "200%"; });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     expect(await expanded.evaluate((element) => Math.abs(element.clientHeight - element.scrollHeight))).toBeLessThanOrEqual(1);
-    await expect(toggle).not.toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
     const mediumToggle = cards.nth(3).getByRole("button", { name: "Show more", exact: true });
-    await expect(mediumToggle).not.toBeVisible();
+    await expect(mediumToggle).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(expanded).toHaveCSS("max-height", "672px");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(expanded).toHaveCSS("max-height", "none");
     await expect(mediumToggle).toBeVisible();
     await page.evaluate(() => { document.documentElement.style.fontSize = ""; });
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await expect(mediumToggle).toHaveCount(0);
+    await expect(mediumToggle).toBeVisible();
+    await toggle.click();
+    await expect(expanded).toBeHidden();
+    await expect(shortCard.getByRole("button", { name: "Show less", exact: true })).toBeVisible();
   });
 }
 

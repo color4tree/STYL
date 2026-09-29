@@ -239,10 +239,13 @@ test("AN-001: route rerenders/focus do not duplicate page views; actual routes a
   h.window.location.pathname = "/products/two";
   h.api.analyticsRouteChanged("/products/two");
   await settle();
-  assert.deepEqual(h.events().map(event => event.path), ["/", "/products/[slug]", "/products/[slug]"]);
+  h.window.location.pathname = "/accessories/1001";
+  h.api.analyticsRouteChanged("/accessories/1001");
+  await settle();
+  assert.deepEqual(h.events().map(event => event.path), ["/", "/products/[slug]", "/products/[slug]", "/accessories/[id]"]);
   h.window.dispatchEvent({ type: "pageshow", persisted: true });
   await settle();
-  assert.equal(h.events().length, 4);
+  assert.equal(h.events().length, 5);
   h.stop();
 });
 
@@ -285,6 +288,7 @@ test("AN-008: only coarse sources/campaigns leave the browser; full referrers/qu
   assert.equal(JSON.stringify(h.requests).includes("PRIVATE_"), false);
   assert.deepEqual(plain(h.api.sanitizeAnalyticsProperties("engagement", { activeMs: 15, intervalStart: "PRIVATE_TIME", intervalEnd: "PRIVATE_TIME" })), { activeMs: 15 });
   assert.equal(h.api.canonicalAnalyticsPath("/products/equipment?email=PRIVATE"), "/products/[slug]");
+  assert.equal(h.api.canonicalAnalyticsPath("/accessories/1001?email=PRIVATE"), "/accessories/[id]");
   h.stop();
 });
 

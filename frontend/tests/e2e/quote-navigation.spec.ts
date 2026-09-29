@@ -14,24 +14,28 @@ async function expectQuoteLanding(page: Page) {
   await expect(page.getByRole("textbox", { name: "Name", exact: true })).toBeInViewport({ ratio: 1 });
 }
 
-test("USR-011 USR-012: Equipment and Shop accessories preserve catalog links and the quote journey", async ({ page }) => {
+test("USR-011 USR-012: combined catalog filters preserve detail links and the quote journey", async ({ page }) => {
   const initialViewport = page.viewportSize()!;
   await page.goto("/");
   await expect(page.locator("#products article").first()).toBeVisible();
   const introduction = page.locator("main > section").first();
   const shopEquipment = introduction.getByRole("link", { name: "Shop equipment", exact: true });
   const shopAccessories = introduction.getByRole("link", { name: "Shop accessories", exact: true });
-  await expect(shopEquipment).toHaveAttribute("href", "#products");
-  await expect(shopAccessories).toHaveAttribute("href", "/accessories");
+  const shopAll = introduction.getByRole("link", { name: "All products", exact: true });
+  await expect(shopAll).toHaveAttribute("href", "/#products");
+  await expect(shopEquipment).toHaveAttribute("href", "/?catalog=equipment#products");
+  await expect(shopAccessories).toHaveAttribute("href", "/?catalog=accessories#products");
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     const navigation = page.getByRole("navigation", { name: width < 1024 ? "Catalog navigation" : "Main navigation", exact: true });
     const equipment = navigation.getByRole("link", { name: "Equipment", exact: true });
     const accessories = navigation.getByRole("link", { name: "Accessories", exact: true });
-    await expect(equipment).toHaveAttribute("href", "/#products");
-    await expect(accessories).toHaveAttribute("href", "/accessories");
+    const all = navigation.getByRole("link", { name: "All products", exact: true });
+    await expect(all).toHaveAttribute("href", "/#products");
+    await expect(equipment).toHaveAttribute("href", "/?catalog=equipment#products");
+    await expect(accessories).toHaveAttribute("href", "/?catalog=accessories#products");
     await expect(page.getByRole("link", { name: "Products", exact: true })).toHaveCount(0);
-    for (const link of [shopEquipment, shopAccessories, equipment, accessories]) {
+    for (const link of [shopAll, shopEquipment, shopAccessories, all, equipment, accessories]) {
       await expect(link).toBeVisible();
       const bounds = await link.boundingBox();
       expect(bounds).not.toBeNull();
@@ -39,29 +43,38 @@ test("USR-011 USR-012: Equipment and Shop accessories preserve catalog links and
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
     }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
   await page.setViewportSize(initialViewport);
   await shopAccessories.focus();
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/accessories$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Accessories", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/\?catalog=accessories#products$/);
+  await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "accessories");
+  await expect(page.locator('#products article[data-analytics-item-type="accessory"]').first()).toBeVisible();
   if (initialViewport.width < 1024) {
     await page.getByRole("button", { name: "Menu", exact: true }).click();
     const menu = page.getByRole("navigation", { name: "Mobile navigation", exact: true });
-    await expect(menu.getByRole("link", { name: "Equipment", exact: true })).toHaveAttribute("href", "/#products");
-    await expect(menu.getByRole("link", { name: "Request a quote", exact: true })).toHaveAttribute("href", "/#contact");
+    await expect(menu.getByRole("link", { name: "Equipment", exact: true })).toHaveAttribute("href", "/?catalog=equipment#products");
+    await expect(menu.getByRole("link", { name: "Request a quote", exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "Menu", exact: true })).toBeFocused();
   }
   const navigation = page.getByRole("navigation", { name: initialViewport.width < 1024 ? "Catalog navigation" : "Main navigation", exact: true });
   await navigation.getByRole("link", { name: "Equipment", exact: true }).click();
-  await expect(page).toHaveURL(/\/#products$/);
+  await expect(page).toHaveURL(/\/\?catalog=equipment#products$/);
+  await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "equipment");
   const card = page.locator("#products article").first();
   const name = await card.locator(":scope > h3").innerText();
   const details = card.getByRole("link", { name: "Details", exact: true });
-  await expect(details).toHaveAttribute("href", /^\/products\/[^/]+$/);
-  await details.click();
+  const titleLink = card.getByRole("link", { name, exact: true });
+  await expect(titleLink).toHaveAttribute("href", /^\/products\/[^/]+$/);
+  if (initialViewport.width < 1024) {
+    await expect(details).toBeHidden();
+    await titleLink.click();
+  } else {
+    await expect(details).toHaveAttribute("href", /^\/products\/[^/]+$/);
+    await details.click();
+  }
   await expect(page).toHaveURL(/\/products\/[^/]+$/);
   await expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
   await page.locator("main").getByRole("link", { name: "Request quote", exact: true }).click();
@@ -72,7 +85,7 @@ test("USR-011 USR-012: Equipment and Shop accessories preserve catalog links and
 
 test("USR-011: equipment empty, failure and missing-detail labels keep compatible API routes", async ({ page }) => {
   await page.route("**/api/products", (route) => route.fulfill({ json: { items: [] } }));
-  await page.goto("/");
+  await page.goto("/?catalog=equipment");
   await expect(page.locator("#products")).toContainText("No equipment is currently available.");
   await page.unroute("**/api/products");
   await page.route("**/api/products", (route) => route.fulfill({ status: 503, json: { detail: "Unavailable" } }));
@@ -95,10 +108,13 @@ for (const origin of ["cart", "product", "header"] as const) {
         .or(page.locator("main").getByRole("link", { name: "Request a quote", exact: true }).first())).toBeVisible();
 
       let releaseCatalog!: () => void;
+      let releaseAccessories!: () => void;
       let releaseCart!: () => void;
       const catalogGate = new Promise<void>((resolve) => { releaseCatalog = resolve; });
+      const accessoryGate = new Promise<void>((resolve) => { releaseAccessories = resolve; });
       const cartGate = new Promise<void>((resolve) => { releaseCart = resolve; });
       await page.route("**/api/products", async (route) => { await catalogGate; await route.continue(); });
+      await page.route("**/api/accessories", async (route) => { await accessoryGate; await route.continue(); });
       await page.route("**/api/catalog/selection", async (route) => { await cartGate; await route.continue(); });
       await page.evaluate(() => {
         const samples: number[] = [];
@@ -128,13 +144,17 @@ for (const origin of ["cart", "product", "header"] as const) {
           }
         }
         await expect(page).toHaveURL(/#contact$/);
-        await expect(page.getByText("Loading equipment...", { exact: true })).toBeVisible();
+        await expect(page.getByText("Loading all products...", { exact: true })).toBeVisible();
         await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         releaseCart();
         await expect(page.getByRole("link", { name: "Review your cart", exact: true })).toBeVisible();
         await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        const equipmentLoaded = page.waitForResponse("**/api/products");
         releaseCatalog();
-        await expect(page.locator("#products article")).toHaveCount(items.length);
+        await equipmentLoaded;
+        await expect(page.getByText("Loading all products...", { exact: true })).toBeVisible();
+        releaseAccessories();
+        await expect(page.locator('#products article[data-analytics-item-type="product"]')).toHaveCount(items.length);
         await expectQuoteLanding(page);
         await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
           document.documentElement.dataset.stopQuoteSampling = "true";
@@ -148,6 +168,7 @@ for (const origin of ["cart", "product", "header"] as const) {
       } finally {
         releaseCart();
         releaseCatalog();
+        releaseAccessories();
       }
     });
   }
@@ -175,10 +196,10 @@ for (const origin of ["cart", "product", "direct"] as const) {
         await page.goto("/?quote=cart#contact");
       }
       await expect(page).toHaveURL(/#contact$/);
-      await expect(page.getByText("Loading equipment...", { exact: true })).toBeVisible();
+      await expect(page.getByText("Loading all products...", { exact: true })).toBeVisible();
       await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(new RegExp(product.name));
       release();
-      await expect(page.locator("#products article")).toHaveCount(items.length);
+      await expect(page.locator('#products article[data-analytics-item-type="product"]')).toHaveCount(items.length);
       await expectQuoteLanding(page);
       await expect(page.getByRole("textbox", { name: "Message", exact: true })).toHaveValue(new RegExp(product.name));
     } finally {
@@ -187,20 +208,25 @@ for (const origin of ["cart", "product", "direct"] as const) {
   });
 }
 
-test("USR-012: same-page quote navigation can be repeated without a reload", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator("#products article").first()).toBeVisible();
+test("USR-012: same-page quote navigation can be repeated without losing the selected catalog", async ({ page }) => {
   const desktop = page.getByRole("navigation", { name: "Main navigation", exact: true });
   const mobile = page.getByRole("navigation", { name: "Mobile navigation", exact: true });
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-    if (await desktop.isVisible()) {
-      await desktop.getByRole("link", { name: "Request a quote", exact: true }).click();
-    } else {
-      await page.getByRole("button", { name: "Menu", exact: true }).click();
-      await mobile.getByRole("link", { name: "Request a quote", exact: true }).click();
+  for (const view of ["all", "equipment", "accessories"] as const) {
+    await page.goto(view === "all" ? "/" : `/?catalog=${view}`);
+    await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", view);
+    await expect(page.locator("#products article").first()).toBeVisible();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      if (await desktop.isVisible()) {
+        await desktop.getByRole("link", { name: "Request a quote", exact: true }).click();
+      } else {
+        await page.getByRole("button", { name: "Menu", exact: true }).click();
+        await mobile.getByRole("link", { name: "Request a quote", exact: true }).click();
+      }
+      await expect(page).toHaveURL(view === "all" ? /\/#contact$/ : new RegExp(`/\\?catalog=${view}#contact$`));
+      await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", view);
+      await expectQuoteLanding(page);
     }
-    await expectQuoteLanding(page);
   }
 });
 
@@ -258,7 +284,7 @@ for (const interaction of ["typing", "scrolling"] as const) {
       const catalogRequested = page.waitForRequest("**/api/products");
       await page.goto("/#contact");
       await catalogRequested;
-      await expect(page.getByText("Loading equipment...", { exact: true })).toBeVisible();
+      await expect(page.getByText("Loading all products...", { exact: true })).toBeVisible();
       if (interaction === "typing") {
         await page.getByRole("textbox", { name: "Name", exact: true }).fill("Keep my input");
       } else if (testInfo.project.use.isMobile) {

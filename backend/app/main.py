@@ -22,7 +22,10 @@ from uuid import uuid4
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi import Path as PathParameter
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
@@ -90,6 +93,15 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Content-Disposition"],
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_response(_request: Request, error: RequestValidationError) -> JSONResponse:
+    # JSON numeric overflow must remain a validation error, not fail error-response serialization.
+    details = jsonable_encoder(error.errors(), custom_encoder={
+        float: lambda value: value if math.isfinite(value) else str(value),
+    })
+    return JSONResponse(status_code=422, content={"detail": details})
 
 
 class InquiryRequest(BaseModel):
@@ -166,16 +178,23 @@ class MarketPricesPayload(BaseModel):
     USD: Price | None = None
 
 
+class MarketMsrpsPayload(MarketPricesPayload):
+    model_config = {"extra": "forbid"}
+
+
 class CatalogIdentityPayload(BaseModel):
     name: str = Field(max_length=200)
     category: str = Field(max_length=300)
     price: Price | None = None
     prices: MarketPricesPayload | None = None
+    msrps: MarketMsrpsPayload | None = None
 
     @model_validator(mode="after")
     def validate_prices_object(self) -> CatalogIdentityPayload:
         if "prices" in self.model_fields_set and self.prices is None:
             raise ValueError("Prices must be an object with CAD and/or USD values; use null for an unavailable market.")
+        if "msrps" in self.model_fields_set and self.msrps is None:
+            raise ValueError("MSRPs must be an object with CAD and/or USD values; use null to clear one market.")
         return self
 
     @field_validator("name")
@@ -470,10 +489,28 @@ def catalog_prices(request: ProductPayload | AccessoryPayload, previous: dict[st
     return {"prices": prices, "currency": currency, "price": prices.get(currency)}
 
 
+def stored_msrps(item: dict[str, object]) -> dict[str, float | None]:
+    existing = item.get("msrps")
+    return {
+        currency: float(existing[currency]) if isinstance(existing, dict) and existing.get(currency) is not None else None
+        for currency in ("CAD", "USD")
+    }
+
+
+def catalog_msrps(request: ProductPayload | AccessoryPayload, previous: dict[str, object]) -> dict[str, object]:
+    if request.msrps is None:
+        return {"msrps": previous["msrps"]} if "msrps" in previous else {}
+    msrps = stored_msrps(previous)
+    for currency in request.msrps.model_fields_set:
+        value = getattr(request.msrps, currency)
+        msrps[currency] = float(value) if value is not None else None
+    return {"msrps": msrps}
+
+
 def admin_catalog_item(item: dict[str, object]) -> dict[str, object]:
     prices = stored_prices(item)
     return {
-        **item, "prices": prices,
+        **item, "prices": prices, "msrps": stored_msrps(item),
         "category": normalize_category(str(item.get("category") or "")),
         "publicationStatus": item.get("publicationStatus") or "published",
         "missingPriceMarkets": [code for code, amount in prices.items() if amount is None],
@@ -483,9 +520,9 @@ def admin_catalog_item(item: dict[str, object]) -> dict[str, object]:
 def public_catalog_item(item: dict[str, object], market: MarketContext) -> dict[str, object]:
     price = stored_prices(item)[market["currency"]]
     return {
-        **{key: value for key, value in item.items() if key not in ("provenance", "prices", "missingPriceMarkets")},
+        **{key: value for key, value in item.items() if key not in ("provenance", "prices", "msrps", "missingPriceMarkets")},
         "category": normalize_category(str(item.get("category") or "")),
-        "price": price, "currency": market["currency"],
+        "price": price, "currency": market["currency"], "msrp": stored_msrps(item)[market["currency"]],
     }
 
 
@@ -747,7 +784,7 @@ def get_catalog_selection(request: Request, response: Response) -> dict[str, obj
     market = request_market(request, response)
     items = [
         {key: value for key, value in public_catalog_item(item, market).items()
-         if key in ("id", "name", "slug", "price", "currency", "sellingUnit", "packageQuantity")}
+         if key in ("id", "name", "slug", "price", "msrp", "currency", "sellingUnit", "packageQuantity")}
         for item in [*load_products(), *load_accessories()] if visible_in_market(item, market)
     ]
     return {"items": items, "market": market}
@@ -825,6 +862,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
         }
         product.update(catalog_details(request, {}, "/images/pro-elite.svg"))
         product.update(catalog_prices(request, {}))
+        product.update(catalog_msrps(request, {}))
         product.update(product_specifications(request, {}))
         product.update(catalog_provenance(request, {}))
         products.append(product)
@@ -850,6 +888,7 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                 }
                 updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
                 updated.update(catalog_prices(request, product))
+                updated.update(catalog_msrps(request, product))
                 updated.update(product_specifications(request, product))
                 updated.update(catalog_provenance(request, product))
                 products[index] = updated
@@ -883,6 +922,16 @@ def get_accessories(request: Request, response: Response) -> dict[str, object]:
     return {"items": [public_catalog_item(item, market) for item in load_accessories() if visible_in_market(item, market)], "market": market}
 
 
+@app.get("/api/accessories/{item_id}")
+def get_accessory_by_id(item_id: Annotated[int, PathParameter(ge=1)], request: Request, response: Response) -> dict[str, object]:
+    market = request_market(request, response)
+    for item in load_accessories():
+        if item.get("id") == item_id and visible_in_market(item, market):
+            return {"item": public_catalog_item(item, market), "market": market}
+
+    raise HTTPException(status_code=404, detail="Accessory not found", headers={"Cache-Control": "private, no-store"})
+
+
 @app.get("/api/admin/accessories", dependencies=[Depends(require_admin)])
 def get_admin_accessories() -> dict[str, list[dict[str, object]]]:
     return {"items": [admin_catalog_item(item) for item in load_accessories()]}
@@ -903,6 +952,7 @@ def create_accessory(request: AccessoryPayload) -> dict[str, object]:
         )
         created.update(catalog_details(request, {}, "/images/accessories/straight-bar.svg"))
         created.update(catalog_prices(request, {}))
+        created.update(catalog_msrps(request, {}))
         created.update(accessory_specifications(request, {}))
         created.update(catalog_provenance(request, {}))
         accessories.append(created)
@@ -922,6 +972,7 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
                 updated = accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))
                 updated.update(catalog_details(request, existing, "/images/accessories/straight-bar.svg"))
                 updated.update(catalog_prices(request, existing))
+                updated.update(catalog_msrps(request, existing))
                 updated.update(accessory_specifications(request, existing))
                 updated.update(catalog_provenance(request, existing))
                 accessories[index] = updated

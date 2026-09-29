@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 logger = logging.getLogger(__name__)
 MAX_BATCH_BYTES = 16 * 1024
 MAX_EVENTS = 20
-PATHS = {"/", "/accessories", "/cart", "/products/[slug]", "other"}
+PATHS = {"/", "/accessories", "/accessories/[id]", "/cart", "/products/[slug]", "other"}
 SOURCES = {"google", "bing", "facebook", "instagram", "youtube", "linkedin", "newsletter", "direct", "other"}
 MEDIUMS = {"organic", "cpc", "paid", "social", "email", "referral", "direct", "other"}
 ENUMS = {

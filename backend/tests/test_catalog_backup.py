@@ -54,6 +54,7 @@ class CatalogBackupTests(unittest.TestCase):
             {
                 "id": 7, "slug": "recovery-rack", "name": "Rack", "category": "Racks",
                 "prices": {"CAD": 750.25, "USD": 600.50}, "price": 750.25, "currency": "CAD",
+                "msrps": {"CAD": 999.95, "USD": 800.25},
                 "publicationStatus": "published", "featured": True,
                 "shortDescription": "Training", "description": "Line one\n中文说明",
                 "features": ["Feature one"], "weight": "25 kg",
@@ -65,12 +66,14 @@ class CatalogBackupTests(unittest.TestCase):
             {
                 "id": 8, "slug": "draft-item", "name": "Draft", "category": "Benches",
                 "prices": {"CAD": None, "USD": 80}, "publicationStatus": "draft",
+                "msrps": {"CAD": None, "USD": 0},
                 "image": "/images/equipment/rack.svg", "photos": [],
             },
         ]
         self.accessories = [{
             "id": 1007, "name": "Pair", "category": "Handle",
             "prices": {"CAD": 49.95, "USD": None}, "sellingUnit": "Pair", "packageQuantity": 2,
+            "msrps": {"CAD": 75.25, "USD": None},
             "description": "Full details", "notes": "Public use",
             "image": "/api/uploads/shared.png", "photos": ["/api/uploads/shared.png"],
         }]
@@ -187,7 +190,24 @@ class CatalogBackupTests(unittest.TestCase):
         restored = json.loads((destination / "data/products.json").read_text())
         self.assertEqual(restored, [legacy])
         self.assertNotIn("prices", restored[0])
+        self.assertNotIn("msrps", restored[0])
         self.assertNotIn("publicationStatus", restored[0])
+
+    def test_sys017_msrp_export_restore_preserves_original_json_bytes(self) -> None:
+        originals = {}
+        for key in ("DATA_PATH", "ACCESSORIES_PATH"):
+            path = self.paths[key]
+            original = b" \r\n" + json.dumps(json.loads(path.read_bytes()), indent=3, ensure_ascii=False).encode("utf-8") + b"\r\n "
+            path.write_bytes(original)
+            originals[path.name] = original
+        archive_path = self.write_archive()
+        destination = self.root / "msrp-recovered"
+        backup.restore_archive(archive_path, destination)
+        with zipfile.ZipFile(archive_path) as archive:
+            for name, original in originals.items():
+                self.assertEqual((self.data / name).read_bytes(), original)
+                self.assertEqual(archive.read(f"data/{name}"), original)
+                self.assertEqual((destination / "data" / name).read_bytes(), original)
 
     def test_sys017_missing_media_or_poster_refuses_incomplete_archive(self) -> None:
         for name in ("shared.png", f"{VIDEO}.poster.jpg"):
@@ -255,10 +275,14 @@ class CatalogBackupTests(unittest.TestCase):
                     self.assertEqual(len(products), 1)
                     self.assertEqual(products[0]["id"], 7)
                     self.assertEqual(products[0]["price"], 750.25 if currency == "CAD" else 600.50)
+                    self.assertEqual(products[0]["msrp"], 999.95 if currency == "CAD" else 800.25)
+                    self.assertNotIn("msrps", products[0])
                     self.assertNotIn("provenance", products[0])
                     self.assertEqual(len(self.client.get("/api/accessories").json()["items"]), accessory_count)
                     self.assertEqual(self.client.get("/api/products/draft-item").status_code, 404)
             self.assertEqual(self.client.get("/api/admin/products", headers=self.headers).json()["items"][0]["provenance"]["notes"], "PRIVATE-ADMIN-NOTE")
+            self.assertEqual(self.client.get("/api/admin/products", headers=self.headers).json()["items"][1]["msrps"], {"CAD": None, "USD": 0})
+            self.assertEqual(self.client.get("/api/admin/accessories", headers=self.headers).json()["items"][0]["msrps"], {"CAD": 75.25, "USD": None})
             self.assertEqual(self.client.get("/api/hero").json()["item"], self.hero)
             video = self.client.get(f"/api/uploads/{VIDEO}.mp4", headers={"Range": "bytes=10-49"})
             self.assertEqual(video.status_code, 206)
@@ -280,7 +304,10 @@ with TestClient(app) as client:
     products = client.get('/api/products').json()['items']
     assert len(products) == 1 and products[0]['id'] == 7
     assert products[0]['currency'] == 'CAD' and products[0]['price'] == 750.25
+    assert products[0]['msrp'] == 999.95 and 'msrps' not in products[0]
     assert len(client.get('/api/accessories').json()['items']) == 1
+    accessory = client.get('/api/accessories/1007').json()['item']
+    assert accessory['msrp'] == 75.25 and 'msrps' not in accessory
     assert client.get('/api/products/draft-item').status_code == 404
     assert client.get('/api/uploads/shared.png').content.startswith(b'\\x89PNG')
     assert client.get('/api/uploads/1234567890abcdef1234567890abcdef.mp4', headers={'Range': 'bytes=10-49'}).status_code == 206

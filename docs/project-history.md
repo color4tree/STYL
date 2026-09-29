@@ -2,6 +2,92 @@
 
 Last recorded: 2026-09-29
 
+## Combined compact catalog, accessory details and regional MSRP - 2026-09-29 (local)
+
+The owner approved three specific choices: Equipment is the correct uncountable
+label; All products/Equipment/Accessories filter one home catalog (All is default,
+equipment first then accessories in their saved orders); desktop Details opens
+matching full pages for both item types. Optional MSRP is separate for CAD/USD
+and crossed out only when higher than the selling Price.
+
+Implemented a shared compact card/grid and full-detail component. Default cards
+show gallery, category, name, actual Price/optional higher MSRP and actions.
+Descriptions, specifications, compatibility, package contents and quantity
+controls are initially hidden under explicit Show more on every viewport.
+Mobile keeps Show more/Add but not a separate Details button; item titles remain
+links. Expansion keeps the complete content and the user's resize choice, without
+a clipped preview. This supersedes the previous 21rem desktop/automatic-full-mobile
+requirement. Quote navigation retains selected filters and the existing pre-paint
+alignment/interruption behavior. Equipment URLs and the legacy /accessories page
+remain valid; new /accessories/[id] pages use the same gallery/spec/quote layout.
+
+Backend/admin MSRP uses nullable independent `msrps.CAD` and `msrps.USD`, with
+exact-cent validation, partial/omitted/clear semantics and legacy compatibility.
+Public serializers expose only selected-market `msrp`; selling Price still gates
+visibility and cart/quote arithmetic. Both editors include optional MSRP fields,
+dirty guards, retained failed input and summaries. Backup/cold-restore checks
+preserve MSRP bytes. Accessory detail responses retain draft/market/privacy and
+cache protections. Analytics normalizes accessory detail paths and counts actual
+mobile Show more actions; impression observation marks selling Price, not MSRP.
+
+Verification found and addressed:
+
+- Mobile editor tests incorrectly expected New while the retained Equipment
+  editor was open; they now wait for the actual active editor rather than
+  contradicting preserved mobile editing behavior.
+- WebKit's native upload input shrank to 10.31px while its control required 108px,
+  widening a 390px page to 437px. Giving the input its own full-width row fixed
+  the real shared-editor overflow.
+- Error notices inherited smooth scrolling after focus, moving the next action.
+  A readonly local WebKit probe measured **382px across 24 frames** after error
+  focus. Explicit instant scrolling reduced this to **0px**, with no server
+  writes. Added a permanent frame-stability assertion and retained pointer recovery
+  coverage rather than replacing every failing click with a retry.
+- Updated obsolete backup wording and synchronized invalid-report route fixtures
+  with the actual response before removing the handler. A filter-recovery test
+  activated a server-rendered link before catalog hydration; it now waits for the
+  selected view and `aria-busy=false`/loaded content.
+- One rapid transition between independent gallery fixtures stalled before any
+  client API request; 7/12-image layout fixtures now have separate fresh contexts.
+  Their assertions remain intact. This is not a claim that the earlier intermittent
+  Next.js loading/prefetch behavior is fixed.
+- OneDrive blocked generated build-directory cleanup; only inspected inactive
+  generated artifacts were removed. A test-loader variable was renamed to satisfy
+  the existing Next lint rule, without adding tooling.
+
+Final dirty candidate on `233292f`, implementation/test-file SHA-256
+`5541017e03efa680c4842e6b6eb1e28d08bcab6a78d99257e23df9d2ac40634c`
+(42 changed/new code files excluding user catalog data):
+
+- **184 backend tests and 43 frontend unit tests passed**. Build/TypeScript and
+  editor/Pylance checks passed; full lint had zero errors and the same five
+  pre-existing image warnings.
+- The final complete **259-execution browser attempt had 258 passes and one
+  browser transport failure**, not a clean full-suite pass. The preserved trace
+  showed admin verification 200 followed by `net::ERR_NO_BUFFER_SPACE` on the
+  admin equipment request. The exact interrupted ZIP-download check then passed
+  in a separate focused run, without changing code/assertions or enabling retries.
+  Do not combine those into a fictitious single clean full run.
+- All compact-catalog, regional MSRP, accessory-detail, media-width and
+  quote-frame scenarios passed across desktop/phone Chromium and phone WebKit.
+  Readonly localhost visual checks confirmed default All/filter navigation,
+  desktop/mobile collapsed cards, accessory details and admin MSRP inputs.
+  A struck-MSRP screenshot used response-only sample data; no catalog value was
+  saved. DNT prevented synthetic behavioral traffic. One initial local visual
+  probe did not complete, but its instrumented repeat did; no unproven fix claimed.
+
+Updated README, pricing/backup/analytics/responsive guidance and stable cases
+SYS-020, ADM-012, USR-017/018 plus the superseded card/expansion cases. Screenshots
+and diagnostic traces remain private session artifacts; scratch scripts removed.
+Existing global numeric IDs were confirmed unique in current data; the pre-existing
+separate ID allocators are not an unlimited collision-free scheme and were not
+migrated as part of this UI task.
+
+This work is local and uncommitted. No push, deployment, real email, user catalog
+save or credential change was performed. Physical devices, production behavior
+and operational/mail/privacy checks remain separate; the browser transport
+interruption is explicitly recorded rather than reported as a full baseline pass.
+
 ## Daily email settings and Equipment labels deployed - 2026-09-29
 
 The owner authorized push/deploy. The exact implementation fingerprint matched

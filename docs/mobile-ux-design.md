@@ -288,14 +288,16 @@ Keep `/#contact` working for existing links.
   feedback, cart totals or Clear cart unreachable.
 - Preserve the existing maximum of 10 per item and visibly explain the limit.
 - Use horizontal `[-] quantity [+]` controls, with labeled 44 px targets.
-- Product and accessory listing cards share aligned media, category, name, price,
-  contents, detail-preview, and purchase-control rows. Cards in each desktop/
+- Equipment and accessory listing cards share aligned media, category, name, price,
+  expansion and purchase-control rows. Cards in each desktop/
   tablet row stay equal-height, including when one card is expanded; mobile
   single-column cards keep their natural content height.
-- Current customer/admin wording is Equipment and Accessories; keep the catalogs
-  separate and preserve existing product URLs/anchors and stored identifiers.
-  The home call-to-action group includes Shop equipment, Shop accessories and the
-  existing quote action on desktop and mobile.
+- Current customer/admin wording is Equipment and Accessories. All products is
+  first in header/home navigation and is the default combined catalog. The three
+  choices filter one home listing through `catalog=equipment|accessories`, while
+  absence/unknown values choose All. All shows saved equipment order followed by
+  saved accessory order; admin catalogs and their ordering remain separate.
+  Preserve legacy product/accessory URLs, anchors and stored identifiers.
 - Admin catalogs share a toolbar ordered Catalog, Arrange listing order, New.
   Arrange/Done stays between the heading and New, including wrapped mobile
   layouts; use at least 48px button height. Click "Arrange listing order" to
@@ -313,32 +315,31 @@ Keep `/#contact` working for existing links.
   repeat saves while pending, and fit the form/errors at 320px without horizontal
   scrolling. Show the non-production no-send restriction independently of the
   saved enabled preference. Keep credentials out of the interface.
-- Keep full names, prices, selling units, and package quantities visible.
-  The 2026-09-27 clarification supersedes the initial closed-accordion design:
-  details are visible by default, not hidden behind a heading. Show the summary,
-  description, features, compatibility and specifications together. On desktop
-  (1024 CSS px and above), cap the preview at 21rem (336 px at default text size),
-  50% taller than the initial 14rem preview. Short content is fully displayed.
-- Below 1024 px, show all details without clipping, fading, or Show more/less.
-  Single-column mobile cards do not need a preview cap. The tablet two-column
-  layout also shows complete details; shared rows retain aligned purchase controls.
-- On desktop only, when content exceeds the preview height, fade the cut-off edge and show a
-  keyboard-operable "Show more" down arrow. Make the control easy to notice:
-  use a visible "..." overflow cue, regular-weight italic underlined label, subtle
-  neutral background (2% black; 4% on hover), light outline, and at least a 48 px hit area.
-  This replaces the initial bold label and warm highlight at the user's request. The dots are
-  decorative for assistive technology and disappear when expanded.
-  Expanding reveals everything without
-  duplicate summary text; "Show less" restores the preview. Recheck overflow as
-  width/text/content size changes. No expansion control for short or empty content.
-  Resizing to mobile shows everything; returning to desktop preserves that card's
-  expanded/collapsed choice.
-- Show an explicit "Includes compatibility - check fit" cue outside the capped
-  preview when applicable, so users know to check fit even if those fields are
-  below the cut-off. Product detail-page compatibility is unchanged. Blank fields
-  are omitted; media controls and existing product-page links remain available.
-- If the catalog grows, add category chips with a visible All option, result
-  count, and clear no-results state. Defer search until inventory warrants it.
+- Shared admin error notices scroll into view instantly before receiving focus;
+  do not let inherited smooth scrolling keep moving retry/save controls after
+  the error has been announced. Native file inputs occupy their own full-width
+  upload row so WebKit does not compress their picker button out of the form.
+- The approved 2026-09-29 compact design **supersedes** the 2026-09-27 visible
+  details, 21rem desktop preview and automatically expanded mobile requirements.
+  Initially show only gallery, category, full name, current price/optional MSRP,
+  Show more and purchase/navigation actions. Place package contents, descriptions,
+  features, compatibility, specifications and quantity controls inside the
+  initially hidden panel, on every viewport.
+- Show more/less remains keyboard-operable on desktop **and mobile**. Keep the
+  decorative "...", regular-weight italic underlined label, subtle neutral
+  background, light outline and >=48px hit area. The control precedes the panel
+  so collapse remains reachable. `aria-expanded`/`aria-controls` reflect the
+  actual hidden panel. Expanded content has no clipping/fade/height cap; resizing
+  preserves the user's choice rather than automatically revealing mobile details.
+- Both card kinds have the same Add to cart and desktop Details actions.
+  Below 1024px omit the separate Details button, retaining Show more and Add.
+  Item title links remain usable; both types have matching full detail pages,
+  including `/accessories/[id]`. Blank fields stay omitted, media controls and
+  existing equipment URLs remain available. Full pages retain readable details.
+- Optional CAD/USD MSRP is edited separately from Price. Show labeled struck
+  MSRP only when above the selected selling price, never manufacture a discount
+  for equal/lower/unset values. Cart/quotes continue using selling price only.
+  Main-list filtering, not search or new taxonomy, is in scope for this revision.
 
 For accessories, retain inline overflow expansion because no separate accessory
 detail route currently exists. Do not introduce a new route solely for this phase.

@@ -8,7 +8,7 @@ test("GEO-008: compact GeoLite attribution is readable on desktop and mobile", a
     await expect(footer.getByRole("link", { name: "MaxMind", exact: true })).toHaveAttribute("href", "https://www.maxmind.com/");
     await expect(footer.getByRole("link", { name: "GeoNames", exact: true })).toHaveAttribute("href", "https://www.geonames.org/");
     await expect(footer).toHaveCSS("font-size", "12px");
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
   }
 });
 
@@ -34,22 +34,27 @@ test("GEO-007: unknown visitors see configured CAD prices across catalog, detail
   await expect(page.locator("main")).not.toContainText("USD $");
 });
 
-test("USR-011: mobile top links switch Equipment and Accessories without opening the menu", async ({ page }) => {
+test("USR-011: mobile top links filter All products, Equipment and Accessories without opening the menu", async ({ page }) => {
   await page.goto("/");
   const mobile = page.getByRole("navigation", { name: "Catalog navigation", exact: true });
   for (const width of [320, 390, 767, 768, 1023]) {
     await page.setViewportSize({ width, height: 844 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect(mobile.getByRole("link", { name: "All products", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(mobile.getByRole("link", { name: "Equipment", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(mobile.getByRole("link", { name: "Accessories", exact: true })).toBeInViewport({ ratio: 1 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await mobile.getByRole("link", { name: "Accessories", exact: true }).click();
-  await page.waitForURL("**/accessories");
-  await expect(page.getByRole("heading", { name: "Accessories", exact: true })).toBeVisible();
+  await page.waitForURL("**/?catalog=accessories#products");
+  await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "accessories");
+  await expect(page.locator('#products article[data-analytics-item-type="accessory"]').first()).toBeVisible();
+  await expect(page.locator('#products article[data-analytics-item-type="product"]')).toHaveCount(0);
   await mobile.getByRole("link", { name: "Equipment", exact: true }).click();
-  await page.waitForURL("**/#products");
+  await page.waitForURL("**/?catalog=equipment#products");
+  await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "equipment");
+  await expect(page.locator('#products article[data-analytics-item-type="accessory"]')).toHaveCount(0);
   await expect(page.locator("#products article").first()).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Site navigation" })).not.toBeVisible();
   await expect.poll(async () => {
@@ -57,10 +62,16 @@ test("USR-011: mobile top links switch Equipment and Accessories without opening
     const header = await page.locator("header").boundingBox();
     return heading && header ? heading.y - header.y - header.height : -1;
   }).toBeGreaterThanOrEqual(0);
+  await mobile.getByRole("link", { name: "All products", exact: true }).click();
+  await page.waitForURL("**/#products");
+  await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "all");
+  await expect(page.locator('#products article[data-analytics-item-type="product"]').first()).toBeVisible();
+  await expect(page.locator('#products article[data-analytics-item-type="accessory"]').first()).toBeVisible();
   for (const width of [1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(mobile).toBeHidden();
     const desktop = page.getByRole("navigation", { name: "Main navigation", exact: true });
+    await expect(desktop.getByRole("link", { name: "All products", exact: true })).toBeVisible();
     await expect(desktop.getByRole("link", { name: "Equipment", exact: true })).toBeVisible();
     await expect(desktop.getByRole("link", { name: "Accessories", exact: true })).toBeVisible();
   }
@@ -71,7 +82,7 @@ test("Canadian display and saved-cart reprice use CAD without converting USD", a
   const body = { items: [item], market: { countryCode: "CA", currency: "CAD", locationStatus: "located" } };
   await page.route("**/api/products", (route) => route.fulfill({ json: body }));
   await page.route("**/api/catalog/selection", (route) => route.fulfill({ json: body }));
-  await page.goto("/");
+  await page.goto("/?catalog=equipment");
   await expect(page.locator("#products article")).toContainText("CAD $4,005.25");
   await page.evaluate(() => localStorage.setItem("styl-cart", JSON.stringify([
     { id: 9901, name: "Canada priced rack", price: 4000.95, currency: "USD", quantity: 2 },
