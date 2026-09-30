@@ -22,6 +22,7 @@ export default function RootLayout({
           GeoLite data by <a href="https://www.maxmind.com/" className="underline underline-offset-2">MaxMind</a>
           {" · "}<a href="https://www.geonames.org/" className="underline underline-offset-2">GeoNames</a>
           {" · "}<Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
+          {" · "}<Link href="/support" className="inline-flex min-h-11 items-center underline underline-offset-2">Ask STYL</Link>
         </footer>
         <Suspense fallback={null}><AnalyticsTracker /></Suspense>
       </body>

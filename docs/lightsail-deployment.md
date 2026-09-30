@@ -63,10 +63,11 @@ declines, DNT/GPC/admin/internal/bot exclusions and fail-closed privacy checks.
 There is no fallback to browser/session identifiers or raw-event/journey storage.
 
 Before activation, verify independent server-hour aggregates, rejected identified
-payloads and the legacy session endpoint's 410 response; retain aggregates for
-13 calendar months. New reports must not read old session history. Existing
-legacy private data is not purged or destructively migrated by this change;
-verify its existing retention or separately approved bounded cleanup.
+payloads and the legacy session endpoint's 410 response. Website/business records
+follow the no-automatic-expiry policy in §6.1, not the former 13-month aggregate
+expiry rule. New reports must not read old session history. Existing legacy
+private data is not purged or destructively migrated by these deployment changes;
+audit active retention jobs before release.
 Review infrastructure access logs and business inquiry/contact data separately:
 they may contain personal data even though new analytics is aggregate-only.
 
@@ -342,11 +343,28 @@ contains the admin token.
 
 ## 6. Install services and the IP-address HTTP proxy
 
+**Existing production installations must complete the preservation and coverage
+gates in §6.1 before changing journal retention.** The following installs capture
+configuration only; it deliberately does not install the operational journal
+drop-in. Do not overwrite the installed domain/IP routes with an example.
+
 The Caddy configuration below already uses the current static IP `54.156.37.31`.
 The `http://` prefix intentionally prevents certificate issuance during the
 IP-only phase.
 
 ```bash
+sudo groupadd --system --force styl-logs
+sudo usermod -a -G styl-logs styl
+sudo usermod -a -G styl-logs caddy
+sudo install -d -m 2770 -o root -g styl-logs /var/log/styl-website
+sudo install -d -m 0700 -o styl -g styl /var/lib/styl-records
+sudo install -d -m 0755 -o root -g root /usr/local/lib/styl
+sudo install -m 0644 -o root -g root /opt/styl/deploy/capture_website_logs.py /usr/local/lib/styl/capture_website_logs.py
+sudo install -m 0755 -o root -g root /opt/styl/deploy/backup.sh /usr/local/lib/styl/backup.sh
+if sudo /usr/bin/python3 /opt/styl/deploy/check_logging_install.py --require; then
+sudo install -d -m 0755 /etc/systemd/system/caddy.service.d
+sudo install -m 0644 /opt/styl/deploy/caddy-website-logs.conf /etc/systemd/system/caddy.service.d/website-logs.conf
+sudo install -m 0644 /opt/styl/deploy/website-logging.caddy /etc/caddy/website-logging.caddy
 sudo install -m 0644 /opt/styl/deploy/styl-api.service /etc/systemd/system/
 sudo install -m 0644 /opt/styl/deploy/styl-web.service /etc/systemd/system/
 sudo install -m 0644 /opt/styl/deploy/styl-backup.service /etc/systemd/system/
@@ -354,7 +372,10 @@ sudo install -m 0644 /opt/styl/deploy/styl-backup.timer /etc/systemd/system/
 sudo chmod 0755 /opt/styl/deploy/backup.sh /opt/styl/deploy/deploy.sh
 
 sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
+import website-logging.caddy
+
 http://54.156.37.31 {
+  import website_access
   encode zstd gzip
 
   handle /health {
@@ -381,11 +402,221 @@ sudo systemctl enable --now styl-api styl-web styl-backup.timer
 sudo systemctl enable caddy
 sudo systemctl restart caddy
 sudo systemctl --no-pager --full status styl-api styl-web caddy styl-backup.timer
+else
+  echo "Prerequisites failed; no updated units were copied or started." >&2
+fi
 ```
 
 The explicit Caddy restart is required when the package's default welcome page
 was already running. Merely enabling an already-running Caddy service does not
 load the replacement Caddyfile.
+
+Do not continue copying updated units if the `--require` preflight fails. It
+checks the root-owned installed scripts, real private directories, required
+ownership/modes and both service users' `styl-logs` membership **before** unit
+installation. It changes nothing and does not configure journal retention.
+
+### 6.1 Website records and operational log retention
+
+**Retention policy:** OS/build/maintenance operational logs have a **14-day
+maximum** (and a 250 MB journal cap, which can expire them earlier).
+**All website access/runtime/error logs and business records, including their
+backups, have no automatic age or size deletion.** Rotation is segmentation, not
+retention. Never apply `logrotate` deletion, `copytruncate`, Caddy's default
+file-rolling retention, backup expiry or storage lifecycle deletion to these
+records. Protected admin cleanup may remove **only sealed, immutable website log
+files with a verified backup**; it must not remove business data or live streams.
+This supersedes the earlier 14-day business-backup rule.
+
+Deployment tooling is not an application-retention migration. Audit existing
+analytics/legacy-data retention jobs and off-server backup/snapshot lifecycles
+against the approved policy before activating this release. Do not assume an
+older analytics retention rule or a generic maintenance cleanup is authorized to
+delete website/business records under this policy.
+
+#### Storage and backend contract
+
+- Set `STYL_WEBSITE_LOG_DIR=/var/log/styl-website` and
+  `STYL_RECORDS_DIR=/var/lib/styl-records` in `/etc/styl/styl.env`, preserving all
+  other settings/secrets. Both must be absolute, real directories, not symlinks.
+  Records storage must be separate, outside the website-log tree and web roots.
+  The installed service `--directory` arguments must match the log environment
+  value; changing only the API variable does not move the writers.
+- The shared, setgid log directory is root:`styl-logs` mode **2770**; `styl` and
+  `caddy` are trusted members. The API can read Caddy files and, only after backup
+  verification, unlink approved sealed files. No public/static route may serve
+  either directory. The records directory is `styl:styl` mode **0700**.
+- The writer makes a flat directory of
+  `<stream>-<UTC YYYYMMDDTHHMMSSffffffZ>-<random run ID>-<sequence>.log.active`.
+  Streams are `api`, `web`, `caddy`, `caddy-reload`, and `analytics-report`.
+  A successful seal removes only the final `.active` suffix, yielding `.log`.
+  Active files are **0640**, sealed files **0440**, subject to the private umask.
+  "Immutable" means the writer never reopens or changes sealed bytes; it is not
+  `chattr +i` and is not protection against a compromised service/root account.
+- The backend may archive sealed **regular `.log` or `.jsonl` files only**, never
+  symlinks, devices, sockets, directories or paths outside the configured root.
+  This writer emits `.log`, not `.jsonl`: size boundaries may split lines, UTF-8
+  or JSON records. Order chunks by run ID and sequence to reconstruct a stream.
+  Preserve raw bytes and verify backup checksums before any permitted deletion.
+- **Every name ending `.active` is incomplete and never admin-removable.**
+  A bounded-prefix live snapshot, if supported by the backend, is labelled
+  incomplete and never qualifies its source for removal. Restarts leave old
+  `.active` files untouched. Following a crash, preserve them; prove no writer
+  holds the inode open, make and verify a protected recovery copy, then handle
+  sealing as a separate reviewed recovery action. Never rename a running stream.
+- `deploy/backup.sh` retains catalog/upload tar backups indefinitely in
+  `/var/backups/styl`; that directory is **not** the admin records store. It does
+  not include website logs, `/var/lib/styl-records`, analytics SQLite, environment
+  secrets or machine configuration. Back each of those up separately using a
+  consistent, private procedure. Avoid recursively backing up backup stores.
+  The backup unit also uses a root-owned `/usr/local/lib/styl/backup.sh` copy,
+  preventing an application-code rollback from restoring the old age-deletion
+  script. Install the updated backup unit and script together.
+
+#### Capture behavior and privacy
+
+`deploy/capture_website_logs.py` uses only Python's standard library. Install the
+root-owned copy in `/usr/local/lib/styl/`, outside the application Git checkout,
+so rolling application code back cannot remove the running capture tool. It starts
+the original command directly (no shell), inherits its working directory and
+environment, and captures **both stdout and stderr**, including startup and
+shutdown output. Each chunk is appended and synced. Files seal at **16 MiB**,
+on a **UTC date change** (including idle streams), or after the pipe drains on
+exit. Unique exclusive creation and no-overwrite publication preserve old files;
+there is no retention scanner, truncation or automatic deletion of history.
+
+A bounded queue and pipe apply backpressure rather than sampling/discarding
+output. SIGTERM/SIGINT/SIGHUP/SIGQUIT/SIGUSR1/SIGUSR2 are forwarded to the child's
+process group on Linux; normal child exit status is returned (signal exits use
+128 + signal).
+`KillMode=mixed` prevents double delivery by systemd, with 30 seconds for graceful
+shutdown and a 45-second systemd limit. The Caddy drop-in retains vendor
+`Type=notify` and enables `NotifyAccess=all` for the wrapped child; reload output
+also has its own wrapper. **Do not restore Caddy's `--environ` flag.**
+
+Storage/write/sync/launch failures exit **74**, emit only a fixed operational
+warning, stop the child, and preserve incomplete `.active` files. The installed
+long-running units do not automatically restart status 74; fix the fault and
+restart explicitly. No logger can guarantee recovery of unsaved bytes after
+disk failure, SIGKILL, power loss or a child failure before it flushes. Previously
+lost/expired logs **cannot be reconstructed**. Application-private file handlers,
+remote outputs and browser-console-only errors are not magically captured.
+
+The shared `website-logging.caddy` uses the stock
+[Caddy access log directive](https://caddyserver.com/docs/caddyfile/directives/log)
+and [global runtime logger](https://caddyserver.com/docs/caddyfile/options#log):
+`output stdout`/`stderr`, `format filter`, `wrap json`, and `delete` filters.
+It removes the **entire request object** (IP/client IP, headers, URI/query,
+referrer, user agent and TLS details), response headers and user ID, retaining
+status, sizes, duration, severity and time. No request-body logging, credentials
+logging, debug logging, sampling or tracking identifiers are enabled.
+Uvicorn's duplicate raw-IP/URL access logger is disabled with `--no-access-log`;
+Caddy supplies the intentionally coarse request summaries.
+
+Use `import website_access` in **every** applicable HTTPS, www redirect and IP
+block, and explicit HTTP redirect blocks; do not assume automatically generated
+HTTPS redirect servers have access logging. Preserve the installed domains,
+redirects, health/API routes and trusted-client-IP headers. If the installed
+Caddyfile already has a global block, merge the runtime logger into it instead
+of importing a second global block. Caddy's stock filter cannot remove the
+special `msg` field: free-text exception/startup messages from Caddy, Next.js or
+Python may still contain emitter-supplied sensitive content. Review actual
+synthetic error output and prevent sensitive logging at the emitter; the raw
+byte wrapper is **not a redaction engine**.
+
+#### Required migration gate — never apply retention first
+
+1. Inventory effective systemd units/drop-ins, all Caddy listeners/log sinks,
+   application file handlers, analytics/report workers, timers, logrotate rules,
+   journal namespaces, backups and external lifecycle policies. Preserve current
+   configuration privately. The normal `deploy.sh` does **not** install capture
+   tooling, backup tooling, service, Caddy or journal changes. OS/security logs,
+   package/build output and the
+   GeoIP updater stay operational; report-worker output is conservatively
+   classified as website output and wrapped too.
+2. **Before any journal policy change**, preserve every available website log
+   source and old backup. Make private, verified, durable copies off the instance
+   with no automatic expiry. Old journal data may mix website and operational
+   entries; when coverage is uncertain, preserve the entire existing journal,
+   including rotated files, rather than filtering away unknown website units.
+   For an authorized consistent handoff, stop website services/report timers,
+   sync/export the journals (for example `journalctl --output=export --all
+   --no-pager` into a private unique `.active` file), verify the export/copies,
+   record checksums and seal only after successful completion. Do not put such
+   potentially sensitive exports in public artifacts. Keep the old operational
+   retention policy until this is complete; **do not run journal vacuum**.
+3. Provision the two directories/group, root-owned capture/backup tools and
+   environment settings above. Run the section 6 `check_logging_install.py
+   --require` gate before copying any updated units/drop-ins. Install the updated
+   backup unit as well. Stage
+   and validate the actual Caddy configuration, install the API/web services and
+   Caddy drop-in, and update `styl-analytics-report.service` if that timer is
+   installed. Preserve its enabled/disabled state and email configuration.
+   Run `systemctl daemon-reload`, restart the affected services, and resume only
+   previously enabled approved timers. Do not enable analytics/mail as a side
+   effect. The [official Caddy service](https://caddyserver.com/docs/running#using-the-service)
+   explains notification, override and reload semantics.
+4. Verify as the service users that the directory is writable and that `styl`
+   can read a sealed Caddy log. Use synthetic requests to verify root, www, IP,
+   HTTP redirects, API, frontend, 404 and controlled error paths; inspect private
+   access/runtime/error files and confirm headers, query tokens and form values
+   are absent from the configured request summaries. Verify startup, Caddy reload,
+   graceful stop/start and report-worker output. Confirm fresh journal entries
+   contain **only service lifecycle/fixed capture warnings**, not website output.
+   Explicitly resolve every uncovered sink before continuing.
+5. Copy/sync any journal/file tail from the handoff into preserved history,
+   verify backups are restorable and record coverage gaps. Obtain operational
+   sign-off that **all existing history is preserved and all future website
+   output is separated**. Any missing access-log configuration means those past
+   requests were never captured, not that this migration recovered them.
+6. **Only after all gates pass**, install the following operational-only policy:
+
+   ```bash
+   sudo install -d -m 0755 /etc/systemd/journald.conf.d
+   sudo install -m 0644 /opt/styl/deploy/journald-operational.conf /etc/systemd/journald.conf.d/60-styl-operational.conf
+   sudo systemctl restart systemd-journald
+   ```
+
+   Restarting journald can enforce age/size limits immediately; this is not a
+   harmless preview. The template sets `MaxRetentionSec=14day`,
+   `MaxFileSec=1day`, `SystemMaxUse=250M` and `RuntimeMaxUse=250M`, not website-file
+   limits. Active journal files and reserved space mean usage is not an exact
+   quota; monitor actual usage.
+   Inspect other drop-ins/namespaces and operational file logs separately:
+   journald cannot expire `/var/log/apt`, audit files, build artifacts or logs
+   owned by other daemons. Audit and configure those operational sources for
+   the same 14-day maximum without including website/business paths. This
+   template alone does **not** certify host-wide operational retention.
+
+No part of the above migration has been performed merely by changing repository
+files. Keep disk/inode monitoring and independent backups active: when capacity
+runs low, add storage or use approved backed-up sealed-log cleanup, never delete
+business records or live streams to free space.
+
+#### Isolated deployment regression checks
+
+From the repository root with its configured Python:
+
+```powershell
+& '.\.venv\Scripts\python.exe' -m unittest discover -s deploy\tests -p 'test_website_logs.py'
+```
+
+`OPS-LOG` covers byte-preserving size/date rotation, old-file preservation,
+incomplete recovery boundaries, collision/symlink rejection, short writes,
+write/sync/launch failures, stdout+stderr draining, exit status and capture
+configuration. Bash tests create isolated data beneath `deploy/tests` and verify
+successful/failed business backups never expire old archives. Linux-only
+ownership/mode provisioning is stubbed in those Bash tests on Windows, where
+NTFS/OneDrive cannot enact it; tar/link/publication operations remain real.
+Linux-only
+process-group/shutdown tests must also pass on the target platform; a Windows
+skip is not a Linux service verification. Caddy config validation, systemd
+notification/reload/permissions, synthetic privacy checks, actual disk alarms,
+historical preservation and restore tests remain mandatory operational gates,
+not inferred from unit tests. Tests do not deploy, vacuum or touch production.
+`OPS-012` additionally covers the fail-fast installation prerequisite checks:
+missing scripts/directories, incorrect ownership/modes, missing group membership
+and unreadable service configuration refuse deployment before pull/build/restart.
 
 ## 7. Verify the IP-address deployment
 
@@ -480,7 +711,8 @@ it, and restart the proxy and API:
 
 ```bash
 sudo install -m 0644 /opt/styl/deploy/Caddyfile /etc/caddy/Caddyfile
-sudo sed -i 's/example.com/YOUR_DOMAIN, www.YOUR_DOMAIN/' /etc/caddy/Caddyfile
+sudo install -m 0644 /opt/styl/deploy/website-logging.caddy /etc/caddy/website-logging.caddy
+sudo sed -i 's/example.com/YOUR_DOMAIN/g' /etc/caddy/Caddyfile
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl restart styl-api caddy
 sudo systemctl --no-pager --full status styl-api caddy
@@ -544,7 +776,7 @@ Browser upload/import is deferred.
 
 Analytics SQLite is also excluded from the catalog recovery ZIP. If analytics is
 later activated, verify its private storage is covered by a consistent SQLite
-backup and the applicable aggregate/legacy expiry rules; do not assume the
+backup and the no-automatic-expiry policy in §6.1; do not assume the
 catalog backup commands below include it. A full analytics backup can contain
 legacy private records and mail delivery metadata, not just anonymous counters.
 See [analytics backup guidance](traffic-analytics-operations.md#retention-deletion-and-backups).
@@ -558,11 +790,19 @@ sudo ls -lh /var/backups/styl
 sudo systemctl list-timers styl-backup.timer
 ```
 
-Archives are retained for 14 days. For minimal cost, leave Lightsail automatic
-snapshots disabled during setup and testing. After the site contains production
-data, consider enabling automatic snapshots or taking periodic manual snapshots
-from the instance's **Snapshots** tab. Review the price and retention shown by
-Lightsail before enabling them. Local backup archives protect against editing
+Business archives are retained indefinitely; no age/size cleanup runs.
+Unique `.tar.gz.active` files identify failed/interrupted backups; only successful
+archives are published as `.tar.gz`, without overwriting older copies. The backup
+script supports `STYL_DATA_DIR` and `STYL_BACKUP_DIR` overrides for isolated tests;
+the installed backup service defaults remain `/var/lib/styl` and
+`/var/backups/styl`. A tar copy is not a transactional snapshot of concurrent
+application writes: arrange a consistent/quiescent backup and verify restoration.
+Website logs and the admin records store need separate coverage (§6.1).
+For minimal cost, leave Lightsail automatic
+snapshots disabled. After the site contains production data, take periodic manual
+snapshots from the instance's **Snapshots** tab and preserve independent off-server
+backups without automatic expiry. Rotating/expiring automatic snapshots do not
+meet this records policy. Review storage pricing and capacity. Local backup archives protect against editing
 mistakes; snapshots protect against instance or disk loss. A backup stored only
 on the same disk is not a complete disaster-recovery copy.
 
@@ -607,7 +847,8 @@ curl --fail https://YOUR_DOMAIN/health
 ```bash
 df -h
 free -h
-sudo du -sh /var/lib/styl /var/backups/styl /opt/styl
+sudo du -sh /var/lib/styl /var/backups/styl /var/log/styl-website /var/lib/styl-records /opt/styl
+df -i
 ```
 
 8. Rotate the admin token when access changes:
@@ -624,7 +865,18 @@ Existing browser sessions stop working immediately after token rotation.
 
 ## 11. Troubleshooting
 
-Check service logs first:
+After the logging migration, website output is in the private log directory,
+not journald. Inspect files locally without copying potentially sensitive
+contents into tickets or chat; `.active` files may still be growing:
+
+```bash
+sudo ls -lt /var/log/styl-website
+# Substitute a verified filename from the listing; do not use an unbounded glob.
+sudo tail -n 100 /var/log/styl-website/SELECTED_FILE.log.active
+```
+
+The journal remains useful for service lifecycle and fixed capture-failure
+warnings (and pre-migration history until preserved):
 
 ```bash
 sudo journalctl -u styl-api -n 100 --no-pager
@@ -644,7 +896,10 @@ Common failure checks:
   with `sudo ls -la /var/lib/styl`, and confirm the API runs as user `styl`.
 - Frontend build is killed: check `free -h` and confirm the 2 GB swap file is active.
 - Disk is full: inspect `/var/backups/styl`, `/var/lib/styl/uploads`, and journal
-  size with `sudo journalctl --disk-usage`. Do not delete production data casually.
+  size with `sudo journalctl --disk-usage`, plus `/var/log/styl-website`,
+  `/var/lib/styl-records` and free inodes. Never use automatic age/size deletion
+  for website logs/business records. Exit status 74 requires fixing capture
+  storage/configuration and explicitly restarting the affected service.
 
 ## Deploy later updates
 
@@ -672,7 +927,10 @@ Provision a country database and configure `STYL_GEOIP_DATABASE`; without it,
 location remains unknown and CAD is used. Apply the updated API service's trusted
 loopback proxy flags and the API reverse proxy's explicit client-IP overwrite to
 the installed systemd/Caddy configuration, preserving your actual domain and
-other settings. Validate Caddy, run `systemctl daemon-reload`, then restart the
+other settings. First provision the root-owned tools/private directories/group
+from section 6 and pass `check_logging_install.py --require`; do not copy the
+updated units without those prerequisites. Validate Caddy, run
+`systemctl daemon-reload`, then restart the
 affected services. The normal application deploy script does not replace installed
 service or proxy configuration.
 
@@ -695,9 +953,15 @@ After pushing tested changes to `main`, deploy them:
 sudo /opt/styl/deploy/deploy.sh
 ```
 
-The script performs a fast-forward pull, installs locked dependencies, builds
+The script first runs a read-only logging preflight, then performs a fast-forward
+pull, installs locked dependencies, builds
 the frontend, and restarts both application services. It never modifies
-`/var/lib/styl`.
+`/var/lib/styl`. When installed units reference `/usr/local/lib/styl` tools,
+missing scripts, private directories, ownership/modes or group membership stop
+the script **before pull/build/restart**. Legacy units remain unchanged until an
+explicit migration; passing their preflight does not certify website capture or
+authorize journal expiry. The deploy script never provisions or activates the
+14-day journal policy.
 
 Verify after every deployment:
 

@@ -8,10 +8,11 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 - [Traffic analytics and daily email requirements](docs/traffic-analytics-requirements.md) — aggregate-only production collection, concise daily summaries and admin reports; actual email sending disabled, City/postal deferred
   - [简体中文版：网站流量分析与每日使用情况邮件](docs/traffic-analytics-requirements.zh-CN.md)
 - [Traffic analytics local use and operations](docs/traffic-analytics-operations.md) — automatic first-party aggregates with Privacy-page opt-out, private hour-based counts, admin reports and guarded daily email jobs
-- [AI-assisted customer-service architecture](docs/customer-service-ai-architecture.md) — current/future system design, grounded AI, human handoff, desktop/mobile chat UX and rollout prerequisites (draft; provider undecided)
+- [AI-assisted customer service](docs/customer-service-ai-architecture.md) — local guest chat, scoped Gemini adapter and protected human-support inbox; broader production architecture and rollout gates remain future
   - [简体中文版：网站与 AI 辅助客户服务架构](docs/customer-service-ai-architecture.zh-CN.md)
 - [Living regression test plan](docs/regression-test-plan.md) — system and end-user cases, automation mapping, release gates, and an expandable run-record template
 - [Catalog backup and offline recovery](docs/catalog-backup-and-recovery.md) — private admin ZIP download, included media/checksums, and recovery on a clean installation; browser upload/import remains deferred
+- [Backup & Records and retention](docs/records-backup-and-retention.md) — private website-log/business-record archives, saved-download verification and optional exact-record removal; no automatic age deletion
 - [STYL regression agent skill](.github/skills/styl-regression/SKILL.md) — full-regression workflow and automatic coverage-maintenance guidance for new features and fixes
 - [Product catalog and admin schema design](docs/catalog-and-admin-schema-design.md) — target data model, catalog-wide SKUs, configurable admin options, and migration plan (design draft, not yet implemented)
 - [Accessory schema review](docs/accessory-schema-review.md) — proposal evaluation and rationale for the catalog design
@@ -130,11 +131,30 @@ and timer templates remain subject to final verification; non-production mail
 is blocked, recipients are not approved and nothing is deployed by this change.
 Admin uses Pacific date filters/manual refresh and hour-level last activity;
 email previews exclude the incomplete hour. New reports/CSV/snapshots do not read
-legacy session history. Aggregates retain 13 calendar months; existing private
-legacy data is not destructively migrated or claimed deleted and remains subject
-to its existing retention/approved cleanup. See
+legacy session history. Website/business records now have no automatic age
+expiry: [Backup & Records](docs/records-backup-and-retention.md) requires a
+verified saved download before optional source cleanup. Legacy data remains
+private, with explicit privacy obligations/deletions handled separately. See
 [analytics operations](docs/traffic-analytics-operations.md) for local verification,
 configuration, previews, privacy review and safe production rollout.
+
+### Local AI customer-service pilot
+
+The local API task supports guest chat at `/support` and **Support inbox** in
+admin. It uses only published market-eligible product facts, exact current prices
+and documented compatibility; missing information goes to a highlighted human
+queue. Existing admin access is a single-operator local exception, not named
+multi-agent production authentication. Chat is hard-gated to local/test and no
+production deployment is authorized.
+
+Use synthetic, non-sensitive messages only with Gemini's unpaid tier. Save a key
+through `.\configure-local-gemini.ps1 -Action Save`; the masked prompt writes
+Windows-user-encrypted data outside Git/OneDrive. The key is backend-only.
+Provider/model, startup steps, isolated testing and the verified synthetic
+connection are documented in the [architecture guide](docs/customer-service-ai-architecture.md).
+Conversation history has no age expiry and is covered by Backup & Records;
+only explicitly selected unchanged closed threads can be removed after verifying
+the downloaded archive.
 
 ### Frontend
 

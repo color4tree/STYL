@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import calendar
 from collections import defaultdict, deque
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
@@ -232,8 +231,6 @@ class AnalyticsStore:
                     raise OSError("Analytics database must not be a symlink.") from None
             else:
                 os.close(descriptor)
-        if self.path.stat().st_size > 1024**3:
-            raise OSError("Analytics storage limit reached; run retention maintenance.")
         connection = sqlite3.connect(self.path, timeout=5)
         connection.row_factory = sqlite3.Row
         try:
@@ -339,31 +336,7 @@ class AnalyticsStore:
                 connection.execute("DELETE FROM analytics_visitors WHERE hash=?", (row["visitor_hash"],))
 
     def prune(self, now: datetime | None = None) -> None:
-        now = now or utcnow()
-        today = now.astimezone(report_zone()).date()
-        month = today.year * 12 + today.month - 1 - 13
-        floor_day = date(month // 12, month % 12 + 1, min(today.day, calendar.monthrange(month // 12, month % 12 + 1)[1]))
-        floor = stamp(datetime.combine(floor_day, time.min, report_zone()))
-        legacy_floor = stamp(hour_start(now - timedelta(days=30)))
-        with self.connection() as connection:
-            connection.execute("DELETE FROM analytics_aggregate_counts WHERE hour<?", (floor,))
-            connection.execute("DELETE FROM analytics_aggregate_items WHERE hour<?", (floor,))
-            tables = _tables(connection)
-            if "analytics_events" in tables:
-                connection.execute("DELETE FROM analytics_events WHERE occurred_at<? OR received_at<?", (legacy_floor, legacy_floor))
-            if "analytics_receipts" in tables:
-                connection.execute("DELETE FROM analytics_receipts WHERE created_at<?", (legacy_floor,))
-            if "analytics_sessions" in tables:
-                remaining = " AND id NOT IN (SELECT session_id FROM analytics_events)" if "analytics_events" in tables else ""
-                connection.execute("DELETE FROM analytics_sessions WHERE last_at<?" + remaining, (legacy_floor,))
-                if "analytics_visitors" in tables:
-                    connection.execute("UPDATE analytics_sessions SET visitor_hash=NULL WHERE visitor_hash IN (SELECT hash FROM analytics_visitors WHERE expires_at<=? OR first_at<?)", (stamp(now), legacy_floor))
-            if "analytics_visitors" in tables:
-                connection.execute("DELETE FROM analytics_visitors WHERE expires_at<=? OR first_at<?", (stamp(now), legacy_floor))
-            if "analytics_rollups" in tables:
-                connection.execute("DELETE FROM analytics_rollups WHERE day<?", (floor_day.isoformat(),))
-            if "analytics_counters" in tables:
-                connection.execute("DELETE FROM analytics_counters WHERE day<?", (floor_day.isoformat(),))
+        # Preserve the scheduled maintenance entry point, but never expire business records by age.
         with self.connection() as connection:
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
@@ -490,7 +463,7 @@ def get_report(start: str, end: str, *, cutoff: datetime | None = None, inquirie
         "Counts are occurrences, not people. Lost, blocked, offline or repeated requests can change totals.",
         "Active seconds are summed estimates assigned to the received hour, not per-visitor medians or interval unions. Exclusive browser Web Locks reduce cross-tab overlap where available; delivery and browser limitations remain.",
         "Independent coarse dimensions cannot be combined into visitor profiles.",
-        "Aggregate retention is 13 calendar months; expired browsing counts cannot be recovered from this report.",
+        "Aggregate history has no automatic age expiry. Explicit removal after a verified backup changes the reports available on this server.",
     ]
     warnings.append("Data cutoff is the start of the current completed-hour boundary; the incomplete hour is excluded." if completed_hours else "The current hour is included and incomplete; activity is bucketed by server receipt hour.")
     earlier_day = first.astimezone(zone).date() - timedelta(days=7)
@@ -501,7 +474,7 @@ def get_report(start: str, end: str, *, cutoff: datetime | None = None, inquirie
         meta = dict(connection.execute("SELECT key,value FROM analytics_meta"))
         tables = _tables(connection)
         if any(connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone() for table in LEGACY_TABLES if table in tables):
-            warnings.append("Legacy identified analytics data exists but is excluded from this report. Maintenance retains legacy raw data for at most 30 days and legacy rollups for 13 calendar months; protected backups require separate expiry.")
+            warnings.append("Legacy identified analytics data exists but is excluded from this report. It remains private and requires separately reviewed privacy deletion; routine maintenance no longer deletes records by age.")
     if not enabled():
         warnings.append("Collection is disabled; existing aggregate data may be displayed.")
     tracked = meta.get("aggregate_tracking_since")

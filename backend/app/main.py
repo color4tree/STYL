@@ -34,7 +34,7 @@ from pydantic import AfterValidator, BaseModel, EmailStr, Field, TypeAdapter, fi
 from app.media import VIDEO_FORMATS, upload_video, video_response
 from app.location import MarketContext, resolve_market
 from app.catalog_backup import BackupError, create_archive, validate_engineering_image
-from app import analytics
+from app import analytics, records, support
 
 APP_PATH = Path(__file__).resolve().parent
 CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
@@ -60,6 +60,7 @@ CATALOG_LOCK = Lock()
 ACCESSORIES_LOCK = CATALOG_LOCK
 HERO_LOCK = CATALOG_LOCK
 BACKUP_LOCK = Lock()
+INQUIRY_LOCK = Lock()
 PUBLIC_IMAGE_PATH = APP_PATH.parents[1] / "frontend" / "public" / "images"
 # Accessory IDs start above this so they don't collide with product IDs in the shared cart.
 ACCESSORY_ID_OFFSET = 1000
@@ -83,6 +84,7 @@ app = FastAPI(
     title="STYL API",
     version="0.1.0",
     description="Lightweight API for catalog and inquiry operations.",
+    lifespan=support.lifespan,
 )
 
 app.add_middleware(
@@ -1188,7 +1190,8 @@ def create_inquiry(request: InquiryRequest) -> dict[str, str]:
         "emailStatus": "pending",
     }
     try:
-        write_json_list(path, inquiry)
+        with INQUIRY_LOCK:
+            write_json_list(path, inquiry)
     except OSError:
         logger.error("Unable to save inquiry %s", inquiry_id)
         raise HTTPException(status_code=503, detail="Unable to save your inquiry. Please try again.") from None
@@ -1200,7 +1203,8 @@ def create_inquiry(request: InquiryRequest) -> dict[str, str]:
     if inquiry["emailStatus"] != "sent":
         logger.warning("Inquiry %s saved; email status: %s", inquiry_id, inquiry["emailStatus"])
     try:
-        write_json_list(path, inquiry)
+        with INQUIRY_LOCK:
+            write_json_list(path, inquiry)
     except OSError:
         logger.error("Unable to update email status for saved inquiry %s", inquiry_id)
     return {
@@ -1218,4 +1222,6 @@ def get_uploaded_video(filename: str, range: str | None = Header(default=None)) 
 
 
 app.include_router(analytics.make_router(require_admin, ALLOWED_ORIGINS))
+app.include_router(records.make_router(require_admin))
+app.include_router(support.make_router(require_admin))
 app.mount("/api/uploads", StaticFiles(directory=UPLOAD_PATH), name="uploads")

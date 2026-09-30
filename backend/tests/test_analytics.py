@@ -407,7 +407,7 @@ class AnalyticsTests(unittest.TestCase):
             self.assertIsNone(connection.execute("SELECT session_id FROM analytics_receipts").fetchone()[0])
         self.assertEqual(self.report()["summary"]["pageViews"], 1)
 
-    def test_an014_thirteen_calendar_month_retention_and_bounded_legacy_raw_retention(self) -> None:
+    def test_an014_maintenance_never_deletes_business_history_by_age(self) -> None:
         self.legacy(NOW - timedelta(days=31))
         old = datetime(2025, 8, 27, 23, tzinfo=timezone.utc)
         retained = datetime(2025, 8, 28, 7, tzinfo=timezone.utc)
@@ -416,15 +416,15 @@ class AnalyticsTests(unittest.TestCase):
                 self.post()
         analytics.get_store().prune(NOW)
         with analytics.get_store().connection() as connection:
-            self.assertEqual(connection.execute("SELECT min(hour) FROM analytics_aggregate_counts").fetchone()[0], analytics.stamp(retained))
+            self.assertEqual(connection.execute("SELECT min(hour) FROM analytics_aggregate_counts").fetchone()[0], analytics.stamp(old))
             for table in ("analytics_events", "analytics_sessions", "analytics_visitors", "analytics_receipts"):
-                self.assertEqual(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0)
+                self.assertEqual(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 1)
             self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 1)
         self.assertEqual(self.report("2025-08-28")["summary"]["pageViews"], 1)
         analytics.get_store().prune(datetime(2028, 1, 1, tzinfo=timezone.utc))
         with analytics.get_store().connection() as connection:
-            self.assertEqual(connection.execute("SELECT count(*) FROM analytics_aggregate_counts").fetchone()[0], 0)
-            self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 0)
+            self.assertGreater(connection.execute("SELECT count(*) FROM analytics_aggregate_counts").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 1)
 
     def test_an013_admin_reports_require_auth_and_csv_is_safe(self) -> None:
         for endpoint in ("report?start=2026-09-28&end=2026-09-28", "export?start=2026-09-28&end=2026-09-28", "email-preview?date=2026-09-28", "deliveries", "email-settings"):

@@ -8,6 +8,34 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Local Ask STYL / Support inbox (2026-09-29)
+
+Use a dedicated responsive `/support` page, linked unobtrusively from navigation
+and footer, not an auto-opening overlay competing with galleries, cart stickies
+or the quote composer. Keep All products/Equipment/Accessories actions unchanged.
+Expose guest start, locally retained access, conversation messages, sources,
+human-help status and a >=48px composer action. Preserve unsent text on failure,
+support Shift+Enter/IME and do not auto-scroll away from older messages.
+The local unpaid-AI/synthetic-only warning must be visible before starting.
+
+Admin Support inbox keeps a distinct guest-thread list and selected conversation,
+stacks on narrow phones, and visibly highlights human attention. Explicit
+takeover/resume/close, scope checkboxes and reply drafts must remain usable at
+320/390px without horizontal scrolling. Failed writes retain drafts; failed reads
+are stale/error states, not an empty-success inbox. Auth errors hide private
+content. Existing catalog drafts survive visiting the support section.
+
+### Backup & Records (2026-09-29)
+
+Keep create, download, saved-file verification and optional source removal as
+distinct actions. Download is not confirmation of a safe saved copy. Display
+coverage/disk warnings and private-data guidance without exposing record contents.
+Use wrapping archive metadata, clear category choices, >=48px action targets,
+explicit destructive confirmations and no 320px horizontal overflow. Preserve
+editor drafts when entering/leaving this section and disable overlapping work.
+File verification and removal failures remain visible and retryable where safe.
+Deleting the verified server ZIP is a separate action from source-record removal.
+
 ### Configurable engineering details (2026-09-29)
 
 The Home banner tab includes a separate Engineering details editor for the

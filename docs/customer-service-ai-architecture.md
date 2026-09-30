@@ -1,7 +1,8 @@
 # STYL website and AI-assisted customer-service architecture
 
-Status: Architecture and UX draft for review; no chat implementation, provider
-selection, purchase, data transfer or deployment authorized by this document
+Status: Local guest chat, single-operator inbox and scoped Gemini adapter
+implemented and locally verified (see project history for harness caveats). No production push/deployment
+or paid billing authorized. Synthetic Gemini adapter connectivity verified.
 
 Date: 2026-09-28
 
@@ -17,6 +18,184 @@ Related documents:
 - [Hosting/deployment](lightsail-deployment.md)
 - [Country/market selection](geoip-pricing.md)
 - [Living regression plan](regression-test-plan.md)
+- [Backup & Records policy](records-backup-and-retention.md)
+
+## 2026-09-29 local implementation request and readiness
+
+The owner requested customer text chat, a consolidated admin inbox with separate
+conversations for different customers, clearly highlighted human-intervention
+cases, and AI answers constrained by an approved, expandable scope (initially
+product information and evidenced compatibility). Gemini is the preferred first
+provider to evaluate, with provider/model replacement supported without rebuilding
+the chat UI, conversation store or business rules. Finish log-backup work first;
+development and testing remain local, with no production push/deployment.
+
+The prior MUSE/CoWork discussion is historical, not the selected integration.
+The broader design below remains a proposal unless covered by this confirmed
+direction. Confirmed: guest chat now with future guest/account coexistence;
+existing admin sign-in for this single-operator local pilot; initial configurable
+topics are published product facts, current selected-market prices and explicitly
+documented compatibility. Missing evidence, excluded topics and customer requests
+go to human help. Named/revocable staff identities remain a multi-agent public
+release requirement. The current English UI/response templates do not constitute
+multilingual certification or a production response-time promise.
+
+### Gemini prerequisites verified from official documentation
+
+Checked 2026-09-29; these are service documentation facts, not an account inspection:
+
+- [Google AI plans](https://ai.google.dev/gemini-api/docs/google-ai-plans):
+  subscription development benefits apply to the AI Studio web interface.
+  Direct Gemini API use by STYL is separately billed/managed. Eligible Developer
+  Program Cloud credits may apply after Cloud Billing setup; Google One AI
+  credits are a different system. No credit entitlement/balance is assumed.
+- [API keys](https://ai.google.dev/gemini-api/docs/api-key): a Gemini API key is
+  associated with a Google Cloud project. New AI Studio keys are authorization
+  keys by default; unrestricted standard keys are rejected. Keys remain backend
+  only and must never enter browser bundles, chat, screenshots or Git.
+- [Billing](https://ai.google.dev/gemini-api/docs/billing): select models support
+  free-tier testing; paid-tier access requires linked Cloud Billing and may
+  require a minimum prepayment. Do not activate billing, auto-reload or a purchase
+  without owner approval. Subscription quotas are not the website's API budget.
+- [Terms](https://ai.google.dev/gemini-api/terms): unpaid input/output may be
+  used to improve Google's services and reviewed by people; do not submit
+  sensitive, confidential or personal information. Paid services do not use
+  prompts/responses for product improvement, but limited abuse-monitoring/legal
+  retention still applies. Paid is not zero retention. Review age, regional and
+  customer-facing use restrictions before any public rollout.
+
+### Access checklist before a real connection test
+
+- Confirm an AI Studio/Cloud project and project identifier under the intended
+  Google account; do not assume the Google One subscription created one.
+- Confirm the project's billing tier, credit availability and an approved test
+  spending limit. Synthetic/non-sensitive messages only for local tests.
+- Have the owner place a restricted API key in a private local secret store
+  outside Git/OneDrive. Record only configured/not-configured status, never its
+  value. Do not ask the owner to paste a key or password into chat.
+- Select an API model actually available to that project. Keep provider/model
+  configurable server-side; do not bind business policy to a hard-coded Gemini
+  UI product name or consumer account session.
+- Verify authentication/model availability, one bounded synthetic generation,
+  timeout/quota failures and usage accounting without printing credentials.
+- Verified: the owner-created **STYL chatbot** project
+  (`gen-lang-client-0774748468`) shows **Free tier**. The owner entered the key
+  through a masked local terminal; it is encrypted with Windows-user DPAPI under
+  `%LOCALAPPDATA%\STYL\AI\gemini-key.dpapi`, outside Git/OneDrive. No full key was
+  sent in chat or committed. Model listing authenticated successfully.
+- A small `gemini-3.8-flash` connectivity call returned the expected synthetic
+  acknowledgement, but subsequent structured support calls returned HTTP 503.
+  A listed `gemini-2.5-flash` alternative returned 404. Actual structured support
+  with **`gemini-3.5-flash`** succeeded: synthetic CAD price and source reference
+  were correctly rendered, with 802 total tokens reported. The local default is
+  therefore `gemini-3.5-flash`, explicitly configurable rather than silently
+  switching models on failure. Listing alone is not inference-availability proof.
+- No billing was enabled, no automatic paid fallback exists, and live checks
+  used only synthetic non-sensitive content. Free-tier limits/service
+  availability can change; quota/errors persist a human-help outcome.
+
+Support transcripts, settings and queue history are business records under the
+new no-age-expiry policy. Their separate SQLite store must join the private
+backup/restore workflow before the chat feature is declared complete. Explicit
+privacy deletion remains separate; chat must not create identified traffic
+analytics or transmit private catalog provenance to an AI provider.
+
+### Implemented local pilot versus the broader proposal
+
+- `/support`: opt-in guest conversation start, browser-token resume, scoped
+  messages, current state and sources, explicit human-help button. No intrusive
+  popup; Ask STYL links remain separate from shopping/quote controls.
+- Admin **Support inbox**: separate guest threads, attention count/highlights,
+  takeover, human replies, explicit resume for subsequent messages and close.
+  Configurable automatic replies and topic checkboxes; provider/model/credential
+  readiness is visible but keys never appear in the UI.
+- Private SQLite conversations/messages/jobs/settings, one bounded in-process
+  worker, scoped request idempotency and compare-and-swap revisions. Provider
+  calls happen outside database transactions. Guest tokens are stored only as
+  hashes on the server. Future account ownership can be added at the access
+  boundary; there is no customer account system or cross-device recovery yet.
+- Catalog evidence is refreshed before inference and rechecked before publishing;
+  drafts, missing-market items and changed prices/details cannot produce stale
+  queued answers. Human takeover/settings changes fence late AI publication.
+- Gemini returns a constrained topic/reference/field decision, **not unrestricted
+  factual prose**. Trusted code renders published values and exact currency
+  amounts, or flags missing/unverified compatibility for a human. This intentionally
+  conservative first version favors evidence over conversational elaboration.
+- Public fact fields are allowlisted; no tools, arbitrary URL fetches, private
+  provenance, admin credentials or other customer records are available to AI.
+  Obvious email/phone/URL input is kept away from the provider, but that heuristic
+  is not comprehensive personal-data detection. Synthetic-only local use remains
+  mandatory with the unpaid provider.
+- Support SQLite is included in Backup & Records. Optional cleanup only removes
+  complete, unchanged, closed threads and their children from a verified archive;
+  active/changed/pending work and current settings remain.
+- No automatic expiry, named staff login, email notification/outbox, file/voice
+  upload, arbitrary FAQ authoring, analytics correlation, or production enablement
+  was added. Those broader sections below remain future design.
+
+### Local configuration and verification commands
+
+`STYL_SUPPORT_ENABLED` defaults false. Even when true, this pilot refuses feature
+use outside `local`/`test`; do not change a production analytics environment to
+circumvent that restriction. Provider defaults `gemini`, model defaults
+`gemini-3.5-flash`. `STYL_SUPPORT_DB` must be a separate absolute private SQLite
+path, defaulting beside the analytics database. `mock` is for isolated local/tests.
+The current local API task loads the private key and uses
+`%LOCALAPPDATA%\STYL\AI\support.sqlite3`; SMTP remains disabled.
+
+```powershell
+# Save through a masked prompt (no API call or billing change):
+.\configure-local-gemini.ps1 -Action Save
+# Use -Replace only for intentional key replacement.
+.\configure-local-gemini.ps1 -Action Status
+
+# A new shell must load the key privately before a synthetic live check:
+.\configure-local-gemini.ps1 -Action Load
+.\.venv\Scripts\python.exe backend\check_gemini.py --model gemini-3.5-flash --support
+```
+
+The helper decrypts only into the current process environment; launch only the
+backend from that shell, not a frontend build. The `NEXT_PUBLIC_*` namespace must
+never contain an API key. Model changes use server configuration and restart, not
+provider-specific UI changes. Another provider implements the small
+`Provider.decide` protocol and adapter registry; policy, storage and UI stay owned
+by STYL. Configuration alone cannot magically support an unimplemented provider.
+
+Automated verification uses isolated temporary databases/catalogs, `mock`, empty
+provider-key environment variables and mocked HTTP transports. Real Gemini
+synthetic checks are reported separately, never as production customer-readiness.
+
+### Switching between the deployed baseline and AI development
+
+The owner requested separate branches on 2026-09-30:
+
+- `main`: deployed application `d6d00a3`, plus documentation-only deployment record
+  `b903f1c`. The application/deployment files in these commits are identical.
+- `ai-assistant/baseline-2026-09-29-2227-pt`: the undeployed AI pilot and its
+  Backup & Records/log-retention dependency. The name records the production
+  baseline activation, **2026-09-29 22:27 Pacific** (`2026-09-30T05:27:30Z`),
+  not a claim that this experimental work is deployed.
+
+Stop the two local STYL tasks before changing branches, inspect `git status`,
+then use either:
+
+```powershell
+git switch main
+git switch ai-assistant/baseline-2026-09-29-2227-pt
+```
+
+Run only the switch for the branch you want, then restart **STYL: local API**
+and **STYL: local web**. The existing ignored local starter checks whether the
+support module and private-key loader exist on the selected branch. On `main`
+it disables support and does not load Gemini credentials; on the AI branch it
+uses the existing encrypted key and private support database.
+
+Git switching does not migrate or delete local data. The selected private catalog
+mirror, chat/analytics databases and DPAPI key remain outside Git. Original
+uncommitted catalog JSON edits are intentionally excluded from the AI commit;
+do not overwrite them or indiscriminately stage/stash all files. If future branch
+changes conflict with those edits, resolve that explicitly rather than forcing
+checkout. Branch switching itself never pushes, deploys or changes billing.
 
 ## 1. Executive recommendation
 
@@ -49,7 +228,8 @@ on an open VS Code session, desktop automation or an operator's personal login.
 
 - Near-future live chat for customer questions.
 - AI normally responds; human fallback when the AI lacks sufficient context.
-- Provider is undecided; names mentioned include MUSE and CoWork.
+- Gemini free tier is selected for synthetic local testing, with the verified
+  `gemini-3.5-flash` model; paid/customer production use remains unapproved.
 - Architecture must include the current website, UX, prerequisites and overall design.
 
 ### Proposed first release
@@ -90,7 +270,7 @@ are proposed defaults requiring review, not existing service promises.
 | Admin access | Shared bearer-token access | Not sufficient for accountable multi-agent support; named identities/roles are a prerequisite |
 | Hosting | One AWS Lightsail Ubuntu instance, Caddy HTTPS, frontend :3000 and API :8000 on loopback | Start small; isolate AI work and bound load so the storefront remains responsive |
 | Traffic analytics | Aggregate-only collection deployed in a611b4e; real daily email disabled | Future support may supply optional unlinked aggregate counts only; no browser/session/conversation correlation in traffic analytics |
-| AI/live support | Not implemented | No provider, trained knowledge base, queue, staffing schedule or live-chat SLA exists yet |
+| AI/live support | Local/test guest chat, Gemini adapter and single-operator inbox implemented | Not deployed; no production staffing schedule/SLA, account login or arbitrary knowledge-base authoring; see local pilot scope above |
 
 Current source references:
 [API and inquiry handling](../backend/app/main.py),
@@ -537,9 +717,11 @@ show "not sent/saved" and the existing contact route instead of claiming success
   restricted purpose and retention as in the analytics requirements. Existing
   infrastructure logs and business contact records may contain personal data;
   aggregate-only traffic measurement does not make the whole site anonymous.
-- Proposed retention for review: transcripts/contact linkage 30 days after
-  closure, operational/audit metadata 90 days, aggregate outcomes as approved
-  for analytics. Legal/business record needs may require a different policy.
+- The 2026-09-29 owner policy supersedes the earlier proposed 30/90-day cleanup:
+  support transcripts, contact linkage and business audit history have no
+  automatic age expiry. Include them in private backup/download verification and
+  approved optional cleanup. Operational logs are separate (14 days); applicable
+  privacy and explicit deletion obligations still apply.
 - Deletion must cover provider copies where supported, local content, derived
   embeddings, exports and backup expiry/replay. Provider deletion capability is
   a selection gate, not an assumed promise.
@@ -596,10 +778,9 @@ not be used to infer a customer's delivery address or identity.
 
 ## 13. Provider/platform selection
 
-MUSE and CoWork are user-named candidates, not a selected vendor or a verified
-capability claim. Confirm the exact product names/URLs and intended commercial
-offering before comparing them. A personal desktop agent without a supported
-production API is not automatically suitable for a public website.
+Gemini is now the preferred first local API candidate. MUSE/CoWork were earlier
+discussion candidates, not verified production integrations. A personal desktop
+agent or consumer Gemini session is not a substitute for a supported server API.
 
 | Evaluation area | Required evidence |
 | --- | --- |

@@ -232,8 +232,8 @@ Unsaved entries survive admin tab changes. Save clears any stale preview;
 inaccessible storage causes an explicit error rather than fallback. Do not delete
 the saved row to turn mail off: an absent row uses the environment defaults.
 Use the disabled preference instead.
-Settings persist until an administrator changes them; the 90-day report-history
-cleanup does not remove current configuration.
+Settings persist until an administrator changes them; verified-record removal
+does not remove current configuration or email duplicate-prevention metadata.
 
 ### Public collector contract and private aggregate tables
 
@@ -262,9 +262,10 @@ not new tracking or person-specific erasure from aggregate counters.
 New-mode hour-rounded `coverage.trackingSince` and `coverage.lastEventAt`
 metadata is separate from legacy timestamps. If legacy data exists, show its
 existence warning without using its sessions/events/rollups as report data.
-Maintenance expires old raw event/session/visitor/receipt rows under the existing
-30-day bound (including visitor expiry) and old rollups/new aggregates at
-13 calendar months. Historical inquiry JSON and backup copies are not rewritten.
+Maintenance no longer expires business records by age. The owner-approved
+[Backup & Records policy](records-backup-and-retention.md) replaces the former
+30-day/13-month cleanup windows. Explicit privacy deletion remains separate;
+historical inquiry JSON and backup copies are not silently rewritten.
 
 ## Daily report commands
 
@@ -279,7 +280,7 @@ From the backend directory, using the configured Python environment:
 Set the private database/environment in that same terminal. Preview reads
 aggregate reporting data and separate safe business inquiry totals; it never
 sends mail, edits catalog/inquiry records or attaches legacy sessions.
-`run-due` performs retention/job maintenance and sends only in explicitly enabled
+`run-due` performs non-deleting storage/job maintenance and sends only in explicitly enabled
 production with separately configured recipients. Local sending stays disabled.
 
 Email/preview uses half-open Pacific day windows with an effective end no later
@@ -347,11 +348,11 @@ Release checklist:
    with independent production configuration and reviewed campaign allowlist.
 4. Verify final dependencies/timezone data, aggregate-only ingestion, rejected
    identified payloads, legacy 410 endpoint and client/server exclusions.
-5. Prove new reports and snapshots exclude legacy history. Verify the old private
-   data's existing retention/approved cleanup path rather than deleting it as an
-   incidental migration or leaving it indefinitely.
-6. Review/install the timer under deployment approval. Retention must run even
-   if email is disabled; exact calendar expiry and backup policy need verification.
+5. Prove new reports and snapshots exclude legacy history. Review applicable
+   privacy obligations and approved deletion requests separately from routine
+   backup/removal; never reintroduce deleted personal data from an archive.
+6. Review/install the timer under deployment approval. Storage/mail maintenance
+   runs even if email is disabled, but does not delete records by age.
 7. Verify real proxy/GeoIP behavior, load, dashboard/CSV, safe backups/restore,
    job state and each approved recipient's mailbox separately.
 
@@ -361,32 +362,28 @@ collection/mail, never re-enable old identified tracking.
 
 ## Retention, deletion and backups
 
-- New hour/dimension aggregates: **13 calendar months**, not a fixed 390-day
-  approximation. Expire according to calendar boundaries and test those boundaries.
+- Website/business history: **no automatic age expiry**. Create a private backup,
+  download it, verify the saved copy, then explicitly select any source removal.
 - New raw events/browser identifiers/session/journey rows: never persist.
-- New aggregate report snapshots/delivery metadata: **90 days**.
-- Existing legacy raw/session data: retain privately, outside new reporting,
-  under the pre-existing **30-local-calendar-day** raw-data bound and approved
-  deletion obligations. This change does not destructively migrate or certify
-  deletion of existing data. Verify maintenance or an approved bounded cleanup
-  before release; turning off reads is not retention enforcement.
-- Existing legacy summaries/snapshots/backups retain their own existing expiry
-  obligations. Do not relabel a mixed legacy database/backup as anonymous.
-- Business inquiries and infrastructure logs have separate retention/access
-  policies and may contain personal data.
+- Existing legacy records remain private and excluded from new reports.
+  Do not relabel mixed legacy databases/backups as anonymous.
+- Source cleanup retains current settings, live/pending records and mail delivery
+  duplicate-prevention metadata. See the precise supported deletion categories in
+  [Backup & Records](records-backup-and-retention.md).
+- Operational logs may expire after **14 days**, only after website log capture
+  is separated and existing website history secured. Business inquiries and
+  website logs may contain personal data.
 
-Analytics maintenance applies the existing raw 30-day and rollup
-13-calendar-month expiry windows. It does not rewrite authoritative inquiry JSON
-or protected backups. Historical `analyticsAttribution` fields in saved inquiries
-can remain until separately approved cleanup; backup expiry/deletion handling
-also remains a separate obligation. Do not claim all legacy associations were
-removed simply because current analytics tables were maintained.
+The owner's 2026-09-29 policy supersedes the former automatic 30-day legacy,
+13-month aggregate and 90-day report-history expiry. It does not override
+applicable privacy obligations, explicit withdrawal or approved deletion requests.
+Historical inquiry attribution and downloaded copies require separate review.
 
 Opt-out clears queued events and stops later collection, but anonymous totals
 cannot be linked back to an individual for selective deletion. Do not offer a
 false server-history deletion confirmation or silently reset old privacy choices.
-Exports/backups and previously delivered mail copies also need appropriate
-expiry; mailboxes have their own retention policy.
+Exports/backups must honor approved privacy deletions; mailboxes have their own
+retention policy. Do not silently expire archives based on age.
 
 The catalog recovery ZIP does **not** include analytics. Use a consistent SQLite
 backup API rather than copying the main file alone while WAL is active:
@@ -398,7 +395,7 @@ backup API rather than copying the main file alone while WAL is active:
 Use a new, private destination. A full backup may include legacy private data and
 mail recipient/delivery metadata, not only anonymous counters. Keep it protected.
 Restore only under the approved procedure, not over a running service; reapply
-expiry and earlier approved deletions without reintroducing legacy data into
+earlier approved privacy deletions without reintroducing legacy data into
 new reports. A real production restore remains a verification gate.
 
 ## Local validation versus production readiness

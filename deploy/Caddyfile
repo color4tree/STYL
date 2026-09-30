@@ -1,4 +1,17 @@
+import website-logging.caddy
+
+http://example.com, http://www.example.com {
+    import website_access
+    redir https://example.com{uri} permanent
+}
+
+www.example.com {
+    import website_access
+    redir https://example.com{uri} permanent
+}
+
 example.com {
+    import website_access
     encode zstd gzip
 
     handle /health {

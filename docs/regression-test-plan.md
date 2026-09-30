@@ -85,7 +85,9 @@ These rules supersede earlier requirements when they conflict:
 | Commerce | Cart is a selection for a quote, not a paid order; quantity counts sale units and remains capped at 10 per item |
 | Add feedback | The clicked card/detail/mobile-sticky button shows Added immediately for 2.5 seconds after a real successful cart addition; failed/no-add operations never show success; existing count and live feedback remain |
 | Analytics privacy | Automatic first-party measurement only after enabled aggregate-only config; no storefront consent panel or technical status. Ordinary Privacy notice with boolean opt-out; preserve prior decline and DNT/GPC/admin/internal/bot exclusions; clear retired identifier keys without resetting privacy choices. No browser/session/event/page IDs or raw event/journey persistence |
-| Analytics reporting | Private server-hour totals and independent coarse dimensions, not combined fingerprints; counts, total active estimate and average web vitals, no visitor/session/funnel/attribution/median metrics. Saved inquiries are independent business totals. Pacific dates/manual refresh/hour-level last activity; preview excludes incomplete hour; 13-calendar-month aggregates; no legacy history in new reports or destructive migration; daily 08:00 Pacific with production-only explicit mail enablement and separately approved recipients |
+| Analytics reporting | Private server-hour totals and independent coarse dimensions, not combined fingerprints; counts, total active estimate and average web vitals, no visitor/session/funnel/attribution/median metrics. Saved inquiries are independent business totals. Pacific dates/manual refresh/hour-level last activity; preview excludes incomplete hour; no age expiry of business history; no legacy history in new reports or destructive migration; daily 08:00 Pacific with production-only explicit mail enablement and separately approved recipients |
+| Backup & Records | Website logs and business history never expire by age/size; create/download/verify before optional explicit exact-record removal. Current/pending/changed records, settings and mail duplicate-prevention metadata stay. Verified server ZIP deletion is separate; operational logs expire after 14 days only after website capture separation |
+| Local AI support | Guest chat without login; separate hashed-token conversation access and shared-admin single-operator local/test pilot. Scoped public product/current-price/documented-compatibility evidence, configurable topics, durable human attention/takeover/reply/explicit resume; no production activation, private-field tools or real personal data in free-tier tests |
 | Layout | Mobile and desktop both remain optimized; mobile changes must not remove desktop functionality |
 | Mobile catalog navigation | All products, Equipment and Accessories appear directly below 1024px without opening Menu; all three also appear in desktop navigation |
 | Catalog card layout | Shared compact gallery/category/name/Price/optional higher MSRP, then Show more/Add/desktop Details. Body and quantity controls initially hidden on every width; deliberate expansion reveals full unclipped content and resize preserves choice. Mobile omits Details button but title links remain |
@@ -140,6 +142,11 @@ Use these short references in the case tables:
 | B-ORDER | [test_catalog_order.py](../backend/tests/test_catalog_order.py) | Protected full-permutation ordering, current-order conflict checks, field preservation, market filtering and backup sequence preservation |
 | B-MSRP | [test_catalog_msrp.py](../backend/tests/test_catalog_msrp.py) | Optional regional MSRP validation/persistence/selection, legacy/partial/clear semantics and accessory detail access/privacy/visibility |
 | B-HOME | [test_hero_engineering.py](../backend/tests/test_hero_engineering.py) | Engineering schema/defaults/partial updates, auth, corruption/write failure, shared image/poster retention |
+| B-RECORDS | [test_records.py](../backend/tests/test_records.py) | Private consistent ZIP/cold restore, auth, checksum/path rejection, saved-copy verification, exact source removal, preserved new/changed/live records, interrupted cleanup, archive deletion and no age expiry |
+| E-RECORDS | [records.spec.ts](../frontend/tests/e2e/records.spec.ts) | Protected admin create/download/verify/optional cleanup, separate server ZIP deletion, retry/busy/dirty guards and responsive behavior |
+| B-SUPPORT | [test_support.py](../backend/tests/test_support.py) | Guest isolation/idempotency, local-only auth boundaries, durable queue/restart, human ownership/CAS, current catalog and late-answer fences |
+| B-SUPPORT-AI | [test_support_ai.py](../backend/tests/test_support_ai.py) | Provider HTTP mocks, public field allowlist, structured decision validation, grounded price/compatibility rendering, scope/personal-data guards, historical item selection and trusted greeting templates |
+| E-SUPPORT | [support.spec.ts](../frontend/tests/e2e/support.spec.ts) | Guest start/resume/two-browser isolation, actual mock-backed answers, human inbox/replies/scope changes, draft/idempotency/error/keyboard/responsive/polling behavior |
 | E-HOME | [engineering.spec.ts](../frontend/tests/e2e/engineering.spec.ts) | Four-card editing/upload/save/reload/public rendering, multiline content, dirty and busy states, invalid inputs, failures and mobile width |
 | B-AN | [test_analytics.py](../backend/tests/test_analytics.py) | Revised aggregate-only assertions: strict unlinked ingestion/legacy 410, independent dimensions, no raw persistence, trusted market/item validation, hour/DST boundaries, independent business inquiry totals, legacy isolation/retention and exports; see AN-001..014 for final integrated evidence |
 | B-REPORT | [test_analytics_reports.py](../backend/tests/test_analytics_reports.py) | Revised complete-hour cutoff/aggregate snapshots plus existing non-production sending guards, SMTP mocks, per-recipient mail claims/retries/ambiguous states and SQLite backups; updated outcomes recorded separately |
@@ -314,6 +321,20 @@ removed. Verify new/legacy archives with the standalone tool; default engineerin
 images are materialized only in exports, and missing/external media still fails.
 Coverage: B-HOME/B-BACKUP plus E-HOME; isolated data only.
 
+Records extension **SYS-022 (P0)**: seed isolated old and new analytics, inquiries,
+sealed/live logs and saved mail configuration. Create a private archive with
+consistent SQLite/WAL snapshot, all supported files and an offline verifier.
+Download alone must not unlock deletion; reject truncated/wrong saved files,
+damaged server ZIPs, unsafe paths, concurrent operations and insufficient disk.
+After verification, require exact confirmation/categories and compare full rows/
+bytes. Preserve new/changed/current-hour/pending/live records and delivery claims.
+Simulate partial filesystem cleanup failure: report explicitly, retain archive
+and prevent unsafe retries/deletion. Separately remove a verified server ZIP;
+source data stays and future source removal is blocked. Run maintenance years
+later with mail disabled: no age-based business/history/backup deletion.
+Coverage B-RECORDS/B-AN/B-REPORT/E-RECORDS; actual production log migration,
+OS permissions/signals, large-download capacity and off-server DR remain M.
+
 ### 7.2 Regional pricing and GeoIP
 
 | ID | Priority | Steps / input | Expected result | Coverage |
@@ -386,7 +407,7 @@ user analytics or catalog/inquiries to make a test pass.
 | AN-011 | P0 | Date/timezone/version/recipient claims survive restart/concurrency; definite mail failures bounded, ambiguous sends held, accepted recipients not repeated. Version 3 concise snapshots cannot reuse older warning-heavy/session-based content. Across versions, accepted recipients still cannot be resent and ambiguous sends remain held. Distinguish mail retries from prohibited ambiguous collection retries. | P: B-REPORT with mocked SMTP; production maintenance timer installed and observed with sending disabled; real delivery/restart verification M |
 | AN-012 | P0 | Preview safe concise HTML/plain text with equivalent key metrics and real Attention conditions; remove static privacy/retention/implementation paragraphs, not operational failures. Local/test/staging cannot send mail. Daily 08:00 Pacific remains; separate approved recipients required, never inherited from inquiries. An authorized real test must reach each intended mailbox. | P: B-REPORT/E-AN; actual mail test Blocked until recipients/configuration/send approval |
 | AN-013 | P0 | Unauthorized reports/exports rejected; CSV/HTML escaped. Inspect new persisted tables, CSV and snapshots for absence of browser/session/event/page IDs, raw request times/IP/full URL/query/referrer hosts/form/token data and raw-event/journey rows. Safe item IDs and operational job IDs must not be mistaken for browsing identifiers. | P: B-AN/B-REPORT/U-AN/E-AN revisions; infrastructure logs/business contact records require separate privacy review |
-| AN-014 | P1 | Desktop/mobile, unavailable storage/privacy failure and slow/offline behavior preserve commerce. Verify 13-calendar-month aggregate expiry and consistent SQLite backups. Seed isolated legacy fixtures: new-mode report excludes them; no destructive migration; maintenance expires old raw/session tables at 30 days and rollups at 13 calendar months. Existing authoritative inquiry JSON/historical analyticsAttribution and protected backups are not rewritten; separate retention/approved cleanup applies. No claim already purged; verify backup expiry/deletion replay separately. | P: U-AN/B-AN/B-REPORT/E-AN revisions; physical devices, performance budget/field measurements and production retention/restore M |
+| AN-014 | P1 | Desktop/mobile, unavailable storage/privacy failure and slow/offline behavior preserve commerce. Verify consistent SQLite backups and no age-based deletion, including legacy and report history with mail disabled. New-mode reports exclude legacy fixtures; explicit privacy withdrawal remains. SYS-022 covers verified optional source cleanup. Approved privacy deletions must apply to restored/downloaded copies separately. | P: U-AN/B-AN/B-REPORT/B-RECORDS/E-AN; physical devices, performance budget/field measurements and production retention/restore M |
 | AN-017 | P0 | Open Daily email settings as admin; change on/off and recipients, save/reload/reopen store, change environment defaults, preview and run mocked scheduler/retry. Reject invalid/empty-enabled/oversized lists and stale revisions; dedupe case; test concurrent saves, storage outage, pending UI, unsaved tab changes and 320px. Recheck changes before delivery claims; no real non-production mail, no SMTP/inquiry config changes, no recipient values in public config. SQLite backup retains settings. | A core: B-AN/B-REPORT and `email-settings.spec.ts` across configured browsers; real approved recipient inbox delivery remains OPS-006 |
 
 #### Requirement provenance and superseded assertions
@@ -454,6 +475,49 @@ Photo-button coverage: banner and all four cards expose a visible >=48px
 cancellation preserves the image, successful selection updates the draft path
 without publishing, invalid files remain blocked, and save/upload busy states
 disable overlapping choices. E-HOME covers desktop/phone Chromium and WebKit.
+
+**ADM-014 (P0), Backup & Records:** open the protected section from a dirty editor
+without silently discarding edits. Review coverage/disk warnings, create a backup,
+download, select the saved file and verify it; failure retains retry controls.
+Removal requires selected categories, verification and the exact displayed
+confirmation; downloading alone never deletes records. Server ZIP deletion is
+separate and warns about sole reliance on downloaded copies. Pending work blocks
+overlapping navigation/signout/actions. Verify accessible controls, error feedback,
+keyboard use and no horizontal overflow at 320/390px. B-RECORDS/E-RECORDS;
+physical file-save dialogs and production data cleanup are not test actions.
+
+E-RECORDS labels map to SYS-022/ADM-014: REC-001 persistent archive and cold-copy
+workflow; REC-002 full saved-file verification/corruption; REC-003 selected exact
+source removal; REC-004 auth, failure/retry and busy guards; REC-005 responsive
+controls/editor preservation; REC-006 separate verified server-ZIP deletion;
+REC-007 interrupted/uncertain cleanup and recovery lock. Deployment
+[logging tests](../deploy/tests/test_website_logs.py) support OPS-012 but do not
+replace the installed Linux service/migration checks.
+REC-008/SUP-009 covers included support snapshots and optional closed-conversation
+cleanup; unchanged active guest access remains valid after selected closed threads
+are removed. B-RECORDS additionally compares full child rows/settings and cold
+support SQLite restoration.
+
+### 8.1 Local AI customer-service cases
+
+These are implemented local/test cases, not approval for real-customer production
+use. Existing broader CS architecture cases remain proposed unless mapped here.
+Use only ephemeral guest/admin credentials, synthetic catalogs and mocked AI in
+the automated runner. Live Gemini checks must be separately approved synthetic
+content with private credentials and no billing upgrade.
+
+| ID | Priority | Steps / expected results | Coverage |
+| --- | --- | --- | --- |
+| SUP-001 | P0 | Start guests in two browser profiles, post/read with correct, missing and other guest tokens; reload/resume only owned thread. Provider sees only selected-market published facts, never private provenance, another conversation or credentials. Current price and canonical source link match catalog. | A: B-SUPPORT/B-SUPPORT-AI/E-SUPPORT |
+| SUP-002 | P0 | Ask for human help, show highlighted separate inbox entry, take over, reply, resume AI explicitly, send next guest message, close/start new. Late AI cannot publish after takeover/close/settings changes. Saved replies survive restart and clear attention until another guest message. | A: B-SUPPORT/E-SUPPORT; named production staff identity and response SLA deferred |
+| SUP-003 | P0 | Save enabled/topic settings with CAS; stale/invalid/empty scope is rejected. Excluded topics and disabled AI route to durable human attention without losing messages or calling an unauthorized provider. | A: B-SUPPORT/B-SUPPORT-AI/E-SUPPORT |
+| SUP-004 | P0 | Fail/lose acknowledgements then retry identical client IDs; exactly one saved guest/human message. Changed content conflicts. Preserve composer text, reject blank/oversized/NUL input, Enter versus Shift+Enter and IME, pending duplicate-action prevention. | A: B-SUPPORT/E-SUPPORT |
+| SUP-005 | P0 | Preserve per-thread reply/catalog drafts across navigation; distinguish stale/offline inbox from empty. CAS conflicts retain replies; auth errors hide private records. No secrets in UI/errors/logs or URLs. | A: B-SUPPORT/E-SUPPORT; physical assistive-technology behavior M |
+| SUP-006 | P0 | Missing credentials/model, timeout/HTTP429/503, malformed/truncated/extra-field decisions and unknown references produce explicit human help, no fabricated answer or paid fallback. Email/phone/URL test inputs do not reach provider. Local trusted greetings remain in AI even with products disabled; arbitrary uncited answers do not. | A: B-SUPPORT/B-SUPPORT-AI, E-SUPPORT simulated UI failure states; actual supported-model synthetic check separate |
+| SUP-007 | P1 | Ask STYL header/footer links remain unobtrusive at 320/390/desktop, do not replace three catalog controls or overlap cart/quote. Disabled/outage chat leaves commerce available. Plain-text messages and allowlisted links; no script/unsafe URL rendering. | A: E-SUPPORT/all browser projects; physical mobile keyboard/screen-reader M |
+| SUP-008 | P0 | Worker refreshes queued catalog and suppresses answers if selected facts/prices/visibility change during inference. Follow-up about an item beyond the first eight retains current evidence, never resurrecting hidden history. Polling pauses hidden and stops closed/unmounted; missing compatibility goes to human rather than inferred fit. | A: B-SUPPORT/B-SUPPORT-AI/E-SUPPORT |
+| SUP-009 | P0 | Back up support SQLite/WAL with all conversations/messages/jobs/settings; restore offline. Verified cleanup compares parent and children and deletes only unchanged closed threads; active/reopened/changed/pending threads/settings stay. Old archive cannot authorize unsupported cleanup or partial prior-category deletion. | A: B-RECORDS/REC-008; off-server production DR M |
+| SUP-010 | P0 | Feature refuses production/staging even if enabled, mock forbidden outside local/test; bounded queue/creation/message rates and concurrency; restart moves interrupted jobs to human review rather than duplicate AI calls. SQLite work is off the event loop and outages do not disable storefront health. | A: B-SUPPORT; installed production capacity/monitoring M, no production enablement authorized |
 
 ## 9. Customer end-user test catalog
 
@@ -529,6 +593,7 @@ Run destructive/error-injection cases only in an isolated/staging environment.
 | OPS-009 | P2 | Record mobile/desktop performance on representative 12-media catalogs and slower networks. | No regression against measured baseline; media loading/layout stable. Targets remain LCP <=2.5s, INP <=200ms, CLS <=0.1 when meaningful field data exists. | M; do not claim field performance from a build result |
 | OPS-010 | P0 | Validate root/www DNS, trusted certificate chain/hostname, HTTP-to-HTTPS redirect, www-to-root path/query retention, same-origin API requests, allowed-origin preflight, and any explicitly retained IP access. Inspect backed-up/installed configuration and service health without changing mail DNS. | Domain works without TLS bypass; redirect destinations and API routes are correct; certificate renewal remains managed by Caddy; no catalog/email configuration loss. | M: live targeted evidence recorded 2026-09-27 in project history; future runs must reverify current configuration |
 | OPS-011 | P0 | Download a catalog ZIP, remove the original isolated fixture data/media, run the bundled restore tool into a nonexistent directory and start a fresh API on recovered storage. Independently repeat with an authorized production archive in an isolated replacement installation. | No original-server/network dependency for file recovery; JSON/media bytes, IDs/slugs, regional prices, drafts, banner and media paths survive. Application/code/credentials/inquiries handled separately. Keep an off-server archive and document recovery steps. | P: B-BACKUP automates fixture cold recovery, fresh API/images/posters/ranges; real production recovery, full frontend restart and physical video playback M |
+| OPS-012 | P0 | Inventory existing production logging and archive retained website history before installing 14-day operational journal limits. Validate separate API/web/Caddy/report capture, permissions, UTC/size rotation, restart/shutdown and disk failure using synthetic staging output. Download/verify an archive and compare recovered data off-server; never delete actual production data as a smoke test. | Website history has no age/size expiry; sealed log files and live prefixes are protected, and no headers/query/customer bodies are deliberately added to access logs. Operational rotation cannot delete uncopied website history. Storage pressure is visible and no forced vacuum/cleanup is performed. | P: isolated capture/record tests; installed Linux services, historical migration, physical downloads, real disk monitoring and off-server DR M |
 
 ## 12. Recent bugs/enhancements and permanent traceability
 

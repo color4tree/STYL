@@ -9,6 +9,7 @@ const links = [
   ...catalogViews,
   { href: "/#about", label: "About" },
   { href: "/#contact", label: "Request a quote" },
+  { href: "/support", label: "Ask STYL" },
 ];
 
 export default function StoreHeader({ cartCount }: { cartCount: number }) {
@@ -32,7 +33,7 @@ export default function StoreHeader({ cartCount }: { cartCount: number }) {
     <header className="sticky top-0 z-40 border-b border-[var(--line)] bg-white/95 backdrop-blur-md">
       <div className="container flex min-h-16 flex-wrap items-center justify-between gap-2 py-2 lg:min-h-20">
         <Link href="/" className="inline-flex min-h-11 items-center" aria-label="STYL home"><BrandLogo markClassName="h-8 w-auto" /></Link>
-        <nav aria-label="Main navigation" className="hidden items-center gap-6 text-sm lg:flex">
+        <nav aria-label="Main navigation" className="hidden items-center gap-4 text-sm lg:flex">
           {links.map((link) => <Link key={link.href} href={link.href} scroll={link.href !== "/#contact"} className="inline-flex min-h-12 items-center hover:underline">{link.label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">

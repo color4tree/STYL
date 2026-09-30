@@ -7,6 +7,8 @@ import AccessoryManager from "./AccessoryManager";
 import HeroManager from "./HeroManager";
 import CatalogBackup from "./CatalogBackup";
 import AnalyticsManager from "./AnalyticsManager";
+import RecordsManager from "./RecordsManager";
+import SupportInbox from "./SupportInbox";
 import CatalogOrderControls from "./CatalogOrderControls";
 import { orderByIds } from "@/lib/catalogOrder";
 import BrandLogo from "@/components/BrandLogo";
@@ -127,12 +129,19 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
   const [showBackup, setShowBackup] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showRecords, setShowRecords] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
+  const [recordsBusy, setRecordsBusy] = useState(false);
+  const [supportBusy, setSupportBusy] = useState(false);
+  const [supportDirty, setSupportDirty] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps)) : childDirty;
-  const busy = saving || uploading || accessoryBusy || backupBusy || orderBusy;
+  const editorDirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps)) : childDirty;
+  const dirty = editorDirty || supportDirty;
+  const busy = saving || uploading || accessoryBusy || backupBusy || recordsBusy || supportBusy || orderBusy;
   const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
+  const confirmEditorLeave = () => !busy && (!editorDirty || confirmLeave());
 
   const loadForm = (next: ProductForm) => {
     setForm(next);
@@ -175,6 +184,9 @@ export default function AdminPage() {
     setActiveTab("products");
     setShowBackup(false);
     setShowAnalytics(false);
+    setShowRecords(false);
+    setShowSupport(false);
+    setSupportDirty(false);
     setShowEditor(false);
   };
 
@@ -237,7 +249,7 @@ export default function AdminPage() {
   };
 
   const selectProduct = (product: Product) => {
-    if (!confirmLeave()) return;
+    if (!confirmEditorLeave()) return;
     setSelectedId(product.id);
     loadForm(toFormState(product));
     setShowEditor(true);
@@ -246,7 +258,7 @@ export default function AdminPage() {
   };
 
   const resetForm = () => {
-    if (!confirmLeave()) return;
+    if (!confirmEditorLeave()) return;
     loadForm(emptyProduct);
     setShowEditor(true);
     setSelectedId(null);
@@ -403,7 +415,7 @@ export default function AdminPage() {
             <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">
-              {showAnalytics ? "Traffic analytics" : showBackup ? "Catalog recovery backup" : adminTabs.find((tab) => tab.id === activeTab)?.heading}
+              {showSupport ? "Support inbox" : showRecords ? "Backup & Records" : showAnalytics ? "Traffic analytics" : showBackup ? "Catalog recovery backup" : adminTabs.find((tab) => tab.id === activeTab)?.heading}
             </h1>
             <div className="mt-4 inline-flex flex-wrap rounded-2xl border border-[var(--line)] bg-white p-1 text-sm font-medium">
               {adminTabs.map((tab) => (
@@ -414,9 +426,11 @@ export default function AdminPage() {
                     if (tab.id === activeTab) {
                       setShowBackup(false);
                       setShowAnalytics(false);
+                      setShowRecords(false);
+                      setShowSupport(false);
                       return;
                     }
-                    if (!confirmLeave()) return;
+                    if (!confirmEditorLeave()) return;
                     const selected = products.find((product) => product.id === selectedId);
                     loadForm(selected ? toFormState(selected) : emptyProduct);
                     setMessage(null);
@@ -424,28 +438,38 @@ export default function AdminPage() {
                     setActiveTab(tab.id);
                     setShowBackup(false);
                     setShowAnalytics(false);
+                    setShowRecords(false);
+                    setShowSupport(false);
                   }}
-                  aria-pressed={!showBackup && !showAnalytics && activeTab === tab.id}
-                  className={`min-h-11 rounded-full px-4 py-1.5 ${!showBackup && !showAnalytics && activeTab === tab.id ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
+                  aria-pressed={!showBackup && !showAnalytics && !showRecords && !showSupport && activeTab === tab.id}
+                  className={`min-h-11 rounded-full px-4 py-1.5 ${!showBackup && !showAnalytics && !showRecords && !showSupport && activeTab === tab.id ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
                 >
                   {tab.label}
                 </button>
               ))}
               <button
                 type="button"
-                onClick={() => { setShowBackup(true); setShowAnalytics(false); }}
+                onClick={() => { setShowBackup(true); setShowAnalytics(false); setShowRecords(false); setShowSupport(false); }}
                 aria-pressed={showBackup}
                 className={`min-h-11 rounded-full px-4 py-1.5 ${showBackup ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}
               >
                 Backup
               </button>
-              <button type="button" onClick={() => { setShowAnalytics(true); setShowBackup(false); }} aria-pressed={showAnalytics}
+              <button type="button" onClick={() => { setShowAnalytics(true); setShowBackup(false); setShowRecords(false); setShowSupport(false); }} aria-pressed={showAnalytics}
                 className={`min-h-11 rounded-full px-4 py-1.5 ${showAnalytics ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}>
                 Analytics
               </button>
+              <button type="button" onClick={() => { setShowRecords(true); setShowBackup(false); setShowAnalytics(false); setShowSupport(false); }} aria-pressed={showRecords}
+                className={`min-h-11 rounded-full px-4 py-1.5 ${showRecords ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}>
+                Backup &amp; Records
+              </button>
+              <button type="button" onClick={() => { setShowSupport(true); setShowBackup(false); setShowAnalytics(false); setShowRecords(false); }} aria-pressed={showSupport}
+                className={`min-h-11 rounded-full px-4 py-1.5 ${showSupport ? "bg-[var(--ink)] text-white" : "text-[var(--muted)]"}`}>
+                Support inbox
+              </button>
             </div>
           </div>
-          {!showBackup && !showAnalytics && activeTab === "products" ? (
+          {!showBackup && !showAnalytics && !showRecords && !showSupport && activeTab === "products" ? (
             <div className="rounded-full border border-[var(--line)] bg-white px-4 py-2 text-sm font-medium text-[var(--muted)]">
               {products.length} equipment items · {products.filter((product) => product.publicationStatus === "draft").length} drafts
             </div>
@@ -461,12 +485,18 @@ export default function AdminPage() {
         <div hidden={!showAnalytics}>
           <AnalyticsManager adminToken={adminToken} active={showAnalytics} />
         </div>
+        <div hidden={!showRecords}>
+          <RecordsManager adminToken={adminToken} active={showRecords} hasUnsavedChanges={dirty} onBusyChange={setRecordsBusy} />
+        </div>
+        <div hidden={!showSupport}>
+          <SupportInbox adminToken={adminToken} active={showSupport} onBusyChange={setSupportBusy} onDirtyChange={setSupportDirty} />
+        </div>
         {/* Keep the editor mounted while viewing read-only tools so unsaved forms survive. */}
-        <div hidden={showBackup || showAnalytics}>
+        <div hidden={showBackup || showAnalytics || showRecords || showSupport}>
         {activeTab === "banner" ? (
           <HeroManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} />
         ) : activeTab === "accessories" ? (
-          <AccessoryManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} confirmLeave={confirmLeave} />
+          <AccessoryManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} confirmLeave={confirmEditorLeave} />
         ) : (
         <>
         <AdminNotice message={message} />
@@ -492,7 +522,7 @@ export default function AdminPage() {
 
           <section className={`${showEditor ? "" : "hidden lg:block"} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4 sm:p-6`}>
             <button type="button" onClick={() => {
-              if (!confirmLeave()) return;
+              if (!confirmEditorLeave()) return;
               const selected = products.find((product) => product.id === selectedId);
               loadForm(selected ? toFormState(selected) : emptyProduct);
               setShowEditor(false);

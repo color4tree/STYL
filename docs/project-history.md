@@ -1,6 +1,207 @@
 # STYL project history and handoff
 
-Last recorded: 2026-09-29
+Last recorded: 2026-09-30
+
+## AI development isolated from main - 2026-09-30 Pacific
+
+At the owner's request, preserve the undeployed AI pilot and required
+Backup & Records/logging changes on
+`ai-assistant/baseline-2026-09-29-2227-pt`. The explicit name identifies the
+deployed baseline activation on September 29 at 22:27 Pacific
+(`2026-09-30T05:27:30Z`), application revision `d6d00a3`.
+
+`main` remains at `b903f1c`, whose only difference from deployed `d6d00a3` is the
+deployment verification entry in this history document. Keeping that record
+avoids unnecessary local/remote history rewriting while restoring all deployed
+application/deployment code. This branch organization is local only, not a push
+or production rollback. Original catalog edits and the untracked home
+configuration are excluded from the feature commit and remain unchanged.
+
+The ignored local API starter now checks for the branch's support module and
+key loader before enabling the pilot/loading its private Gemini credential.
+The baseline does neither. Private catalog mirror, analytics/support databases
+and encrypted credentials stay outside Git and survive switching.
+Stop local API/web tasks before switching and restart them afterward; see the
+[branch workflow](customer-service-ai-architecture.md#switching-between-the-deployed-baseline-and-ai-development).
+This is a Git/runtime-organization task with source-equivalence/data-preservation
+and local smoke checks, not a change requiring another full regression.
+
+## Local Gemini customer-service pilot - 2026-09-30 Pacific
+
+After completing Backup & Records locally, the owner requested guest chat, a
+consolidated admin inbox with separate customer threads, configurable bounded
+AI scope and clear human-intervention highlighting. Confirmed guest/no-login
+first (future guest/account coexistence), existing admin sign-in for this
+single-operator local prototype, and initial published product information,
+selected-market prices and explicitly documented compatibility. Paid provider
+selection is deferred. **No commit, push, deployment, paid billing or production
+retention change was authorized or performed.**
+
+Google AI Studio initially blocked project creation. The owner later created
+**STYL chatbot**, with Free tier visible, and entered the key through a masked
+terminal. The full key never appeared in chat/source. The new Windows helper
+stores it using current-user DPAPI with private directory ACLs under LocalAppData,
+outside Git/OneDrive; the local API task loads it only into the backend process.
+Authentication/model listing succeeded. A small synthetic `gemini-3.8-flash`
+acknowledgement worked, but structured requests returned 503; a listed 2.5 model
+returned 404. The actual support adapter on **`gemini-3.5-flash`** returned the
+correct synthetic CAD price/source decision with 802 total tokens. That verified
+model is the configurable local default; no automatic paid/model fallback exists.
+
+Implemented `/support`, unobtrusive Ask STYL navigation/footer links, private
+guest resume tokens, and admin **Support inbox** with separate threads, attention
+flags/counts, takeover/reply/resume/close and scope/automatic-reply settings.
+The local/test-only gate explicitly blocks staging/production use of the
+shared-admin pilot. Chats are not traffic analytics. Messages, settings and
+jobs persist in private SQLite; one bounded worker performs network calls
+outside transactions. Request IDs prevent duplicate guest/human writes after
+lost acknowledgements; revisions/generations fence stale replies and takeovers.
+
+Provider portability uses a small decision adapter. Gemini selects approved
+topics/references/fields; trusted code renders current facts/prices rather than
+publishing arbitrary model prose. Public-field allowlisting excludes private
+provenance and hidden/missing-market items. Catalog evidence is refreshed before
+inference and checked under the catalog lock through publication. Changed
+prices/details/visibility or missing compatibility evidence request human help.
+Email/phone/URL guards are not comprehensive DLP; free-tier local tests must
+remain synthetic/non-sensitive. Current UI/fact templates are English, not a
+certified multilingual support service.
+
+Support SQLite joins records ZIPs and offline recovery. Optional verified cleanup
+compares entire unchanged closed conversations plus messages/jobs before explicit
+cascade removal; active/reopened/changed/pending work and settings remain.
+No age expiry, customer accounts, named staff login, email notification/outbox,
+arbitrary FAQ authoring, file/voice input or production service SLA was added.
+
+Correctness review caught two integration issues: citation-free local greetings
+were incorrectly routed to humans, and generic follow-ups lost products outside
+the first eight evidence entries. Exact trusted-template validation and
+history-aware current-evidence selection fixed these with regression tests.
+WebKit exposed a poll scheduled after accepting a closed thread; polling now
+stops immediately, without waiting for React's effect cleanup.
+
+### Verification evidence and limits
+
+Application candidate base: `b903f1c3ed0e10272207ef5960979f73a99666c9`.
+Final source/test/deploy/helper patch fingerprint (40 files, excluding owner
+catalog data and documentation, sorted path/NUL/content/NUL SHA-256):
+`cc97621e825ad3124541a3da4bdad6538a2414db1ac8ba56f2911ae6d1368b85`.
+The ignored local API task configuration is additionally retained on this machine.
+
+- **288 backend tests passed**, full run 42.407s, including 31 support-state,
+  23 provider and 30 records tests. All automated AI calls used mocks.
+- **48 frontend unit tests passed**, 1.15s. Full lint had zero errors and four
+  existing image warnings; final affected lint/editor checks passed.
+- All **328 browser test assertions passed** on the polling-fixed application
+  in 11.6 minutes across desktop Chromium, phone Chromium and phone WebKit.
+  That invocation exited nonzero **after tests**, during fixture cleanup.
+- The new background SQLite writer exposed an existing teardown race: global
+  teardown deleted fixtures before stopping the API. The test runner now records
+  the real fixture API PID, verifies its isolated directory/ephemeral credential
+  ownership, stops that specific process, waits for exit, then removes the exact
+  fixture. It no longer races an active SQLite worker. No application behavior
+  changed after the 328 passing assertions.
+- A final **8-case cross-browser rerun passed, exit 0, in 41.4s**, exercising
+  support polling, closed-chat backup/removal, market pricing and the corrected
+  fixture shutdown. Fake-clock navigation was returned to real time before
+  testing Next.js route completion. This is a full assertion pass followed by
+  targeted harness verification, **not one clean final 328-test runner exit**.
+- Earlier broad attempt: 326/328 passed; one existing Chromium
+  `net::ERR_NO_BUFFER_SPACE` on catalog GET (confirmed from trace, no catalog
+  workaround) and the corrected WebKit polling race. Both passed targeted
+  reruns before the 328-assertion pass. An inactive OneDrive read-only build
+  directory was inspected and removed by exact path after a build EPERM.
+- Operational logging evidence remains 30 passes/2 Linux-only skipped checks
+  from the completed records task. No unnecessary operational/full backend
+  repeat followed a browser/harness-only fix.
+
+SUP-001..010 and REC-008/SUP-009 map the implemented scope; production, physical
+devices/keyboards/screen readers, Linux signals/permissions, capacity, low-disk
+alert delivery, named staff auth and off-server production DR remain unverified
+or deferred, never counted as passed. Real Gemini coverage is limited to the
+explicit synthetic connectivity/structured-price checks, not general answer
+quality or production readiness.
+
+The real local API was restarted safely and reported healthy with
+`local/gemini/gemini-3.5-flash`; a synthetic Hello completed through its worker
+and explicit handoff persisted human attention. One synthetic demonstration
+thread remains for local inbox inspection. A local guest-start screenshot was
+reviewed; the integrated browser's pointer actionability timed out, so actual
+click flows rely on the separately passing Playwright browser evidence.
+The failed fixture was removed after confirming test ports were stopped, and
+the final runner cleanup succeeded. Failure traces remain privately in the
+session files directory. Documentation links/whitespace and accidental
+Google-key-pattern checks passed. Original owner catalog edits, private local
+mirror, email settings and production data remain untouched.
+
+## Backup & Records - locally completed, not deployed - 2026-09-29
+
+The owner clarified that website logs and business records must not be deleted
+because of age or capacity. Only operational logs may expire after 14 days.
+They selected a protected **Backup & Records** admin section and subsequently
+required finishing this work before AI customer-service development, with all
+work/testing local and no production push/deployment.
+
+Implemented persistent private ZIP creation, consistent full analytics SQLite
+snapshots, inquiry JSON and configured website log files, plus an included
+standard-library offline verifier/restorer. Download alone never unlocks cleanup:
+the saved ZIP must be selected and streamed back for exact size/SHA-256
+verification. Explicit source-category and typed confirmations remove only exact
+unchanged eligible backed records; live/pending/new/changed data stays. Separate
+verified server-ZIP deletion preserves audit history and never deletes sources.
+Interrupted cleanup is explicitly reported and locks its retained recovery
+archive against unsafe retries or deletion.
+
+Age-based aggregate/legacy/report-history expiry and business tar-backup expiry
+were removed. Legacy privacy withdrawal still works, privacy obligations remain,
+and downloaded copies must honor approved deletion decisions. A bounded
+correctness review found that removing saved report snapshots could regenerate
+different content on a pending mail retry; all report content and delivery
+safety metadata are now protected from ordinary source cleanup. Current settings,
+catalogs and credentials are not removal targets.
+
+Operational preparation adds private rotating (never auto-expiring) website
+stdout/stderr/access capture, a 14-day/250-MB operational journald template,
+non-destructive backup publication and a deployment prerequisite checker.
+Root-owned installed helpers and history-preservation/separation gates precede
+unit changes or journal retention activation. Existing website history must be
+archived first; non-journal operational files need destination-specific policies.
+Nothing was installed, rotated, vacuumed or removed on production.
+
+Final local candidate: base `b903f1c3ed0e10272207ef5960979f73a99666c9` plus
+27 changed runtime/test/deploy files (excluding owner catalog data and docs),
+sorted path/NUL/content/NUL SHA-256
+`76d17dac3ccd18df884f1bd823f6f63717fdedbebd8954fe220bd35e34554340`.
+
+- Backend: **229 passed**, final full run **28.807s**, including standalone
+  `python -S` recovery with original inquiry/log/database sources removed.
+- Frontend units: **48 passed**, **0.95s**; unchanged unit-tested libraries.
+- Browser baseline: **301 passed**, **9.6 minutes**, all configured desktop
+  Chromium, phone Chromium and phone WebKit projects, including 27 records cases.
+  Runner production build/TypeScript check passed; no duplicate standalone build.
+- Operational isolated tests: **30 passed, 2 skipped** (Linux-only signal
+  checks unavailable on Windows), **2.76s**. Shell syntax/preflight checks passed.
+- Full frontend lint: zero errors, four existing image warnings. Final focused
+  lint/editor diagnostics and whitespace checks passed.
+
+Iteration failures were investigated, not hidden: test header-union typing,
+CommonJS discovery of `import.meta`, an exact select-label mismatch, and
+Chromium DevTools losing the File-upload response body. The browser test now
+checks real persisted verification state plus UI acknowledgement rather than
+depending on the inspector cache. The focused nine-desktop-case run passed in
+34.8s before the full matrix. An earlier full backend attempt had one existing
+Windows temporary-directory rename Access Denied in catalog recovery; its
+unchanged isolated rerun and subsequent full runs passed. No retry allowance,
+assertion disabling or unrelated catalog-code change was introduced.
+
+SYS-022/ADM-014/REC-001..007 are automated locally; OPS-012 remains partially
+verified. Installed Linux signals/ownership/Caddy validation, historical
+production-log migration, physical-device file dialogs, large real archives,
+external low-disk alert delivery and off-server production disaster recovery
+are not certified. The local API was restarted through its verified helper and
+returned healthy on loopback; the private catalog mirror, original owner catalog
+edits, SMTP configuration and production state were preserved. No commit/push or
+deployment was performed.
 
 ## Photo-picker presentation deployed - 2026-09-29 Pacific
 

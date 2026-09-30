@@ -1,0 +1,30 @@
+# Keep runtime and request summaries out of journald via the service wrapper.
+# Merge this logger into an existing global block instead of adding a second one.
+{
+    log default {
+        output stderr
+        format filter {
+            wrap json
+            fields {
+                request delete
+                resp_headers delete
+                headers delete
+                user_id delete
+            }
+        }
+    }
+}
+
+(website_access) {
+    log {
+        output stdout
+        format filter {
+            wrap json
+            fields {
+                request delete
+                resp_headers delete
+                user_id delete
+            }
+        }
+    }
+}
