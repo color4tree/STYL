@@ -75,6 +75,7 @@ These rules supersede earlier requirements when they conflict:
 | Technical content | Separate descriptions, public use, features, included contents, selling unit, finish/colour, compatibility, and optional weight |
 | Captured date | Private date-only `YYYY-MM-DD`; no timezone conversion or day shift |
 | Home banner | Independently editable text and image; no product selector, price field, price preview, or automatic price display |
+| Engineering details | Home banner tab edits heading/optional intro and four image/title/description cards; existing content is the legacy default, no read-time source rewrite. Save publishes; uploaded/local references participate in cleanup and complete recovery |
 | Banner responsive rule | Hidden below 768 CSS px; visible at 768 px and above |
 | Brand principle | Exact statement remains prominent in the introduction, above shopping actions, without an About-section duplicate |
 | Collection views | All products first/default on home/header; Equipment/Accessories filter the same home catalog with URL/history support. All keeps equipment order followed by accessory order; legacy /accessories and product detail URLs remain valid |
@@ -138,6 +139,8 @@ Use these short references in the case tables:
 | B-BACKUP | [test_catalog_backup.py](../backend/tests/test_catalog_backup.py) | Authenticated complete ZIP, strict source reads, locks, private scope, checksum/path/size rejection, standalone cold restore and a fresh API on recovered data |
 | B-ORDER | [test_catalog_order.py](../backend/tests/test_catalog_order.py) | Protected full-permutation ordering, current-order conflict checks, field preservation, market filtering and backup sequence preservation |
 | B-MSRP | [test_catalog_msrp.py](../backend/tests/test_catalog_msrp.py) | Optional regional MSRP validation/persistence/selection, legacy/partial/clear semantics and accessory detail access/privacy/visibility |
+| B-HOME | [test_hero_engineering.py](../backend/tests/test_hero_engineering.py) | Engineering schema/defaults/partial updates, auth, corruption/write failure, shared image/poster retention |
+| E-HOME | [engineering.spec.ts](../frontend/tests/e2e/engineering.spec.ts) | Four-card editing/upload/save/reload/public rendering, multiline content, dirty and busy states, invalid inputs, failures and mobile width |
 | B-AN | [test_analytics.py](../backend/tests/test_analytics.py) | Revised aggregate-only assertions: strict unlinked ingestion/legacy 410, independent dimensions, no raw persistence, trusted market/item validation, hour/DST boundaries, independent business inquiry totals, legacy isolation/retention and exports; see AN-001..014 for final integrated evidence |
 | B-REPORT | [test_analytics_reports.py](../backend/tests/test_analytics_reports.py) | Revised complete-hour cutoff/aggregate snapshots plus existing non-production sending guards, SMTP mocks, per-recipient mail claims/retries/ambiguous states and SQLite backups; updated outcomes recorded separately |
 | U-AN | [analytics.test.mjs](../frontend/tests/analytics.test.mjs) | Rewritten aggregate-only assertions: automatic config gating, Privacy boolean opt-out/legacy decline, exclusions/identifier cleanup, identifier-free Web Lock/visibility/idle bounds, memory-only batches without ambiguous retries, local rerender suppression and safe failure; final execution evidence pending |
@@ -284,6 +287,16 @@ Examples of impact selection:
 | SYS-019 | P0 | Reorder products/accessories with correct/absent/invalid auth; duplicate, missing, extra, noninteger and stale IDs; concurrent metadata edit; corrupt/missing source and write failure. Query admin/public markets and download backup afterward. | Full ordered permutation saves atomically under shared lock; no record/metadata loss or reseeding. Stale order/item set is 409, invalid permutation 422, I/O failure explicit. Relative order survives market/draft filtering and backup. | A: B-ORDER/E-ACTIONS; real production rollout not inferred |
 | SYS-020 | P0 | Save optional msrps CAD/USD on both types; omit/partial/clear/zero/equal/below/higher values; reject negative/nonfinite/extra precision/unknown currencies/null map and overflow. Query public/admin/detail/selection, backup/restore, cart and quote. | No conversion/copying; missing old values remain null; public selected msrp only. Price still gates visibility/arithmetic; provenance/full maps stay private. MSRP survives unrelated saves and byte-preserving backup. | A: B-MSRP/B-BACKUP, pricing/public-catalog/cart units, E-MSRP/E-COMPACT |
 
+Home content extension **SYS-021 (P0)**: use legacy and configured hero fixtures;
+update top banner or engineering independently, reject malformed/fewer/more than
+four cards, blank required text, unsafe/video URLs and oversized fields without
+partial writes. Missing files use defaults; corrupt saved configuration is 503,
+not successful default data. Share an upload across catalog/banner/cards and
+remove references in different orders; retain it until the last reference is
+removed. Verify new/legacy archives with the standalone tool; default engineering
+images are materialized only in exports, and missing/external media still fails.
+Coverage: B-HOME/B-BACKUP plus E-HOME; isolated data only.
+
 ### 7.2 Regional pricing and GeoIP
 
 | ID | Priority | Steps / input | Expected result | Coverage |
@@ -413,6 +426,13 @@ drill-down is excluded, not an automatically permitted future feature.
 | ADM-011 | P1 | In Equipment and Accessories, assert shared toolbar DOM order Catalog → Arrange/Done → New with 48px controls; cover empty catalogs, pending moves, 503/409 and 320px. Move actual image/price cards up/down, then Done/reload/public view while retaining unsaved fields. | Arrange button is between heading and New; one listing only, no position dropdown. Arrows appear only in arrange mode; saved move updates card position and retains focus. Boundaries/pending/empty states disable inappropriate actions. Done restores normal selection; Featured does not override order. | A: B-ORDER/E-ACTIONS/U-CART; physical-device touch/screen-reader verification M |
 | ADM-012 | P1 | In both editors enter CAD/USD MSRP, save/reload/clear one, edit only MSRP then switch tabs/reset/delete, reject precision errors, inject failures and inspect 320/390px upload/price controls. | Optional fields do not warn as missing prices; stable labels, independent amounts, dirty guards and failed inputs retained. Native upload input has usable width rather than compressed overflow. | A: B-MSRP/E-MSRP/pricing units; physical file picker M |
 
+**ADM-013 (P1), Engineering editor:** Home banner → Engineering details. Edit the
+heading/introduction and all four titles/descriptions, upload a replacement,
+save/reload and inspect public output. Exercise partial image URLs, invalid MIME/
+8 MiB boundary, 503/retry, pending-save duplicate prevention, tab guards and Backup
+return. Expected: previews/values retained, no publish before save, current banner
+preserved, no 320px overflow; E-HOME and hero unit coverage.
+
 ## 9. Customer end-user test catalog
 
 | ID | Priority | Workflow | Expected user experience | Coverage |
@@ -435,6 +455,13 @@ drill-down is excluded, not an automatically permitted future feature.
 | USR-016 | P1 | Add from product/accessory cards, product detail and mobile sticky action. Inspect immediate button feedback, advance 2.5s, repeat through ten-unit cap, and fail browser cart storage. Include a long unbroken item name in feedback/cart. | Successful write immediately shows check/Added then restores action label; count updates and accessible notice remains. Failed storage/no added quantity cannot show Added. Quantity cap and location remain intact; long feedback/cart content stays within the configured viewport, without mobile auto-widening. | A: E-ACTIONS across desktop/phone Chromium and phone WebKit; physical-device checks M |
 | USR-017 | P0 | Open home/default/filtered/unknown-filter URLs, use hero/header links, reload/back/forward; compare exact combined ordering and both card kinds. Fail one catalog source. | All = equipment then accessories in saved orders; no partial failure disguised as complete data. Available specific view works independently. Shared compact format, desktop Details on both, mobile Show more/Add/title navigation; MSRP only strikes when higher and never changes quote totals. | A: E-COMPACT/public-catalog/cart units |
 | USR-018 | P1 | Open accessory details from desktop Details/mobile title/direct ID; inspect gallery, MSRP/Price, specs/notes/compatibility, cart/quote and unknown/draft/missing-market items. | Matching complete layout, trusted-market/private-field protection, usable media/no overflow, correct accessory identity; unavailable item gets error/retry rather than phantom price. | A: B-MSRP/E-COMPACT/E-LAYOUT; physical media controls M |
+
+**USR-019 (P1), Engineering presentation:** expand the configurable public section
+at 320/390/1440px, compare all four images/titles/descriptions with saved data,
+including multiline/blank optional text and failed-image retry. Expected: same
+responsive four-card design, safe text escaping, unchanged top-banner hiding and
+quote navigation. Coverage: E-HOME/E-QUOTE and readonly local/live checks;
+physical-device behavior remains manual.
 
 ## 10. Permanent Captured date diagnostic protocol
 

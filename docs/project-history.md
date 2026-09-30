@@ -2,6 +2,52 @@
 
 Last recorded: 2026-09-29
 
+## Configurable engineering details - 2026-09-29 Pacific
+
+The owner requested development, testing and deployment of an editable version
+of the homepage engineering photograph section. Added Engineering details under
+Home banner: section heading/optional introduction and four fixed image/title/
+description cards, upload controls and previews. Existing content/layout is the
+default, not a production data rewrite. Save changes publishes; uploads alone
+do not. The price-free top banner and its phone hiding remain unchanged.
+
+The existing hero configuration/API now supports the nested engineering section.
+Omitted fields preserve saved values; the frontend submits changed top-level
+settings only. Required headings/titles/images, image schemes/types and text
+limits are validated. Partial/unsafe image text does not crash previews. Invalid
+stored configuration returns an explicit logged 503 and cannot be overwritten
+through a default-shaped admin response; an absent file can still use defaults.
+Shared catalog/banner/engineering image and poster references protect media from
+premature cleanup.
+
+Recovery ZIPs include engineering configuration and images. For legacy saved
+banners, defaults are materialized in the export copy only, with their referenced
+bundled images. Current verification/restore supports both old and new ZIPs;
+older tools may reject the added references, so use the current/included tool.
+Standalone standard-library cold restore and byte/hash checks are covered.
+
+Validation of the final implementation on base `bb672f7`:
+**204 backend tests, 48 frontend unit tests and all 271 browser executions passed**.
+Production build/TypeScript passed; lint had zero errors and four pre-existing
+image warnings (the engineering images now reuse the existing image component).
+The initial targeted run found textarea exact-label matching included their
+contents; explicit stable accessible names fixed it. The corrected targeted run
+passed 37 executions before the complete final run. No assertions were removed
+or test retries enabled.
+
+Readonly local normal-sign-in checks confirmed four editor cards, desktop/320px
+layout and public defaults with saved hero bytes unchanged and no server writes.
+An initial preloaded-session visual probe did not reach the local editor; the
+normal sign-in workflow succeeded without changing auth behavior. Screenshots
+remain private session artifacts.
+
+Implementation/test fingerprint:
+`242c415989b57a72ce7d64000ddf20f3d6516952edd067d5ff5739b2ce8caf13`
+(12 changed/new code files, excluding all user catalog data). Regression cases
+SYS-021 / ADM-013 / USR-019 and related README/responsive/recovery guidance were
+updated. Deployment verification follows separately; physical-device checks,
+production content editing and real email are not implied by isolated tests.
+
 ## Short catalog labels deployed - 2026-09-29 Pacific
 
 Pushed application **`f62087c289e31fc876be751ff9946756737c8834`** under the

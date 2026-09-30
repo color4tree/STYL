@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
-import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
+import { changedHeroFields, defaultHero, fetchHero, isEngineeringImage, parseHero, type EngineeringCard, type Hero } from "@/lib/hero";
 import { AdminNotice, AdminSaveBar, inputClass, type AdminMessage } from "./AdminFields";
+import CatalogImage from "@/components/CatalogImage";
 
-const textFields: { key: Exclude<keyof Hero, "image">; label: string; maxLength: number }[] = [
+const textFields: { key: "tag" | "number" | "eyebrow" | "title"; label: string; maxLength: number }[] = [
   { key: "tag", label: "Top-left tag", maxLength: 40 },
   { key: "number", label: "Top-right number", maxLength: 10 },
   { key: "eyebrow", label: "Small heading", maxLength: 60 },
@@ -22,6 +23,7 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<AdminMessage | null>(null);
+  const pending = useRef(false);
   const dirty = JSON.stringify(form) !== baseline;
   useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
   useEffect(() => { onBusyChange(loading || saving || uploading); return () => onBusyChange(false); }, [loading, saving, uploading, onBusyChange]);
@@ -43,14 +45,21 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
     setForm((current) => ({ ...current, [key]: value }));
     setMessage((current) => current?.type === "success" ? null : current);
   };
-  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
+  const updateCard = (index: number, key: keyof EngineeringCard, value: string) => {
+    setForm(current => ({ ...current, engineering: { ...current.engineering,
+      items: current.engineering.items.map((item, slot) => slot === index ? { ...item, [key]: value } : item),
+    } }));
+    setMessage(current => current?.type === "success" ? null : current);
+  };
+  const uploadImage = async (event: ChangeEvent<HTMLInputElement>, cardIndex?: number) => {
     const image = event.target.files?.[0];
     event.target.value = "";
-    if (!image) return;
+    if (!image || pending.current) return;
     if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(image.type) || image.size > 8 * 1024 * 1024) {
       setMessage({ type: "error", text: "Use a JPG, PNG, WebP, or GIF image up to 8 MiB." });
       return;
     }
+    pending.current = true;
     setUploading(true);
     onBusyChange(true);
     setMessage(null);
@@ -61,24 +70,37 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Unable to upload banner image.");
       if (typeof data.image !== "string") throw new Error("The server did not return an image path.");
-      updateField("image", data.image);
-      setMessage({ type: "success", text: "Photo uploaded. Save changes to update the banner." });
+      if (cardIndex === undefined) updateField("image", data.image);
+      else updateCard(cardIndex, "image", data.image);
+      setMessage({ type: "success", text: `Photo uploaded. Save changes to update ${cardIndex === undefined ? "the banner" : `engineering card ${cardIndex + 1}`}.` });
     } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to upload banner image." }); }
-    finally { setUploading(false); }
+    finally { pending.current = false; setUploading(false); }
   };
   const save = async () => {
+    if (pending.current) return;
+    if (!form.engineering.heading.trim() || form.engineering.items.some(item => !item.title.trim() || !item.image.trim())) {
+      setMessage({ type: "error", text: "Enter an engineering section heading and a title and image for each of the four cards." });
+      return;
+    }
+    if (form.engineering.items.some(item => !isEngineeringImage(item.image))) {
+      setMessage({ type: "error", text: "Use an uploaded image path or an HTTP/HTTPS image URL for each engineering card. Videos are not supported here." });
+      return;
+    }
+    pending.current = true;
     setSaving(true);
     onBusyChange(true);
     setMessage(null);
     try {
-      const response = await fetch(`${API_BASE}/api/hero`, { method: "PUT", headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      const changes = changedHeroFields(form, parseHero(JSON.parse(baseline)));
+      const response = await fetch(`${API_BASE}/api/hero`, { method: "PUT", headers: { Authorization: `Bearer ${adminToken}`, "Content-Type": "application/json" }, body: JSON.stringify(changes) });
       const data = await response.json();
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Unable to save home banner.");
-      setForm(data.item as Hero);
-      setBaseline(JSON.stringify(data.item));
-      setMessage({ type: "success", text: "Home banner saved successfully." });
+      const saved = parseHero(data.item);
+      setForm(saved);
+      setBaseline(JSON.stringify(saved));
+      setMessage({ type: "success", text: "Home banner and engineering details saved successfully." });
     } catch (error) { setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to save home banner." }); }
-    finally { setSaving(false); }
+    finally { pending.current = false; setSaving(false); }
   };
   if (loading) return <p role="status">Loading home banner...</p>;
   return <>
@@ -103,7 +125,7 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
           </label>)}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium">Banner photo
-              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={uploadImage} className="mt-3 block w-full text-sm" />
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={event => void uploadImage(event)} className="mt-3 block min-h-12 w-full min-w-0 text-sm" />
             </label>
             <p className="mt-2 text-sm text-[var(--muted)]">JPG, PNG, WebP, or GIF up to 8 MiB.</p>
             <label className="mt-4 block text-sm font-medium">Banner image URL or path
@@ -111,9 +133,43 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
             </label>
           </div>
         </div>
-        <AdminSaveBar><button type="button" onClick={save} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 font-medium text-white">{saving ? "Saving..." : "Save changes"}</button>{dirty ? <span className="text-sm">Unsaved changes</span> : null}</AdminSaveBar>
-        <Link href="/" className="mt-3 inline-flex min-h-11 items-center text-sm underline">View portal</Link>
       </section>
+      <section aria-labelledby="engineering-editor-title" className="min-w-0 rounded-3xl border border-[var(--line)] bg-white/80 p-5 sm:p-6 lg:col-span-2">
+        <h2 id="engineering-editor-title" className="text-xl font-semibold">Engineering details</h2>
+        <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Replace the pictures and text in the four-card section near the bottom of the home page. These cards are separate from the equipment catalog. Upload images for a self-contained recovery backup.</p>
+        <div className="mt-5 grid min-w-0 gap-5">
+          <label className="block min-w-0 text-sm font-medium">Engineering section heading
+            <input value={form.engineering.heading} maxLength={120} onChange={event => updateField("engineering", { ...form.engineering, heading: event.target.value })} className={inputClass} />
+          </label>
+          <label className="block min-w-0 text-sm font-medium">Engineering introduction
+            <textarea aria-label="Engineering introduction" value={form.engineering.intro} maxLength={1000} rows={2} onChange={event => updateField("engineering", { ...form.engineering, intro: event.target.value })} className={`${inputClass} text-base`} />
+          </label>
+        </div>
+        <div className="mt-6 grid min-w-0 gap-5 lg:grid-cols-2">
+          {form.engineering.items.map((item, index) => <fieldset key={index} className="min-w-0 rounded-2xl border border-[var(--line)] p-4">
+            <legend className="px-2 font-semibold">Engineering card {index + 1}</legend>
+            {isEngineeringImage(item.image) ? <CatalogImage key={item.image} src={item.image.trim()} alt={`Engineering card ${index + 1} preview`} className="aspect-[4/3] h-auto w-full rounded-xl object-cover" />
+              : <div className="flex aspect-[4/3] items-center justify-center rounded-xl bg-neutral-100 p-4 text-center text-sm text-[var(--muted)]">Enter an image path or upload a photo to preview this card.</div>}
+            <label className="mt-4 block text-sm font-medium">Card {index + 1} title
+              <input value={item.title} maxLength={120} onChange={event => updateCard(index, "title", event.target.value)} className={inputClass} />
+            </label>
+            <label className="mt-4 block text-sm font-medium">Card {index + 1} description
+              <textarea aria-label={`Card ${index + 1} description`} value={item.description} maxLength={2000} rows={3} onChange={event => updateCard(index, "description", event.target.value)} className={`${inputClass} text-base`} />
+            </label>
+            <label className="mt-4 block text-sm font-medium">Card {index + 1} photo
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={event => void uploadImage(event, index)} className="mt-2 block min-h-12 w-full min-w-0 text-sm" />
+            </label>
+            <p className="mt-2 text-xs text-[var(--muted)]">JPG, PNG, WebP or GIF, up to 8 MiB. Uploading does not publish until you save.</p>
+            <label className="mt-4 block text-sm font-medium">Card {index + 1} image URL or path
+              <input value={item.image} maxLength={500} onChange={event => updateCard(index, "image", event.target.value)} className={inputClass} />
+            </label>
+          </fieldset>)}
+        </div>
+      </section>
+      <div className="min-w-0 lg:col-span-2">
+        <AdminSaveBar><button type="button" onClick={save} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 font-medium text-white">{saving ? "Saving..." : "Save changes"}</button>{dirty ? <span className="text-sm">Unsaved changes</span> : null}</AdminSaveBar>
+        <Link href="/" className="mt-3 inline-flex min-h-12 items-center text-sm underline">View portal</Link>
+      </div>
     </fieldset>
   </>;
 }

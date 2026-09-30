@@ -160,17 +160,18 @@ class RegionalCatalogTests(unittest.TestCase):
     def test_banner_restores_custom_content_and_never_exposes_legacy_price(self) -> None:
         banner = {"tag": "Signature", "number": "01", "eyebrow": "Training", "title": "Your space", "image": "/images/main.jpg"}
         main.HERO_PATH.write_text(json.dumps({**banner, "priceLabel": "CAD $9,999.00"}))
+        expected = {**banner, "engineering": main.DEFAULT_ENGINEERING.model_dump()}
         for country in ("CA", "US", None):
             with self.market(country):
                 response = self.client.get("/api/hero")
                 self.assertIn("no-store", response.headers["cache-control"])
-                self.assertEqual(response.json()["item"], banner)
+                self.assertEqual(response.json()["item"], expected)
                 self.assertNotIn("9,999", response.text)
-        self.assertEqual(self.client.get("/api/admin/hero", headers=self.headers).json()["item"], banner)
+        self.assertEqual(self.client.get("/api/admin/hero", headers=self.headers).json()["item"], expected)
         self.assertIn("priceLabel", json.loads(main.HERO_PATH.read_text()))
         updated = {**banner, "title": "Independent banner"}
         self.assertEqual(self.client.put("/api/hero", headers=self.headers, json=updated).status_code, 200)
-        self.assertEqual(json.loads(main.HERO_PATH.read_text()), updated)
+        self.assertEqual(json.loads(main.HERO_PATH.read_text()), {**updated, "engineering": expected["engineering"]})
         self.assertEqual(self.client.put("/api/hero", headers=self.headers, json={"priceLabel": "$123"}).status_code, 422)
         self.assertEqual(self.client.put("/api/hero", headers=self.headers, json={"catalog": "products", "productId": 1}).status_code, 422)
 

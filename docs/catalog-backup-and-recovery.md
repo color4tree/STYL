@@ -8,6 +8,12 @@ and its data are no longer available.
 This restores **catalog content onto a clean, compatible STYL installation**.
 It is not a full AWS instance, application-source, credential or inquiry backup.
 
+Engineering-enabled archives keep the version-1 container, but older recovery
+scripts do not understand the additional image references and may reject them.
+Use the current tool included in the downloaded ZIP (or the matching trusted
+repository version). The current tool continues to verify/restore legacy
+archives that do not contain an engineering section.
+
 ## Local production-catalog mirror (2026-09-29)
 
 The owner supplied `styl-catalog-backup-20260929T232242Z.zip` for local testing.
@@ -62,6 +68,10 @@ Included:
   compatibility and private provenance/admin notes.
 - Home banner configuration. If it has never been saved, the current default
   configuration is materialized in the archive without changing the source.
+- Engineering-details heading/introduction and four image/title/description
+  cards. If an older saved banner omits this section, the export copy includes
+  its defaults and their four images without modifying the saved source file.
+  Existing saved engineering content is preserved, not replaced with defaults.
 - All referenced local uploaded images/videos and required MP4 posters.
 - Referenced bundled media under the frontend's public images directory.
 - A versioned manifest with file lengths and SHA256 hashes, restore instructions

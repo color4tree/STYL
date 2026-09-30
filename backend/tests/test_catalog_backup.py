@@ -1,4 +1,6 @@
 import io
+from copy import deepcopy
+import hashlib
 import json
 from contextlib import nullcontext
 import os
@@ -42,10 +44,13 @@ class CatalogBackupTests(unittest.TestCase):
             f"data/uploads/{VIDEO}.mp4": bytes(range(256)) * 4,
             f"data/uploads/{VIDEO}.poster.jpg": b"\xff\xd8original poster",
             "public/images/equipment/rack.svg": b'<svg xmlns="http://www.w3.org/2000/svg"/>',
+            "public/images/brand/logo-plate.jpg": b"default shield",
+            "public/images/brand/j-hook.jpg": b"default hook",
+            "public/images/brand/cable-swivel.jpg": b"default swivel",
+            "public/images/brand/frame-badge.jpg": b"default banner",
         }
         for name, content in self.media.items():
             (self.source / name).write_bytes(content)
-        (self.images / "brand" / "frame-badge.jpg").write_bytes(b"default banner")
         self.uploads.joinpath("unreferenced.png").write_bytes(b"not part of the catalog")
         self.data.joinpath("inquiries").mkdir()
         self.data.joinpath("inquiries", "customer.json").write_text("PRIVATE-CUSTOMER-NOT-IN-BACKUP")
@@ -77,7 +82,10 @@ class CatalogBackupTests(unittest.TestCase):
             "description": "Full details", "notes": "Public use",
             "image": "/api/uploads/shared.png", "photos": ["/api/uploads/shared.png"],
         }]
-        self.hero = {"tag": "Custom", "number": "02", "eyebrow": "Built well", "title": "Banner", "image": "/api/uploads/banner.webp"}
+        self.hero = {
+            "tag": "Custom", "number": "02", "eyebrow": "Built well", "title": "Banner", "image": "/api/uploads/banner.webp",
+            "engineering": main.DEFAULT_ENGINEERING.model_dump(),
+        }
         for name, value in (("products", self.products), ("accessories", self.accessories), ("hero", self.hero)):
             self.data.joinpath(name + ".json").write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
         self.paths = {
@@ -133,7 +141,7 @@ class CatalogBackupTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
             manifest = json.loads(archive.read("manifest.json"))
             self.assertEqual(manifest["version"], 1)
-            self.assertEqual(manifest["counts"], {"products": 2, "accessories": 1, "mediaFiles": 5})
+            self.assertEqual(manifest["counts"], {"products": 2, "accessories": 1, "mediaFiles": 9})
             self.assertEqual(json.loads(archive.read("data/products.json")), self.products)
             self.assertEqual(json.loads(archive.read("data/accessories.json")), self.accessories)
             self.assertEqual(json.loads(archive.read("data/hero.json")), self.hero)
@@ -178,6 +186,104 @@ class CatalogBackupTests(unittest.TestCase):
             self.assertEqual(archive.read("public/images/brand/frame-badge.jpg"), b"default banner")
         self.assertFalse(self.paths["HERO_PATH"].exists())
 
+    def test_sys017_legacy_banner_defaults_materialize_only_in_export_with_all_rendered_images(self) -> None:
+        legacy = {key: value for key, value in self.hero.items() if key != "engineering"}
+        original = json.dumps(legacy, indent=3).encode()
+        self.paths["HERO_PATH"].write_bytes(original)
+        with zipfile.ZipFile(io.BytesIO(self.download())) as archive:
+            self.assertEqual(json.loads(archive.read("data/hero.json")), self.hero)
+            for card in self.hero["engineering"]["items"]:
+                name = "public" + card["image"]
+                self.assertEqual(archive.read(name), self.media[name])
+        self.assertEqual(self.paths["HERO_PATH"].read_bytes(), original)
+
+    def test_sys017_custom_engineering_uploads_bundled_and_shared_images_are_deduplicated(self) -> None:
+        engineering_only = b"engineering image not used by any catalog item"
+        self.uploads.joinpath("engineering-only.jpg").write_bytes(engineering_only)
+        self.hero["engineering"]["heading"] = "Custom precision"
+        for card, image in zip(self.hero["engineering"]["items"], [
+            "/api/uploads/engineering-only.jpg", "/api/uploads/shared.png",
+            "/api/uploads/banner.webp", "/images/brand/j-hook.jpg",
+        ]):
+            card["image"] = image
+        original = b"\r\n " + json.dumps(self.hero, ensure_ascii=False, indent=3).encode() + b"\n "
+        self.paths["HERO_PATH"].write_bytes(original)
+        path = self.write_archive()
+        manifest = backup.verify_archive(path)
+        self.assertEqual(manifest["counts"]["mediaFiles"], 7)
+        with zipfile.ZipFile(path) as archive:
+            self.assertEqual(archive.read("data/hero.json"), original)
+            self.assertEqual(archive.namelist().count("data/uploads/shared.png"), 1)
+            self.assertEqual(archive.namelist().count("data/uploads/banner.webp"), 1)
+            self.assertEqual(archive.read("data/uploads/engineering-only.jpg"), engineering_only)
+            for entry in manifest["files"]:
+                self.assertEqual(hashlib.sha256(archive.read(entry["path"])).hexdigest(), entry["sha256"])
+            tool = self.root / "restore_catalog.py"
+            tool.write_bytes(archive.read("restore_catalog.py"))
+        self.assertEqual(self.paths["HERO_PATH"].read_bytes(), original)
+        shutil.rmtree(self.source)
+        target = self.root / "engineering-cold-recovered"
+        process = subprocess.run(
+            [sys.executable, "-S", str(tool), "restore", str(path), "--destination", str(target)],
+            cwd=self.root, capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual((target / "data/hero.json").read_bytes(), original)
+        self.assertEqual((target / "data/uploads/engineering-only.jpg").read_bytes(), engineering_only)
+
+    def test_sys017_invalid_engineering_or_missing_external_unsafe_images_refuse_export(self) -> None:
+        invalid = [None, {}, {**self.hero["engineering"], "items": []}, {**self.hero["engineering"], "extra": True}]
+        for field, value in (("heading", " "), ("heading", "x" * 121), ("intro", "x" * 1001)):
+            invalid.append({**self.hero["engineering"], field: value})
+        for field, value in (
+            ("title", ""), ("title", "x" * 121), ("description", "x" * 2001),
+            ("image", ""), ("image", "x" * 501), ("image", "/api/uploads/absent.jpg"),
+            ("image", "https://example.com/private.jpg?secret=DO-NOT-LOG"),
+            ("image", "/images/%2e%2e/private.jpg"), ("image", "/api/uploads/clip.mp4"),
+            ("extra", "unexpected"),
+        ):
+            engineering = deepcopy(self.hero["engineering"])
+            engineering["items"][0][field] = value
+            invalid.append(engineering)
+        for engineering in invalid:
+            content = json.dumps({**self.hero, "engineering": engineering}).encode()
+            self.paths["HERO_PATH"].write_bytes(content)
+            with self.subTest(engineering=engineering), self.assertLogs(main.logger, level="WARNING") as logs:
+                response = self.client.get("/api/admin/catalog-backup", headers=self.headers)
+                self.assertEqual(response.status_code, 409, response.text)
+            self.assertNotIn("DO-NOT-LOG", response.text)
+            self.assertNotIn("DO-NOT-LOG", "\n".join(logs.output))
+            self.assertEqual(self.paths["HERO_PATH"].read_bytes(), content)
+
+    def test_ops011_legacy_archive_verifies_and_restores_without_injecting_missing_engineering_media(self) -> None:
+        legacy = {key: value for key, value in self.hero.items() if key != "engineering"}
+        original = json.dumps(legacy, indent=3).encode()
+        self.paths["HERO_PATH"].write_bytes(original)
+        stream = io.BytesIO()
+        backup.create_archive(
+            stream, products_path=self.paths["DATA_PATH"], accessories_path=self.paths["ACCESSORIES_PATH"],
+            hero_path=self.paths["HERO_PATH"], uploads_path=self.uploads, images_path=self.images,
+            default_hero=legacy, app_version="legacy",
+        )
+        path = self.write_archive(stream.getvalue())
+        self.assertEqual(backup.verify_archive(path)["counts"]["mediaFiles"], 5)
+        with zipfile.ZipFile(path) as archive:
+            self.assertEqual(archive.read("data/hero.json"), original)
+            self.assertNotIn("public/images/brand/logo-plate.jpg", archive.namelist())
+            tool = self.root / "restore_catalog.py"
+            tool.write_bytes(archive.read("restore_catalog.py"))
+        shutil.rmtree(self.source)
+        destination = self.root / "legacy-cold-recovered"
+        for action in ("verify", "restore"):
+            arguments = ["--destination", str(destination)] if action == "restore" else []
+            process = subprocess.run(
+                [sys.executable, "-S", str(tool), action, str(path), *arguments],
+                cwd=self.root, capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertEqual((destination / "data/hero.json").read_bytes(), original)
+        self.assertFalse((destination / "public/images/brand").exists())
+
     def test_sys017_legacy_fields_and_empty_catalog_are_preserved(self) -> None:
         legacy = {"id": 9, "slug": "legacy-item", "name": "Legacy", "category": "Racks", "price": 12.5, "currency": "USD"}
         self.paths["DATA_PATH"].write_text(json.dumps([legacy]))
@@ -195,7 +301,7 @@ class CatalogBackupTests(unittest.TestCase):
 
     def test_sys017_msrp_export_restore_preserves_original_json_bytes(self) -> None:
         originals = {}
-        for key in ("DATA_PATH", "ACCESSORIES_PATH"):
+        for key in ("DATA_PATH", "ACCESSORIES_PATH", "HERO_PATH"):
             path = self.paths[key]
             original = b" \r\n" + json.dumps(json.loads(path.read_bytes()), indent=3, ensure_ascii=False).encode("utf-8") + b"\r\n "
             path.write_bytes(original)
@@ -254,7 +360,7 @@ class CatalogBackupTests(unittest.TestCase):
         shutil.rmtree(self.source)
         target = self.root / "recovered"
         process = subprocess.run(
-            [sys.executable, str(tool), "restore", str(archive_path), "--destination", str(target)],
+            [sys.executable, "-S", str(tool), "restore", str(archive_path), "--destination", str(target)],
             cwd=self.root, capture_output=True, text=True, timeout=30,
         )
         self.assertEqual(process.returncode, 0, process.stderr)
@@ -295,6 +401,8 @@ class CatalogBackupTests(unittest.TestCase):
             self.assertEqual(media_client.get("/images/equipment/rack.svg").content, self.media["public/images/equipment/rack.svg"])
             self.assertEqual(media_client.get(f"/api/uploads/{VIDEO}.poster.jpg").content, self.media[f"data/uploads/{VIDEO}.poster.jpg"])
             self.assertEqual(media_client.get("/api/uploads/shared.png").content, self.media["data/uploads/shared.png"])
+            for card in self.hero["engineering"]["items"]:
+                self.assertEqual(media_client.get(card["image"]).content, self.media["public" + card["image"]])
         fresh_api = subprocess.run(
             [sys.executable, "-c", """
 from fastapi.testclient import TestClient
@@ -312,6 +420,9 @@ with TestClient(app) as client:
     assert client.get('/api/uploads/shared.png').content.startswith(b'\\x89PNG')
     assert client.get('/api/uploads/1234567890abcdef1234567890abcdef.mp4', headers={'Range': 'bytes=10-49'}).status_code == 206
     assert client.get('/api/hero').json()['item']['title'] == 'Banner'
+    engineering = client.get('/api/hero').json()['item']['engineering']
+    assert engineering['heading'] == 'Explore our engineering details'
+    assert len(engineering['items']) == 4 and engineering['items'][0]['title'] == 'Signature shield'
 print('Fresh application recovered from downloaded catalog: OK')
 """],
             cwd=Path(main.__file__).parents[1],
@@ -326,6 +437,26 @@ print('Fresh application recovered from downloaded catalog: OK')
             backup.restore_archive(archive, self.root / "must-not-exist")
         self.assertFalse(self.root.joinpath("must-not-exist").exists())
         self.assertEqual(list(self.root.glob(".styl-restore-*")), [])
+
+    def test_sys018_invalid_engineering_in_a_checksummed_archive_is_rejected(self) -> None:
+        content = self.download()
+        with zipfile.ZipFile(io.BytesIO(content)) as original:
+            entries = {name: original.read(name) for name in original.namelist()}
+        for engineering in (None, {**self.hero["engineering"], "items": []}, {**self.hero["engineering"], "intro": 7}):
+            with self.subTest(engineering=engineering):
+                hero = json.dumps({**self.hero, "engineering": engineering}).encode()
+                manifest = json.loads(entries["manifest.json"])
+                for entry in manifest["files"]:
+                    if entry["path"] == "data/hero.json":
+                        entry.update(size=len(hero), sha256=hashlib.sha256(hero).hexdigest())
+                stream = io.BytesIO()
+                with zipfile.ZipFile(stream, "w") as archive:
+                    for name, data in entries.items():
+                        archive.writestr(name, hero if name == "data/hero.json" else json.dumps(manifest).encode() if name == "manifest.json" else data)
+                path = self.write_archive(stream.getvalue())
+                with self.assertRaisesRegex(backup.BackupError, "engineering"):
+                    backup.restore_archive(path, self.root / "invalid-engineering")
+                self.assertFalse((self.root / "invalid-engineering").exists())
 
     def test_sys018_missing_archive_entry_is_rejected(self) -> None:
         archive = self.rewrite(omit=f"data/uploads/{VIDEO}.poster.jpg")

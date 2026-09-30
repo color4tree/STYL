@@ -197,6 +197,20 @@ ignored on read and removed on the next admin save; the original text and image
 remain usable. The banner stays hidden below 768 CSS px. Regional product prices
 continue to appear in the catalog, product details, and cart.
 
+The **Home banner** tab also manages **Engineering details**: its section heading,
+optional introduction, and four image/title/description cards. Upload a photo or
+enter a supported image URL/path, review the preview, then choose **Save changes**.
+Uploads alone do not publish. The existing four-card layout and default content
+remain until edited; the engineering section remains available on mobile even
+though the top banner is hidden there. Blank descriptions/introduction are allowed.
+The editor submits only changed top-level settings, so changing the banner does
+not overwrite an unchanged engineering section, and vice versa.
+
+Engineering content is stored with the banner and included in recovery ZIPs with
+all referenced images. For older saved banners, exports materialize the current
+engineering defaults into the ZIP only; source data is not silently rewritten.
+Use the included/current recovery tool for these newer archives.
+
 Customer/admin labels use **Equipment** (an uncountable noun, not "equipments")
 and **Accessories**. The home page and header put **All products** first; it is
 the default combined view, with equipment followed by accessories in each

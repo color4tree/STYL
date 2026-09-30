@@ -10,17 +10,11 @@ import CartFeedback from "@/components/CartFeedback";
 import InquiryForm from "@/components/InquiryForm";
 import CatalogGrid from "@/components/CatalogGrid";
 import CatalogViewSync from "@/components/CatalogViewSync";
+import CatalogImage from "@/components/CatalogImage";
 import { catalogViews, fetchPublicCatalog, type CatalogEntry, type CatalogView, type PublicCatalogItem } from "@/lib/publicCatalog";
 import { defaultHero, fetchHero, type Hero } from "@/lib/hero";
 import { useQuoteNavigation } from "@/lib/useQuoteNavigation";
 import { trackAnalytics } from "@/lib/analytics";
-
-const brandAssets = [
-  { name: "Signature shield", description: "Laser-etched into brushed stainless steel on every frame upright.", file: "/images/brand/logo-plate.jpg" },
-  { name: "J-hook", description: "Rubber-lined steel hooks that protect the bar and carry the wordmark.", file: "/images/brand/j-hook.jpg" },
-  { name: "Cable swivel plate", description: "Machined plate and 360° swivel for smooth, tangle-free cable work.", file: "/images/brand/cable-swivel.jpg" },
-  { name: "Frame badge", description: "Brushed steel badge finishing the top crossmember of the multi trainer.", file: "/images/brand/frame-badge.jpg" },
-];
 
 export default function Home() {
   const [products, setProducts] = useState<PublicCatalogItem[]>([]);
@@ -135,10 +129,14 @@ export default function Home() {
 
         <section id="gallery" className="container scroll-mt-32 pb-12 lg:scroll-mt-24">
           <details onToggle={(event) => { if (event.currentTarget.open) trackAnalytics("media_open", { mediaType: "image" }); }} className="rounded-3xl border border-[var(--line)] bg-white/60 p-5 lg:p-7">
-            <summary className="min-h-11 text-xl font-semibold">Explore our engineering details</summary>
-            <p className="mt-3 text-[var(--muted)]">Our mark, engineered into every piece.</p>
+            <summary className="min-h-12 break-words text-xl font-semibold">{hero.engineering.heading}</summary>
+            {hero.engineering.intro ? <p className="mt-3 whitespace-pre-line break-words text-[var(--muted)]">{hero.engineering.intro}</p> : null}
             <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {brandAssets.map((asset) => <article key={asset.name} className="min-w-0"><img src={asset.file} loading="lazy" alt={asset.name} className="aspect-[4/3] w-full rounded-xl object-cover" /><h3 className="mt-3 text-xl font-semibold">{asset.name}</h3><p className="mt-2 text-sm leading-6 text-[var(--muted)]">{asset.description}</p></article>)}
+              {hero.engineering.items.map((item, index) => <article key={index} className="min-w-0">
+                <CatalogImage key={item.image} src={item.image} alt={item.title} className="aspect-[4/3] h-auto w-full rounded-xl object-cover" />
+                <h3 className="mt-3 break-words text-xl font-semibold">{item.title}</h3>
+                {item.description ? <p className="mt-2 whitespace-pre-line break-words text-sm leading-6 text-[var(--muted)]">{item.description}</p> : null}
+              </article>)}
             </div>
           </details>
         </section>

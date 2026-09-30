@@ -29,6 +29,7 @@ CHUNK_SIZE = 1024 * 1024
 CATALOG_FILES = ("data/products.json", "data/accessories.json", "data/hero.json")
 SUPPORT_FILES = ("restore_catalog.py", "RESTORE.txt")
 MEDIA_EXTENSIONS = {".svg", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
+IMAGE_EXTENSIONS = {".svg", ".jpg", ".jpeg", ".png", ".gif", ".webp"}
 RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"{prefix}{i}" for prefix in ("COM", "LPT") for i in range(1, 10))}
 RECOVERY_NOTES = """STYL CATALOG RECOVERY BACKUP - FORMAT 1
 
@@ -52,7 +53,7 @@ verified result is published to the destination.
 The restored directory contains:
   data/products.json, data/accessories.json, data/hero.json
   data/uploads/        (required uploaded images, videos and posters)
-  public/images/       (required bundled catalog/banner media)
+  public/images/       (required bundled catalog/banner/engineering images)
   manifest.json, RESTORE.txt, restore_catalog.py
 
 Install a compatible STYL application on a clean replacement server.
@@ -65,6 +66,13 @@ Configure fresh admin/SMTP/GeoIP/TLS settings separately from protected backups.
 Check admin record counts/IDs, both market prices, draft privacy, banner, images,
 video playback/seeking and service restart before opening the replacement site.
 Keep the recovery archive until an independent restored copy is verified.
+
+Engineering details and their four images are included in new exports. Legacy
+saved banners receive engineering defaults in the export copy only. This tool
+also verifies/restores older format-1 archives without engineering details;
+those archives did not include the then-hardcoded engineering images, so use a
+compatible application's bundled defaults. Older recovery tools may reject new
+archives containing engineering-only media: use this tool or a newer trusted copy.
 
 Browser upload/import is not implemented. This is catalog recovery, not a full
 machine backup. The original production server is not needed to recover these files.
@@ -132,6 +140,8 @@ def _hero(data: bytes) -> dict[str, object]:
     value = _json(data, "hero.json")
     if not isinstance(value, dict) or any(not isinstance(value.get(key), str) for key in ("tag", "number", "eyebrow", "title", "image")):
         raise BackupError("hero.json is not a valid saved banner configuration.")
+    if "engineering" in value:
+        _engineering(value["engineering"])
     return value
 
 
@@ -156,6 +166,57 @@ def _allowed_entry(name: str) -> None:
         raise BackupError("The archive contains a file outside the catalog recovery scope.")
 
 
+def validate_engineering_image(value: str) -> str:
+    """Validate an image URL without accessing the filesystem or network."""
+    value = value.strip()
+    if not value or len(value) > 500 or any(ord(character) < 32 for character in value) or "\\" in value:
+        raise BackupError("Engineering images must use an HTTP(S) URL or a safe local image path.")
+    try:
+        parsed = urlsplit(value)
+        path = unquote(parsed.path, errors="strict")
+        if parsed.scheme in ("http", "https") and parsed.hostname and not parsed.username and not parsed.password:
+            _ = parsed.port
+            if PurePosixPath(path).suffix.lower() in MEDIA_EXTENSIONS - IMAGE_EXTENSIONS:
+                raise BackupError("Engineering images cannot be videos.")
+            return value
+        if parsed.scheme or parsed.netloc:
+            raise BackupError("Engineering images must use an HTTP(S) URL or a safe local image path.")
+        if path.startswith("/api/uploads/"):
+            name = "data/uploads/" + path.removeprefix("/api/uploads/")
+        elif path.startswith("/images/"):
+            name = "public/images/" + path.removeprefix("/images/")
+        else:
+            raise BackupError("Engineering images must use an HTTP(S) URL or a safe local image path.")
+        _allowed_entry(name)
+        if PurePosixPath(name).suffix.lower() not in IMAGE_EXTENSIONS:
+            raise BackupError("Engineering images cannot be videos.")
+    except (ValueError, UnicodeError) as error:
+        raise BackupError("Engineering images must use an HTTP(S) URL or a safe local image path.") from error
+    return value
+
+
+def _engineering(value: object) -> list[str]:
+    if not isinstance(value, dict) or set(value) != {"heading", "intro", "items"}:
+        raise BackupError("hero.json has invalid engineering details.")
+    for key, limit, required in (("heading", 120, True), ("intro", 1000, False)):
+        text = value[key]
+        if not isinstance(text, str) or len(text.strip()) > limit or (required and not text.strip()):
+            raise BackupError("hero.json has invalid engineering text.")
+    items = value["items"]
+    if not isinstance(items, list) or len(items) != 4:
+        raise BackupError("hero.json must contain exactly four engineering cards.")
+    images: list[str] = []
+    for item in items:
+        if not isinstance(item, dict) or set(item) != {"title", "description", "image"}:
+            raise BackupError("hero.json has an invalid engineering card.")
+        for key, limit, required in (("title", 120, True), ("description", 2000, False), ("image", 500, True)):
+            text = item[key]
+            if not isinstance(text, str) or len(text.strip()) > limit or (required and not text.strip()):
+                raise BackupError("hero.json has invalid engineering card text.")
+        images.append(validate_engineering_image(item["image"]))
+    return images
+
+
 def _media_names(records: list[dict[str, object]]) -> set[str]:
     required: set[str] = set()
     for item in records:
@@ -164,6 +225,8 @@ def _media_names(records: list[dict[str, object]]) -> set[str]:
         if photos is not None and (not isinstance(photos, list) or any(not isinstance(photo, str) for photo in photos)):
             raise BackupError(f"Invalid media list in {label}.")
         values = [item.get("image"), *(photos if isinstance(photos, list) else [])]
+        if "engineering" in item:
+            values.extend(_engineering(item["engineering"]))
         for value in values:
             if value is None or value == "":
                 continue
@@ -233,7 +296,12 @@ def create_archive(
     hero = _read_saved(hero_path, "hero.json") if hero_path.exists() else json.dumps(default_hero, ensure_ascii=False).encode("utf-8")
     product_records = _catalog(products, "products.json", True)
     accessory_records = _catalog(accessories, "accessories.json", False)
-    required = _media_names([*product_records, *accessory_records, _hero(hero)])
+    hero_record = _hero(hero)
+    if "engineering" not in hero_record and "engineering" in default_hero:
+        hero_record["engineering"] = default_hero["engineering"]
+        _engineering(hero_record["engineering"])
+        hero = json.dumps(hero_record, ensure_ascii=False, indent=2).encode("utf-8")
+    required = _media_names([*product_records, *accessory_records, hero_record])
     assets = {
         name: _file_source(
             uploads_path if name.startswith("data/uploads/") else images_path,
@@ -272,7 +340,7 @@ def create_archive(
             "applicationVersion": app_version,
             "counts": {"products": len(product_records), "accessories": len(accessory_records), "mediaFiles": len(assets)},
             "files": files,
-            "scope": "Saved catalog, banner and referenced local media; private admin fields included.",
+            "scope": "Saved catalog, banner, engineering details and referenced local media; private admin fields included.",
             "excluded": ["inquiries", "credentials", "server configuration", "GeoIP databases", "application code/build", "unreferenced uploads"],
         }
         encoded = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")

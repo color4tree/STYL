@@ -8,6 +8,23 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Configurable engineering details (2026-09-29)
+
+The Home banner tab includes a separate Engineering details editor for the
+section heading, optional introduction, and four image/title/description cards.
+Keep the existing four positions and public 1/2/4-column responsive layout.
+The current photographs and text are defaults for older configurations, not an
+automatic rewrite of saved content. The public section retains its disclosure
+control and remains usable on mobile; top-banner mobile hiding is unchanged.
+
+Editors can upload JPG/PNG/WebP/GIF up to 8 MiB or enter an image URL/path.
+Show previews without crashing while a URL is partly typed. Keep visible labels,
+stable textarea accessible names, multiline wrapping, >=48px actions and no
+horizontal overflow at 320px. A single Save changes action publishes changes;
+uploads alone do not. Preserve failed/unsaved edits, block overlapping work,
+and keep the existing tab/Backup dirty-state guards. Shared images must not be
+deleted while another catalog/banner/engineering card references them.
+
 ### Safari privacy notice (2026-09-29)
 
 The owner supplied an iPhone banner offering **Dismiss / Reduce Protections**.

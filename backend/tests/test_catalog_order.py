@@ -33,6 +33,10 @@ class CatalogOrderTests(unittest.TestCase):
         hero.write_text(json.dumps({"tag": "", "number": "", "eyebrow": "", "title": "", "image": ""}))
         (self.root / "uploads").mkdir()
         (self.root / "images").mkdir()
+        for card in main.DEFAULT_ENGINEERING.items:
+            image = self.root / card.image.removeprefix("/")
+            image.parent.mkdir(parents=True, exist_ok=True)
+            image.write_bytes(b"engineering default fixture")
         settings = patch.multiple(
             main, DATA_PATH=self.paths["products"], ACCESSORIES_PATH=self.paths["accessories"],
             HERO_PATH=hero, UPLOAD_PATH=self.root / "uploads", PUBLIC_IMAGE_PATH=self.root / "images",

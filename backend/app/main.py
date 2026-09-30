@@ -19,7 +19,7 @@ from tempfile import TemporaryFile
 from collections.abc import Iterator
 from typing import Annotated, Literal
 from uuid import uuid4
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi import Path as PathParameter
@@ -33,7 +33,7 @@ from pydantic import AfterValidator, BaseModel, EmailStr, Field, TypeAdapter, fi
 
 from app.media import VIDEO_FORMATS, upload_video, video_response
 from app.location import MarketContext, resolve_market
-from app.catalog_backup import BackupError, create_archive
+from app.catalog_backup import BackupError, create_archive, validate_engineering_image
 from app import analytics
 
 APP_PATH = Path(__file__).resolve().parent
@@ -262,6 +262,53 @@ class AccessoryPayload(CatalogDetailsPayload, AccessorySpecificationsPayload, Ca
     image: str | None = None
 
 
+class EngineeringCardPayload(BaseModel):
+    model_config = {"extra": "forbid", "str_strip_whitespace": True}
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(max_length=2000)
+    image: str = Field(min_length=1, max_length=500)
+
+    @field_validator("image")
+    @classmethod
+    def validate_image(cls, value: str) -> str:
+        return validate_engineering_image(value)
+
+
+class EngineeringPayload(BaseModel):
+    model_config = {"extra": "forbid", "str_strip_whitespace": True}
+    heading: str = Field(min_length=1, max_length=120)
+    intro: str = Field(max_length=1000)
+    items: list[EngineeringCardPayload] = Field(min_length=4, max_length=4)
+
+
+DEFAULT_ENGINEERING = EngineeringPayload(
+    heading="Explore our engineering details",
+    intro="Our mark, engineered into every piece.",
+    items=[
+        EngineeringCardPayload(
+            title="Signature shield",
+            description="Laser-etched into brushed stainless steel on every frame upright.",
+            image="/images/brand/logo-plate.jpg",
+        ),
+        EngineeringCardPayload(
+            title="J-hook",
+            description="Rubber-lined steel hooks that protect the bar and carry the wordmark.",
+            image="/images/brand/j-hook.jpg",
+        ),
+        EngineeringCardPayload(
+            title="Cable swivel plate",
+            description="Machined plate and 360° swivel for smooth, tangle-free cable work.",
+            image="/images/brand/cable-swivel.jpg",
+        ),
+        EngineeringCardPayload(
+            title="Frame badge",
+            description="Brushed steel badge finishing the top crossmember of the multi trainer.",
+            image="/images/brand/frame-badge.jpg",
+        ),
+    ],
+)
+
+
 class HeroPayload(BaseModel):
     model_config = {"extra": "forbid"}
     tag: str = Field(default="", max_length=40)
@@ -269,6 +316,7 @@ class HeroPayload(BaseModel):
     eyebrow: str = Field(default="", max_length=60)
     title: str = Field(default="", max_length=80)
     image: str = Field(default="", max_length=500)
+    engineering: EngineeringPayload = Field(default_factory=lambda: DEFAULT_ENGINEERING.model_copy(deep=True))
 
 
 DEFAULT_HERO = HeroPayload(
@@ -382,8 +430,15 @@ def save_products(products: list[dict[str, object]]) -> None:
 def write_json_list(path: Path, items: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = path.with_suffix(".tmp")
-    temporary_path.write_text(json.dumps(items, indent=2), encoding="utf-8")
-    temporary_path.replace(path)
+    try:
+        temporary_path.write_text(json.dumps(items, indent=2), encoding="utf-8")
+        temporary_path.replace(path)
+    except OSError:
+        try:
+            temporary_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def seed_accessory(
@@ -663,20 +718,45 @@ def product_specifications(request: ProductPayload, previous: dict[str, object])
 
 
 def delete_uploaded_image(image: object) -> None:
-    image_path = str(image or "")
-    if not image_path.startswith("/api/uploads/"):
+    image_path = uploaded_image_reference(image)
+    if image_path is None:
         return
 
     references = {image_path}
     if image_path.endswith(".poster.jpg"):
         references.add(image_path[:-11] + ".mp4")
-    if any(references.intersection(catalog_photos(item)) for item in [*load_products(), *load_accessories(), load_hero()]):
-        return
+    try:
+        items = [*load_products(), *load_accessories(), load_hero()]
+        if any(references.intersection(uploaded_image_reference(photo) for photo in home_media(item)) for item in items):
+            return
+        (UPLOAD_PATH / Path(image_path).name).unlink(missing_ok=True)
+        if image_path.endswith(".mp4"):
+            delete_uploaded_image(image_path[:-4] + ".poster.jpg")
+    except (OSError, HTTPException):
+        # A completed save must not become an error or remove files with unknown references.
+        logger.warning("Unable to clean up unreferenced catalog media.")
 
-    filename = Path(image_path).name
-    (UPLOAD_PATH / filename).unlink(missing_ok=True)
-    if image_path.endswith(".mp4"):
-        delete_uploaded_image(image_path[:-4] + ".poster.jpg")
+
+def uploaded_image_reference(image: object) -> str | None:
+    try:
+        parsed = urlsplit(str(image or ""))
+        path = unquote(parsed.path, errors="strict")
+    except (ValueError, UnicodeError):
+        return None
+    if parsed.scheme or parsed.netloc or not path.startswith("/api/uploads/"):
+        return None
+    filename = path.removeprefix("/api/uploads/")
+    if not filename or filename in (".", "..") or any(character in filename for character in '/\\:'):
+        return None
+    return path
+
+
+def home_media(item: dict[str, object]) -> list[str]:
+    images = catalog_photos(item)
+    engineering = item.get("engineering")
+    if isinstance(engineering, dict) and isinstance(engineering.get("items"), list):
+        images.extend(str(card["image"]) for card in engineering["items"] if isinstance(card, dict) and card.get("image"))
+    return images
 
 
 @app.get("/health")
@@ -703,7 +783,7 @@ def download_catalog_backup() -> StreamingResponse:
     except BackupError as error:
         if archive is not None:
             archive.close()
-        logger.warning("Catalog backup rejected: %s", error)
+        logger.warning("Catalog backup rejected.")
         raise HTTPException(status_code=409, detail=str(error)) from None
     except OSError:
         if archive is not None:
@@ -996,17 +1076,25 @@ def delete_accessory(accessory_id: int) -> dict[str, str]:
     return {"status": "deleted", "message": f"Accessory {accessory_id} deleted."}
 
 
+def unique_home_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    fields = dict(pairs)
+    if len(fields) != len(pairs):
+        raise ValueError("Duplicate saved home configuration fields.")
+    return fields
+
+
 def load_hero() -> dict[str, object]:
     try:
-        data = json.loads(HERO_PATH.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            data.pop("priceLabel", None)
+        data = json.loads(HERO_PATH.read_text(encoding="utf-8"), object_pairs_hook=unique_home_fields)
+        if not isinstance(data, dict) or not {"tag", "number", "eyebrow", "title", "image"}.issubset(data):
+            raise ValueError("Invalid saved home configuration.")
+        data.pop("priceLabel", None)
         return HeroPayload(**data).model_dump()
     except FileNotFoundError:
         return DEFAULT_HERO.model_dump()
-    except (json.JSONDecodeError, TypeError, ValueError):
-        logger.error("Invalid home banner configuration; using the default banner.")
-        return DEFAULT_HERO.model_dump()
+    except (OSError, TypeError, ValueError, RecursionError):
+        logger.error("Unable to read saved home configuration.")
+        raise HTTPException(status_code=503, detail="Saved home configuration is unavailable or invalid. No changes were made.") from None
 
 
 @app.get("/api/hero")
@@ -1024,11 +1112,19 @@ def get_admin_hero() -> dict[str, object]:
 def update_hero(request: HeroPayload) -> dict[str, object]:
     with HERO_LOCK:
         previous = load_hero()
-        updated = {key: value.strip() for key, value in request.model_dump().items()}
-        updated["image"] = updated["image"] or DEFAULT_HERO.image
-        write_json_list(HERO_PATH, updated)
-        if previous.get("image") != updated["image"]:
-            delete_uploaded_image(previous.get("image"))
+        updated = {**previous, **{
+            key: value.strip() if isinstance(value, str) else value
+            for key, value in request.model_dump(exclude_unset=True).items()
+        }}
+        if "image" in request.model_fields_set:
+            updated["image"] = updated["image"] or DEFAULT_HERO.image
+        try:
+            write_json_list(HERO_PATH, updated)
+        except OSError:
+            logger.error("Unable to save home configuration.")
+            raise HTTPException(status_code=503, detail="Unable to save home configuration. Check server storage and permissions, then retry.") from None
+        for image in set(home_media(previous)) - set(home_media(updated)):
+            delete_uploaded_image(image)
     return {"status": "updated", "item": updated}
 
 
