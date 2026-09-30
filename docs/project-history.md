@@ -2,6 +2,52 @@
 
 Last recorded: 2026-09-29
 
+## Short catalog labels deployed - 2026-09-29 Pacific
+
+Pushed application **`f62087c289e31fc876be751ff9946756737c8834`** under the
+owner's deployment authorization. Activation completed at
+`2026-09-30T00:47:36Z` (September 29, 17:47 Pacific).
+The live actions now read All products / Equipment / Accessories; short
+empty-cart links point to the matching filtered views.
+
+This was a **frontend-only** release. Source comparison confirmed no backend or
+service-definition changes. The API PID remained **124988** throughout; Caddy,
+GeoIP and analytics/report scheduling were not restarted or reconfigured.
+Protected rollback material is in `/var/backups/styl/release-f62087c`, including
+old source/build/config, data archive, analytics SQLite snapshot and the isolated
+candidate build. Linux **43 frontend unit tests and production build/TypeScript
+passed**; the preceding local targeted browser run passed 14 checks.
+
+Two operational issues were handled before activation:
+
+- A browser-terminal transfer timed out with an incomplete quoted input. No
+  deployment command was executed from it. The SSH session was renewed and the
+  existing protected release template was transformed/reviewed in short commands;
+  variables, service scope and shell syntax were checked before execution.
+- The first activation guard found catalog/media changes during the build,
+  including two formerly listed files no longer present, and correctly stopped
+  before switching services. Nothing was restored over those live edits.
+  Downloaded and verified a fresh protected catalog ZIP under the catalog lock:
+  **3 equipment, 16 accessories, 95 referenced media files**. Resumed only the
+  already-built frontend swap with the original rollback protection and unchanged
+  backend/API/config guards. Do not claim the catalog was byte-identical across
+  the whole build; concurrent edits were explicitly preserved.
+
+Live desktop Chromium, 390px phone Chromium and phone WebKit checks passed:
+short labels, >=48px targets, all three phone actions on one row, correct catalog
+filters, no horizontal overflow and correct empty-cart destinations. They passed
+again after staging cleanup, with no runtime diagnostics in these short runs and
+no server writes from the DNT-protected checks. This does not certify physical
+Safari or resolve the previously documented privacy/prefetch notices.
+
+The running build matched the protected candidate. Deployment scripts/logs were
+retained privately and temporary transfer/local helper files removed. The local
+production ZIP mirror, its machine-specific profile and all pre-existing local
+catalog edits were excluded from the push. That local mirror still represents
+the supplied 23:22:42 UTC snapshot, not the subsequent live catalog edits.
+No production catalog, email settings or credentials were overwritten and no
+test inquiry/email was submitted.
+
 ## Short mobile actions, Safari notice and local production snapshot - 2026-09-29
 
 Shortened home actions to **All products / Equipment / Accessories**, keeping
