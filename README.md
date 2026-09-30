@@ -40,6 +40,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-styl.ps1
 The script stops stale servers, starts the backend and frontend, verifies both services, and opens the product management page. If port 8000 is still reserved by Windows, it automatically selects a free API port and configures the frontend to use it.
 The local admin token is printed in the terminal when startup completes.
 
+For a verified local catalog restore, an ignored `.styl-runtime/local-catalog.json`
+can select a private absolute `dataDirectory` containing `products.json`,
+`accessories.json`, `hero.json` and `uploads/`. Both the standard starter and the
+local API task honor that profile; invalid/incomplete profiles fail explicitly.
+The local starters disable real SMTP/report sending. See
+[catalog recovery](docs/catalog-backup-and-recovery.md) for the current production
+snapshot and rollback boundaries.
+
 ### Production
 
 Follow [the minimal AWS Lightsail deployment guide](docs/lightsail-deployment.md).
@@ -192,7 +200,7 @@ continue to appear in the catalog, product details, and cart.
 Customer/admin labels use **Equipment** (an uncountable noun, not "equipments")
 and **Accessories**. The home page and header put **All products** first; it is
 the default combined view, with equipment followed by accessories in each
-catalog's saved order. **Shop equipment** and **Shop accessories** filter that
+catalog's saved order. **Equipment** and **Accessories** filter that
 same home catalog using `?catalog=equipment` / `?catalog=accessories`; reload and
 browser history preserve the choice. Existing `/accessories`, `/products/[slug]`,
 `/api/products`, `#products` and saved identifiers stay compatible.

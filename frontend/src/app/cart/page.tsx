@@ -23,7 +23,7 @@ export default function CartPage() {
       {error ? <button type="button" onClick={retry} className="mb-4 min-h-11 rounded-full border px-5">Retry current prices</button> : null}
       {loading ? <p role="status">Checking prices and availability for your location...</p> : !items.length && !error ? <section className="soft-panel rounded-3xl p-6">
         <h2 className="text-xl font-semibold">Your cart is empty.</h2>
-        <div className="mt-4 flex flex-wrap gap-3"><Link href="/#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 text-white">Shop equipment</Link><Link href="/accessories" className="inline-flex min-h-12 items-center rounded-full border px-5">Browse accessories</Link></div>
+        <div className="mt-4 flex flex-wrap gap-3"><Link href="/?catalog=equipment#products" className="inline-flex min-h-12 items-center rounded-full bg-[var(--ink)] px-5 text-white">Equipment</Link><Link href="/?catalog=accessories#products" className="inline-flex min-h-12 items-center rounded-full border px-5">Accessories</Link></div>
       </section> : <>
         <div className="grid items-start gap-8 lg:grid-cols-[1.3fr_0.7fr]">
           <section aria-label="Selected items" className="min-w-0 space-y-4">

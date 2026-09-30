@@ -87,8 +87,8 @@ export default function Home() {
             </blockquote>
             <div className="mt-5 flex flex-wrap gap-3 lg:mt-8">
               {catalogViews.map(entry => <Link key={entry.view} href={entry.href} aria-current={view === entry.view ? "page" : undefined}
-                className={`inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-5 py-3 font-medium ${view === entry.view ? "bg-[var(--ink)] text-white" : ""}`}>
-                {entry.view === "all" ? "All products" : `Shop ${entry.label.toLowerCase()}`}
+                className={`inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-3 py-3 font-medium sm:px-5 ${view === entry.view ? "bg-[var(--ink)] text-white" : ""}`}>
+                {entry.label}
               </Link>)}
             </div>
           </div>

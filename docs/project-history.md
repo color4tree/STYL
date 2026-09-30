@@ -2,6 +2,64 @@
 
 Last recorded: 2026-09-29
 
+## Short mobile actions, Safari notice and local production snapshot - 2026-09-29
+
+Shortened home actions to **All products / Equipment / Accessories**, keeping
+their existing filtered destinations. Reduced small-screen horizontal padding
+without reducing the 48px hit height; all three fit one row at 390px and wrap
+safely at narrower widths. Empty-cart links use the same short names and correct
+filtered destinations. **14 focused desktop/phone Chromium/WebKit checks passed**,
+including 320/390px layout, filter/quote navigation, empty-cart recovery and the
+existing banner/principle rules. Build/TypeScript and scoped lint passed (two
+pre-existing home-image warnings). This is targeted validation, not a new full run.
+
+The iPhone screenshot's Dismiss / Reduce Protections text is Safari-owned privacy
+compatibility UI, not a STYL agreement or a certificate-warning screen. Official
+WebKit/Apple sources describe legitimate functionality being affected and iOS 26
+fingerprinting protection extending to normal browsing; they do not document the
+exact display heuristic for that banner. App-source inspection found no banner
+text, fingerprinting SDK or direct canvas/WebGL readback; optional first-party
+analytics/Web Vitals exist but are not established as the cause. The screenshot
+shows the older two-choice header. No iPhone protections were reduced, and the
+native banner was not falsely declared reproduced/fixed by WebKit emulation.
+Source links and the remaining device-inspection steps are in the mobile guide.
+
+The supplied production archive `styl-catalog-backup-20260929T232242Z.zip`
+(28,940,527 bytes; SHA-256
+`fcdf415966870038604d89adbc062a7cbc78d6abffa62b15daeab00d91355398`)
+was verified with the trusted repository restore implementation, not by executing
+the archive's embedded Python. It was restored into the new private
+`%LOCALAPPDATA%\STYL\CatalogMirrors\production-20260929T232242Z` directory,
+outside Git/OneDrive with restricted user/SYSTEM/Administrators access.
+
+Before switching, exported and verified the current local catalog to
+`CatalogMirrors\before-production-20260929T232242Z\local-catalog.zip`:
+4 equipment, 11 accessories, 16 referenced media files. Original repository JSON/
+hero and upload directories were not overwritten. Two existing local inquiry
+files were byte-preserved in the new data directory; no production inquiries,
+credentials, email settings or analytics database were imported.
+
+The local API now reads the supplied snapshot through ignored
+`.styl-runtime/local-catalog.json`: **3 equipment, 16 accessories, 100 media**.
+All **105 manifest entries** passed file checks; all **100 HTTP upload responses**
+matched their hashes; a ZIP downloaded again from the running local API
+byte-matched **103 catalog/media payloads** against the input archive. There
+were zero bundled-image entries, so frontend static assets were not replaced.
+Authenticated API IDs/order/names/prices/photos matched restored data, and
+readonly desktop/390px browsing showed all 19 items and working accessory details.
+
+Both local launchers honor the profile with explicit absolute-path/completeness
+validation and locally disabled SMTP/report sending. **Eight isolated profile
+checks passed** without starting/stopping services via the legacy standard
+launcher. Only the verified local API task was restarted. Localhost remains
+unknown/CAD; both CAD and USD prices are present for all 19 snapshot items.
+The mirror matches the ZIP's 23:22:42 UTC catalog snapshot, not subsequent
+production edits or production geography/services.
+
+Persistent catalog/profile and rollback archives remain private; scratch scripts
+were removed. Existing local edits are retained. No commit, push, production
+deployment, real mail or production-data change was performed in this task.
+
 ## Compact All products / MSRP release deployed - 2026-09-29
 
 The owner authorized push/deploy. Verified the exact implementation fingerprint

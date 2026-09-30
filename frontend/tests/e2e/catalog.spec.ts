@@ -311,7 +311,7 @@ test("business principle is prominent in the introduction without delaying mobil
     await page.setViewportSize({ width, height: 844 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await expect(principle).toBeInViewport({ ratio: 1 });
-    await expect(page.getByRole("link", { name: "Shop equipment", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(introduction.getByRole("link", { name: "Equipment", exact: true })).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (width === 390) {
       const firstProduct = await page.locator("#products article h3").first().boundingBox();
@@ -334,7 +334,7 @@ test("home banner is hidden on phones and preserved on tablet and desktop", asyn
     }
     await expect(introduction.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(introduction.locator("blockquote")).toBeVisible();
-    await expect(introduction.getByRole("link", { name: "Shop equipment", exact: true })).toBeVisible();
+    await expect(introduction.getByRole("link", { name: "Equipment", exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
 });
@@ -401,7 +401,9 @@ test("catalog retry, unavailable images and empty cart recover visibly", async (
   await expect(page.getByRole("button", { name: "Retry image", exact: true })).toBeVisible();
   await page.goto("/cart");
   await expect(page.getByRole("heading", { name: "Your cart is empty." })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Shop equipment", exact: true })).toBeVisible();
+  await expect(page.locator("main").getByRole("link", { name: "Equipment", exact: true })).toBeVisible();
+  await expect(page.locator("main").getByRole("link", { name: "Equipment", exact: true })).toHaveAttribute("href", "/?catalog=equipment#products");
+  await expect(page.locator("main").getByRole("link", { name: "Accessories", exact: true })).toHaveAttribute("href", "/?catalog=accessories#products");
 });
 
 test("unsupported and oversized upload attempts do not submit files", async ({ page }) => {

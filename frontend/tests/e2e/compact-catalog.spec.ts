@@ -164,7 +164,7 @@ test("USR-017 AN-009: combined-catalog failure is explicit while an available sp
   await page.route("**/api/accessories", route => route.fulfill({ status: 503, json: { detail: "Synthetic unavailable accessories" } }));
   await page.goto("/");
   await expect(page.locator("#products").getByRole("alert")).toContainText("complete catalog is unavailable");
-  await page.locator("main > section").first().getByRole("link", { name: "Shop equipment", exact: true }).click();
+  await page.locator("main > section").first().getByRole("link", { name: "Equipment", exact: true }).click();
   await expect(page.locator("#products")).toHaveAttribute("data-catalog-view", "equipment");
   await expect(page.locator('#products article[data-analytics-item-type="product"]').first()).toBeVisible();
   await expect(page.locator("#products").getByRole("alert")).toHaveCount(0);

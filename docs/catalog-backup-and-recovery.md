@@ -8,6 +8,51 @@ and its data are no longer available.
 This restores **catalog content onto a clean, compatible STYL installation**.
 It is not a full AWS instance, application-source, credential or inquiry backup.
 
+## Local production-catalog mirror (2026-09-29)
+
+The owner supplied `styl-catalog-backup-20260929T232242Z.zip` for local testing.
+It was verified using the trusted repository recovery module, not by executing
+the Python file inside the archive, and restored to a new private directory:
+
+```text
+%LOCALAPPDATA%\STYL\CatalogMirrors\production-20260929T232242Z\data
+```
+
+The snapshot contains **3 equipment records, 16 accessories and 100 media files**,
+captured at `2026-09-29T23:22:42.861671+00:00`.
+Input ZIP SHA-256:
+`fcdf415966870038604d89adbc062a7cbc78d6abffa62b15daeab00d91355398`.
+All 105 manifest entries were verified; a ZIP re-exported from the running local
+API byte-matched all 103 catalog/media payloads. All 100 upload URLs served the
+matching bytes. This archive has no bundled `/images` entries, so checked-out
+static assets were not replaced.
+
+An ignored `.styl-runtime/local-catalog.json` selects this directory on future
+local API starts. The standard starter and local API task validate the absolute
+path and required files before using it. To return to the earlier local catalog,
+stop the local API, move/remove only that profile and clear any explicit
+`STYL_DATA_DIR` override, then restart with the original paths. Do not copy
+production credentials or rewrite prices to simulate a country.
+
+The previous active local catalog was exported and verified at:
+
+```text
+%LOCALAPPDATA%\STYL\CatalogMirrors\before-production-20260929T232242Z\local-catalog.zip
+```
+
+It contains 4 equipment records, 11 accessories and 16 referenced media files.
+Original repository catalog/hero files and upload directories were left intact.
+Two existing local inquiry files were preserved in the new data directory; no
+production inquiries, credentials, email settings or analytics were imported.
+The mirror root has restricted user/SYSTEM/Administrators access and is outside
+Git and OneDrive.
+
+This matches the **supplied catalog snapshot**, not every part of current
+production. Later production edits require another export. Localhost resolves
+to unknown/CAD; the snapshot has valid CAD and USD prices for all 19 items.
+Real SMTP/report sending is disabled locally, and local browsing/analytics/inquiry
+history remains local rather than pretending to be production activity.
+
 ## Included and excluded
 
 Included:

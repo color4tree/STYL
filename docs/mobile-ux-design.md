@@ -8,6 +8,37 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Safari privacy notice (2026-09-29)
+
+The owner supplied an iPhone banner offering **Dismiss / Reduce Protections**.
+This is consistent with Safari's own privacy-compatibility UI, not a STYL consent
+panel. It is distinct from a certificate/HTTPS or fraudulent-site warning and
+does not by itself prove either malicious behavior or site safety.
+
+WebKit documents that advanced protections can affect legitimate functionality,
+including tracker-request blocking and mitigations for graphics/audio/screen APIs.
+Apple announced that iOS 26 extends advanced fingerprinting protection to normal
+browsing by default; the screenshot does not establish Private Browsing mode.
+The exact banner-trigger heuristic is not documented in the reviewed sources.
+
+STYL application-source inspection found no banner text, fingerprinting SDK or
+direct canvas/WebGL readback. Optional first-party aggregate measurement and
+Web Vitals are present; this does not identify them as the banner's cause.
+The previously recorded WebKit prefetch/access-control diagnostics are not proof
+of the same issue. Do not claim a fix from emulation or recommend reducing
+customer protections simply to hide the message.
+
+If browsing works, dismiss the notice and keep protections enabled. To diagnose
+actual breakage, record iOS version/tab mode/current URL and inspect console/
+network activity with Safari's trusted-device Web Inspector. The supplied phone
+screenshot shows the older two-choice header; reload the current version before
+comparing behavior. No phone settings were changed by this work.
+
+Sources: [WebKit Private Browsing 2.0](https://webkit.org/blog/15697/private-browsing-2-0/),
+[Apple iOS 26 announcement](https://www.apple.com/newsroom/2025/06/apple-elevates-the-iphone-experience-with-ios-26/),
+[Safari security warnings](https://support.apple.com/en-us/102279),
+[Web Inspector setup](https://webkit.org/web-inspector/enabling-web-inspector/).
+
 ### Round 2 update (2026-09-26)
 
 This update supersedes the earlier currency/publication holds below:
@@ -245,7 +276,8 @@ At high zoom or short landscape heights, fall back to an in-flow action.
 Recommended order:
 
 1. Compact header.
-2. Short value proposition, business principle, and **Shop equipment**. Show the
+2. Short value proposition, business principle, and the short **All products /
+   Equipment / Accessories** actions. Show the
    promotional Home banner card only at widths of 768 CSS px and above.
 3. Product collection, with a **Browse accessories** link below 1024 CSS px.
    Hide this duplicate collection link on desktop, where the main Accessories
@@ -255,13 +287,13 @@ Recommended order:
 6. Quote form and concise contact information.
 7. Secondary brand material.
 
-Target: at 390 x 844 CSS px and default text size, Shop equipment is visible in the
+Target: at 390 x 844 CSS px and default text size, Equipment is visible in the
 initial viewport. The collection heading and first product identity should be
 reachable within one viewport-height scroll. Validate with real copy and media;
 do not meet the target by truncating essential content or shrinking text.
 
 Keep the business principle in a compact callout below the introductory copy and
-above Shop equipment. Move the expanded brand-detail presentation below the
+above the catalog actions. Move the expanded brand-detail presentation below the
 collection, keeping that content accessible rather than deleting it. Reduce the
 four-card brand sequence to a short preview with an explicit expand action.
 
@@ -405,7 +437,8 @@ Request quote must preserve product context in the inquiry form.
 - Confirm Clear cart; do not make it visually compete with Request a quote.
 - Keep the quote action reachable without scrolling through every item.
 - Preserve selections and quantities when navigating back from the quote form.
-- Show an empty state with Shop equipment and Browse accessories.
+- Show an empty state with Equipment and Accessories links to the corresponding
+  filtered catalog views.
 
 **Currency design constraint:** CAD and USD remain stored separately, while the
 requested public price display is `$` only. Never add CAD and USD amounts together
@@ -499,7 +532,7 @@ Illustrative hierarchy only; not pixel-perfect specifications.
 | Equipment for your training space|
 | Short supporting value statement |
 | [ Purposeful product image     ] |
-| [ Shop equipment               ] |
+| [ Equipment                    ] |
 |                                  |
 | Equipment       Browse accessories|
 | [ Gallery                1 / 4 ] |
@@ -654,7 +687,7 @@ keyboards, native playback, and touch gestures.
 | Scenario | Acceptance |
 | --- | --- |
 | Header/menu at 320 px | Logo, cart, and menu remain usable; no page overflow; all destinations reachable. |
-| First arrival at 390 x 844 | Shop equipment visible; first product identity reachable within one viewport-height scroll. |
+| First arrival at 390 x 844 | All products / Equipment / Accessories actions visible on one row with >=48px height; first item identity reachable within one viewport-height scroll. |
 | Long product names and prices | Wrap without hiding actions or essential information. |
 | Gallery with 0/1/12 media | Correct states, useful position feedback, no broken navigation. |
 | Swipe while browsing | Horizontal change works; vertical scrolling and browser zoom remain available. |

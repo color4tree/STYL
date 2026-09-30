@@ -89,6 +89,30 @@ if (-not (Test-Path (Join-Path $frontend "node_modules"))) {
 
 New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 
+$catalogProfile = Join-Path $runtime "local-catalog.json"
+if (Test-Path -LiteralPath $catalogProfile) {
+    $catalogSettings = Get-Content -LiteralPath $catalogProfile -Raw | ConvertFrom-Json
+    $dataDirectory = [string]$catalogSettings.dataDirectory
+    if (-not [System.IO.Path]::IsPathRooted($dataDirectory) -or [System.IO.Path]::GetFullPath($dataDirectory) -ne $dataDirectory) {
+        throw "The selected local catalog directory must be an absolute path."
+    }
+    foreach ($file in @("products.json", "accessories.json", "hero.json")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory $file) -PathType Leaf)) {
+            throw "The selected local catalog is incomplete; missing $file. Existing servers were not stopped."
+        }
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $dataDirectory "uploads") -PathType Container)) {
+        throw "The selected local catalog has no uploads directory. Existing servers were not stopped."
+    }
+    $env:STYL_DATA_DIR = $dataDirectory
+    Write-Host "Local catalog data: $dataDirectory" -ForegroundColor Cyan
+}
+$env:STYL_ANALYTICS_ENVIRONMENT = "local"
+$env:STYL_ANALYTICS_EMAIL_ENABLED = "false"
+$env:STYL_SMTP_HOST = ""
+$env:STYL_SMTP_USERNAME = ""
+$env:STYL_SMTP_PASSWORD = ""
+
 Write-Host "Stopping stale STYL servers..." -ForegroundColor Cyan
 Stop-PortProcess -Port 3000
 Stop-StylApiProcesses

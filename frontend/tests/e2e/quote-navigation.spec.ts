@@ -19,12 +19,13 @@ test("USR-011 USR-012: combined catalog filters preserve detail links and the qu
   await page.goto("/");
   await expect(page.locator("#products article").first()).toBeVisible();
   const introduction = page.locator("main > section").first();
-  const shopEquipment = introduction.getByRole("link", { name: "Shop equipment", exact: true });
-  const shopAccessories = introduction.getByRole("link", { name: "Shop accessories", exact: true });
+  const shopEquipment = introduction.getByRole("link", { name: "Equipment", exact: true });
+  const shopAccessories = introduction.getByRole("link", { name: "Accessories", exact: true });
   const shopAll = introduction.getByRole("link", { name: "All products", exact: true });
   await expect(shopAll).toHaveAttribute("href", "/#products");
   await expect(shopEquipment).toHaveAttribute("href", "/?catalog=equipment#products");
   await expect(shopAccessories).toHaveAttribute("href", "/?catalog=accessories#products");
+  await expect(introduction.getByRole("link", { name: /^Shop / })).toHaveCount(0);
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     const navigation = page.getByRole("navigation", { name: width < 1024 ? "Catalog navigation" : "Main navigation", exact: true });
@@ -42,6 +43,10 @@ test("USR-011 USR-012: combined catalog filters preserve detail links and the qu
       expect(bounds!.height).toBeGreaterThanOrEqual(48);
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+    }
+    if (width === 390) {
+      const tops = await Promise.all([shopAll, shopEquipment, shopAccessories].map(async link => (await link.boundingBox())!.y));
+      expect(Math.max(...tops) - Math.min(...tops), "short catalog actions fit one row on a 390px phone").toBeLessThanOrEqual(1);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   }
