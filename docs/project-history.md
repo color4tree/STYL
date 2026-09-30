@@ -2,6 +2,35 @@
 
 Last recorded: 2026-09-29
 
+## Photo-picker presentation deployed - 2026-09-29 Pacific
+
+Deployed **`d6d00a3192b9d4f71088142eee26549bc13d779a`** at
+`2026-09-30T05:27:30Z` (September 29, 22:27 Pacific), about 11.5 minutes after
+the request. This publishes the Choose photo presentation and the previously
+requested efficient-delivery skill/project guidance.
+
+The scoped frontend release reused the established protected deployment template,
+with reviewed revision/service checks. Backup:
+`/var/backups/styl/release-d6d00a3`. The production build/type check passed;
+only styl-web restarted. API PID **129002** remained unchanged, all five services/
+timers were active, and config/catalog/GeoIP hashes matched. No saved photos,
+text, recipients or credentials were changed.
+
+Local coverage was the new fail-fast case followed by **17 affected browser
+executions**, not a full-system rerun. Real picker opening, pointer/keyboard,
+cancellation, uploads, validation and disabled/pending behavior were tested with
+the isolated API. A readonly 390px local visual check captured the new controls.
+Live verification confirmed the updated admin JavaScript was served and admin
+sign-in/storefront pages worked at desktop/phone Chromium and phone WebKit with
+no runtime diagnostics or test server writes. Actual authenticated upload/save
+was deliberately not performed against production; physical device picker UI is
+not certified by browser automation.
+
+Candidate build-ID matched the running output; staging and deployment logs/scripts
+were moved into the protected backup, transfer files and local helper scripts
+removed. No redundant backend/full browser suite or second complete live run was
+used. Data-preservation/rollback checks and focused live verification were retained.
+
 ## Clear Home banner photo buttons - 2026-09-29 (release candidate)
 
 Replaced the unstyled native file-input presentation in the Home banner editor
