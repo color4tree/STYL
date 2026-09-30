@@ -12,8 +12,10 @@ agreed STYL task, proceed with relevant edits, debugging, reproduction tests,
 builds, lint/type checks, test reruns and safe local verification without asking
 whether each routine step should run.
 
-Use the [STYL regression skill](../styl-regression/SKILL.md) for coverage and
-validation scope. Preserve current code, user catalog data and unrelated work.
+Use [efficient delivery](../styl-efficient-delivery/SKILL.md) for fail-fast
+iteration, impact-based test selection and avoiding redundant work. Use the
+[STYL regression skill](../styl-regression/SKILL.md) for coverage maintenance,
+evidence and full-regression requirements. Preserve current code, user catalog data and unrelated work.
 Keep development on `main` unless the user requests otherwise.
 
 ## Execution

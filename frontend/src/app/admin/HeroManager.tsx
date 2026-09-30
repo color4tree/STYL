@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { Upload } from "lucide-react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import { changedHeroFields, defaultHero, fetchHero, isEngineeringImage, parseHero, type EngineeringCard, type Hero } from "@/lib/hero";
 import { AdminNotice, AdminSaveBar, inputClass, type AdminMessage } from "./AdminFields";
@@ -13,6 +14,23 @@ const textFields: { key: "tag" | "number" | "eyebrow" | "title"; label: string; 
   { key: "eyebrow", label: "Small heading", maxLength: 60 },
   { key: "title", label: "Title", maxLength: 80 },
 ];
+
+function PhotoPicker({ label, buttonLabel, onChange }: {
+  label: string; buttonLabel: string; onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const hint = useId();
+  return <div className="min-w-0 rounded-2xl border border-dashed border-[var(--line)] bg-neutral-50 p-4">
+    <p className="text-sm font-medium">{label}</p>
+    <input ref={input} type="file" aria-label={label} accept="image/jpeg,image/png,image/webp,image/gif" onChange={onChange} hidden />
+    <button type="button" aria-label={buttonLabel} aria-describedby={hint} onClick={() => input.current?.click()}
+      className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[var(--ink)] bg-white px-5 py-3 text-sm font-semibold text-[var(--ink)] hover:bg-neutral-100 disabled:opacity-50 sm:w-auto">
+      <Upload size={18} aria-hidden="true" />
+      Choose photo
+    </button>
+    <p id={hint} className="mt-2 text-xs leading-5 text-[var(--muted)]">Click to choose or replace a photo. JPG, PNG, WebP or GIF up to 8 MiB. Choose Save changes to publish.</p>
+  </div>;
+}
 
 export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }: { adminToken: string; onBusyChange: (busy: boolean) => void; onDirtyChange: (dirty: boolean) => void }) {
   const [form, setForm] = useState<Hero>(defaultHero);
@@ -124,10 +142,7 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
             <input value={form[field.key]} maxLength={field.maxLength} onChange={(event) => updateField(field.key, event.target.value)} className={inputClass} />
           </label>)}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium">Banner photo
-              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={event => void uploadImage(event)} className="mt-3 block min-h-12 w-full min-w-0 text-sm" />
-            </label>
-            <p className="mt-2 text-sm text-[var(--muted)]">JPG, PNG, WebP, or GIF up to 8 MiB.</p>
+            <PhotoPicker label="Banner photo" buttonLabel="Choose banner photo" onChange={event => void uploadImage(event)} />
             <label className="mt-4 block text-sm font-medium">Banner image URL or path
               <input value={form.image} maxLength={500} onChange={(event) => updateField("image", event.target.value)} className={inputClass} />
             </label>
@@ -156,10 +171,7 @@ export default function HeroManager({ adminToken, onBusyChange, onDirtyChange }:
             <label className="mt-4 block text-sm font-medium">Card {index + 1} description
               <textarea aria-label={`Card ${index + 1} description`} value={item.description} maxLength={2000} rows={3} onChange={event => updateCard(index, "description", event.target.value)} className={`${inputClass} text-base`} />
             </label>
-            <label className="mt-4 block text-sm font-medium">Card {index + 1} photo
-              <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={event => void uploadImage(event, index)} className="mt-2 block min-h-12 w-full min-w-0 text-sm" />
-            </label>
-            <p className="mt-2 text-xs text-[var(--muted)]">JPG, PNG, WebP or GIF, up to 8 MiB. Uploading does not publish until you save.</p>
+            <div className="mt-4"><PhotoPicker label={`Card ${index + 1} photo`} buttonLabel={`Choose photo for engineering card ${index + 1}`} onChange={event => void uploadImage(event, index)} /></div>
             <label className="mt-4 block text-sm font-medium">Card {index + 1} image URL or path
               <input value={item.image} maxLength={500} onChange={event => updateCard(index, "image", event.target.value)} className={inputClass} />
             </label>

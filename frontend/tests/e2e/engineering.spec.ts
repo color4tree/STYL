@@ -27,6 +27,45 @@ async function openEditor(page: Page) {
   await expect(page.getByLabel("Engineering section heading", { exact: true })).toBeEnabled();
 }
 
+test("ADM-013: clear photo buttons open the picker by pointer and keyboard without publishing", async ({ page, request }) => {
+  await openEditor(page);
+  const buttons = page.getByRole("button", { name: /^Choose (banner photo|photo for engineering card [1-4])$/ });
+  await expect(buttons).toHaveCount(5);
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const button of await buttons.all()) {
+      await expect(button).toBeVisible();
+      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+      await expect(button).toHaveText("Choose photo");
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  const previous = await page.getByLabel("Banner image URL or path", { exact: true }).inputValue();
+  const cancelled = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose banner photo", exact: true }).click();
+  await (await cancelled).setFiles([]);
+  await expect(page.getByLabel("Banner image URL or path", { exact: true })).toHaveValue(previous);
+
+  const before = (await (await request.get(`${api}/api/admin/hero`, { headers })).json()).item;
+  for (const [buttonName, field, keyboard] of [
+    ["Choose banner photo", "Banner image URL or path", false],
+    ["Choose photo for engineering card 2", "Card 2 image URL or path", true],
+  ] as const) {
+    const button = page.getByRole("button", { name: buttonName, exact: true });
+    const chosen = page.waitForEvent("filechooser");
+    if (keyboard) { await button.focus(); await expect(button).toBeFocused(); await button.press("Enter"); }
+    else await button.click();
+    const upload = page.waitForResponse(response => response.url().endsWith("/api/uploads/product-image") && response.request().method() === "POST");
+    await (await chosen).setFiles({ name: "chosen-photo.png", mimeType: "image/png", buffer: png });
+    const response = await upload;
+    expect(response.status()).toBe(200);
+    const image = (await response.json()).image;
+    await expect(page.getByLabel(field, { exact: true })).toHaveValue(image);
+    await expect(button).toBeEnabled();
+  }
+  expect((await (await request.get(`${api}/api/admin/hero`, { headers })).json()).item).toEqual(before);
+});
+
 test("ADM-013 USR-019: engineering text and uploaded photo save, reload and render in the existing public layout", async ({ page, request }, info) => {
   const original = originals.get(info.testId)!;
   await openEditor(page);
@@ -140,6 +179,8 @@ test("ADM-013: pending engineering save blocks overlapping edits and unavailable
     await expect(page.getByLabel("Card 1 title", { exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Equipment", exact: true })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Saving...", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Choose banner photo", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Choose photo for engineering card 1", exact: true })).toBeDisabled();
   } finally { release(); }
   await expect(page.locator("main").getByRole("status").filter({ hasText: "saved successfully" })).toBeVisible();
 });

@@ -18,6 +18,12 @@ automatic rewrite of saved content. The public section retains its disclosure
 control and remains usable on mobile; top-banner mobile hiding is unchanged.
 
 Editors can upload JPG/PNG/WebP/GIF up to 8 MiB or enter an image URL/path.
+Banner and engineering photo inputs use a prominent outlined **Choose photo**
+button with an upload icon and short format/save instructions inside a bordered
+panel, rather than an unstyled "Choose file / No file chosen" line. Keep the
+underlying native picker, descriptive accessible names, keyboard operation,
+>=48px targets and disabled state during saves/uploads. Cancelling keeps the
+existing image; selecting uploads a draft replacement but does not publish.
 Show previews without crashing while a URL is partly typed. Keep visible labels,
 stable textarea accessible names, multiline wrapping, >=48px actions and no
 horizontal overflow at 320px. A single Save changes action publishes changes;

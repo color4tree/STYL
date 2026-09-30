@@ -1,5 +1,10 @@
 # STYL project testing instructions
 
+- Apply the [efficient-delivery skill](skills/styl-efficient-delivery/SKILL.md)
+  to STYL development, debugging, test selection and approved deployments.
+  Classify change impact first; iterate on the smallest relevant case in one
+  browser with fail-fast enabled, then run the required final scope. Do not
+  repeat unchanged builds/full suites or replace evidence with blind retries.
 - Follow the [autonomous testing workflow](skills/styl-autonomous-testing/SKILL.md)
   for routine execution already authorized by the user. It avoids repeated
   conversational permission questions, but does not override native tool approvals.
@@ -9,6 +14,11 @@
   Default to the full active plan and all configured automated suites/browser
   projects, not only the latest changed feature. An explicitly narrower user
   request takes precedence and must be reported as targeted.
+- A plain push/deploy request is not itself a request for full-system regression.
+  Use the [run-selection policy](../docs/regression-test-plan.md#6-when-to-run-which-regression-set):
+  focused coverage for bounded low-risk changes, full coverage for shared/high-risk
+  changes or an explicit full/comprehensive verification request. Keep backups,
+  privacy/data protection and live verification mandatory for approved releases.
 - When implementing any feature, function, enhancement, or bug fix, follow the
   skill's coverage-maintenance workflow: add/update relevant executable tests and
   stable plan cases, including system and end-user expectations. Maintain the

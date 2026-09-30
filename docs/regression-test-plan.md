@@ -239,13 +239,30 @@ without exposing credentials or raw visitor IPs.
 
 ## 6. When to run which regression set
 
+The 2026-09-29 workflow clarification replaces the blanket requirement to run
+every suite before any push. Use the
+[efficient-delivery skill](../.github/skills/styl-efficient-delivery/SKILL.md):
+classify impact first, fail fast on one relevant case/browser during iteration,
+and then run the final scope below. Explicit full/comprehensive verification and
+shared/high-risk changes retain full coverage; speed does not excuse incomplete
+evidence or weakened assertions.
+
 | Run | Trigger | Minimum scope |
 | --- | --- | --- |
+| Documentation/skill checks | Documentation or workflow-guidance only | Content/link/whitespace checks and existing documentation tests; no application suite solely for this change |
 | Change-focused | Each functional change | Related cases at both layers plus direct downstream consumers |
-| Core smoke | Before handing off a functional build | Authentication, normal create/save/reload, one price/visibility check, browsing/cart/inquiry, banner/navigation |
-| Full code regression | Before merging/pushing a release candidate, or after broad shared-model/UI changes | Backend suite, frontend unit suite, lint, type/build, entire configured E2E suite; examine warnings |
-| Staging release regression | Before deploying a release changing pricing, persistence, proxy, media, or delivery | Full code pass plus applicable physical-device and operational P0/P1 cases |
+| Low-risk UI release | Isolated wording/style/page-layout changes | Affected desktop/mobile navigation and layout checks, relevant lint/type/build; no unrelated backend suite |
+| Core smoke | Before handing off a functional build | Affected core journeys; broaden to auth/create/save/reload/pricing/cart/inquiry/banner when those consumers are impacted |
+| Full code regression | Explicit full/comprehensive verification, or shared/high-risk changes | Backend suite, frontend unit suite, lint, type/build, entire configured E2E suite; examine warnings |
+| High-risk staging release | Changes to auth/privacy/pricing/shared persistence/media deletion/recovery/proxy trust/delivery, or broad shared UI | Full code pass plus applicable physical-device and operational P0/P1 cases; unavailable checks remain Blocked/Not run |
 | Post-deploy smoke | After deployment | Verify actual deployed revision, health, region pricing/no-store, public visibility, media and approved inquiry flow |
+
+Deploy authorization does not itself request a full regression or a real email.
+Use the scoped gate unless impact or an agreed release requirement calls for the
+full baseline. The current E2E runner still rebuilds on each invocation: do not
+pretend build reuse is configured. A future reuse path must verify the candidate,
+dependencies/toolchain and build environment while keeping API fixtures isolated.
+Keep one worker until shared fixture/service dependencies are deliberately isolated.
 
 Examples of impact selection:
 
@@ -432,6 +449,11 @@ save/reload and inspect public output. Exercise partial image URLs, invalid MIME
 8 MiB boundary, 503/retry, pending-save duplicate prevention, tab guards and Backup
 return. Expected: previews/values retained, no publish before save, current banner
 preserved, no 320px overflow; E-HOME and hero unit coverage.
+Photo-button coverage: banner and all four cards expose a visible >=48px
+**Choose photo** control. Pointer and keyboard open the actual native file picker;
+cancellation preserves the image, successful selection updates the draft path
+without publishing, invalid files remain blocked, and save/upload busy states
+disable overlapping choices. E-HOME covers desktop/phone Chromium and WebKit.
 
 ## 9. Customer end-user test catalog
 

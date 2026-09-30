@@ -2,6 +2,55 @@
 
 Last recorded: 2026-09-29
 
+## Clear Home banner photo buttons - 2026-09-29 (release candidate)
+
+Replaced the unstyled native file-input presentation in the Home banner editor
+and its four engineering cards with explicit **Choose photo** buttons, upload
+icons and concise format/save guidance. Native file selection, 8 MiB/type limits,
+image previews, error reporting, draft-before-save behavior and busy guards are
+unchanged. The hidden native inputs keep their existing accessible labels for
+test/assistive identification; visible buttons have distinct descriptive names.
+
+Applied the new efficient-delivery guidance: scoped this as a bounded frontend
+presentation change, not shared storage/media cleanup. One desktop first-case
+run passed in **46.8 seconds** including its build. The final affected matrix
+passed **17 executions in 48.5 seconds**, including desktop/phone Chromium and
+phone WebKit: actual chooser pointer/keyboard activation, cancellation, draft
+upload/no publish, validation, save/reload/public display, failed-save recovery
+and disabled pending controls. Build/TypeScript and scoped lint/editor checks
+passed with one existing banner image warning. No unrelated backend/full-system
+suite was launched. Inspected only known generated artifacts before removing
+OneDrive-blocked build output.
+
+The previously requested efficient-delivery skill and linked project/regression
+guidance are included with this release's documentation. They do not alter tool
+approvals, worker isolation or runtime behavior. Production rollout evidence
+follows after deployment; local catalog/mirror content remains excluded.
+
+## Durable efficient-delivery workflow - 2026-09-29
+
+Added the project `styl-efficient-delivery` skill at the owner's request and
+linked it from project instructions and the existing autonomous/regression
+skills. The living plan now explicitly selects verification by impact instead
+of requiring every suite for every push: documentation checks for guidance-only
+work, affected desktop/mobile checks for isolated UI changes, downstream tests
+for bounded features, and full regression for explicit comprehensive requests
+or shared/high-risk changes.
+
+The skill requires one relevant case/browser and `--max-failures=1` during
+iteration, diagnosis before retries, use of established helpers/readiness checks,
+coherent edits, no duplicate full runs/builds without a reason, preserved fixture
+isolation and actual phase timings. Backups, authorization boundaries, rollback
+preparation and live verification remain. High-risk media cleanup/recovery,
+pricing, auth/privacy and shared persistence are not downgraded to smoke tests.
+
+This changes persistent project guidance, not Playwright's default commands,
+worker count, build cache, VS Code approvals, workspace location or SSH/CI
+configuration. Guarded artifact reuse and infrastructure setup remain future
+work. Checked Markdown links, front matter and whitespace only; no application
+suite or deployment was triggered by creating the skill. Local catalog data
+was not touched, and these workflow edits have not been committed/pushed.
+
 ## Engineering editor deployed and workflow review - 2026-09-29 Pacific
 
 Deployed **`efb3f5c1a5a7b5a33fc3acbc55a87b61ae0fe611`** at

@@ -26,6 +26,12 @@ future work, not a claim that all those features exist today.
 
 ## Choose the workflow
 
+Use the [efficient-delivery skill](../styl-efficient-delivery/SKILL.md) to select
+the initial scope and fail fast while developing. A plain request to implement,
+push or deploy is not automatically comprehensive regression; shared/high-risk
+changes and explicit full/comprehensive verification still require the full
+baseline and applicable plan checks. Follow the living plan's run-selection policy.
+
 ### Full regression
 
 Use this mode when the user asks to "do regression", "run regression", "regression
@@ -41,7 +47,9 @@ Use this mode whenever implementing a new feature, function, enhancement, or bug
 fix, even if the user does not explicitly mention testing.
 
 Update the plan and executable tests as part of the change. Run the smallest
-meaningful validation during implementation; run the full-regression mode when
+meaningful validation during implementation, initially in one relevant browser
+with `--max-failures=1` for Playwright. After that case is stable, run affected
+configured browser projects and direct downstream checks. Run the full-regression mode when
 explicitly requested or required for the agreed release verification.
 Creating or editing this skill is not itself an instruction to launch a full
 application regression.
