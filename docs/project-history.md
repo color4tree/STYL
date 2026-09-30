@@ -2,6 +2,58 @@
 
 Last recorded: 2026-09-29
 
+## Engineering editor deployed and workflow review - 2026-09-29 Pacific
+
+Deployed **`efb3f5c1a5a7b5a33fc3acbc55a87b61ae0fe611`** at
+`2026-09-30T04:15:29Z` (September 29, 21:15 Pacific), under the owner's explicit
+develop/test/deploy request. Protected backup:
+`/var/backups/styl/release-efb3f5c`. Linux passed **204 backend tests, 48 frontend
+units and the production build/TypeScript check** before web/API activation.
+The report timer was paused around activation, waiting for any in-flight job
+instead of interrupting it, and resumed. Catalog, environment and GeoIP checksums
+matched; no saved homepage content was automatically rewritten.
+
+The authenticated production hero API returned the four-card configuration.
+A new private recovery ZIP verified successfully with **3 equipment records,
+16 accessories and 99 referenced media files**, including the four engineering
+images. Live desktop Chromium, phone Chromium and phone WebKit checks confirmed
+the API-backed heading/text, all images, responsive layout, disclosure behavior
+and unchanged top-banner hiding. Final checks after staging cleanup had no runtime
+diagnostics or server writes. No creative test content was saved on production.
+Build-ID comparison matched the running and staged artifacts; stage/scripts/logs
+were moved into the protected backup and scratch scripts removed.
+
+Live-check corrections were verification issues, not product fixes: image URLs
+were compared by normalized URL identity rather than relative/absolute spelling;
+lazy images were scrolled into view before checking load completion. Physical
+iPhone behavior and the earlier native Safari notice remain separate.
+
+The owner requested an explanation of elapsed time. Activation was about
+71 minutes after the request; final verification followed. Observable testing
+costs included the initial targeted run (**4.9 minutes**, three 60-second textarea
+locator timeouts), corrected targeted run (**1.5 minutes**) and the full
+271-execution browser matrix (**10 minutes**). The Linux backend/unit checks
+themselves took seconds. The remaining time was implementation, integration,
+repeated local probes, documentation and browser-terminal deployment operations;
+it was not precisely profiled and should not be assigned invented percentages.
+
+Necessary scope included persistence/validation, uploads, shared-file retention,
+legacy compatibility and recoverability, not just four HTML inputs. Avoidable
+overhead included testing a broken first case across all browsers before stopping,
+repeated browser-state injection probes instead of the normal sign-in helper,
+extra one-off verification scripts/URL assumptions, OneDrive-generated artifact
+handling, and manual browser-SSH command/screenshot round trips.
+
+Next-workflow improvements: fail fast on the new case in one browser during
+iteration, run the affected multi-browser group once after it is stable, and use
+full-system regression deliberately for requested/broad high-risk changes rather
+than reflexively for every small UI task. Reuse builds when the application
+candidate has not changed, use existing auth/test helpers, and batch inspection/
+edits. A clone outside OneDrive and a reviewed direct-SSH/CI release path would
+remove recurring infrastructure overhead, but require a separate setup decision;
+no credentials, approval settings, system networking or workspace relocation were
+changed as part of this review. Retain validation, backups and live verification.
+
 ## Configurable engineering details - 2026-09-29 Pacific
 
 The owner requested development, testing and deployment of an editable version
