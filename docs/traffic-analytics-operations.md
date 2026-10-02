@@ -30,8 +30,11 @@ Requirements: [English](traffic-analytics-requirements.md) /
 - Preserve a prior explicit decline as opt-out; honor DNT/GPC/admin/internal/bot
   exclusions. Clear retired visitor/session/lease keys without clearing privacy
   choices, essential cart data or administrator credentials.
-- Report timezone: **America/Los_Angeles**; daily schedule: **08:00**, for the
-  preceding local calendar day. IANA timezone rules handle daylight saving.
+- Report timezone: **America/Los_Angeles**; daily schedule: **00:15 (12:15 AM
+  Pacific)** early the next day, for the preceding completed local calendar day,
+  never the current day. IANA timezone rules handle daylight saving. Before
+  00:15 the latest due report is two calendar days ago; at/after 00:15 it is
+  yesterday. Previews still exclude the incomplete hour.
 - Real analytics email is disabled in local/test/staging. Recipients are
   **not yet approved** and must be configured separately from inquiry recipients.
 - Privacy review for served jurisdictions is a release gate. Self-hosted
@@ -332,8 +335,18 @@ Existing templates:
 [service](../deploy/styl-analytics-report.service) /
 [timer](../deploy/styl-analytics-report.timer).
 They were installed during the approved `a611b4e` production rollout.
-The timer checks every 15 minutes; the job handles the 08:00 Pacific boundary,
-mail retry rules, retention and restart catch-up without sending on every tick.
+The timer already checks every 15 minutes, including :15; no timer change is
+needed. The updated job uses the **00:15 America/Los_Angeles (12:15 AM Pacific)**
+boundary for the previous completed calendar day. Before 00:15, the latest due
+date remains two days ago. A delayed restart processes only the latest due date;
+it does not backfill every missed day. Persisted snapshots and per-recipient
+claims prevent accepted/ambiguous mail from being sent again on later ticks or
+DST clock changes; report version, retry rules and no-age-expiry retention stay
+unchanged.
+This schedule change is **local only, not deployed**; the existing production
+installation is not evidence of the new schedule. Deployment/enablement requires
+separate approval, and actual SMTP/inbox delivery is **not certified** by mocked
+tests. No real recipient settings were changed.
 The first manual run and next scheduled run succeeded with email sending disabled.
 No recipient delivery has been attempted. Before enabling actual mail, retain the
 remaining privacy/recipient/inbox-verification gates below.

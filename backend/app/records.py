@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 OPERATIONS = Lock()
 RESERVE_BYTES = 128 * 1024 * 1024
 REMOVABLE_TABLES = ("analytics_aggregate_counts", "analytics_aggregate_items")
+KNOWLEDGE_SUFFIXES = (".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".mp4", ".mov", ".webm", ".m4v", ".mkv", ".avi")
 
 
 class RemovalFailed(RecordsError):
@@ -218,7 +219,7 @@ def add_file(archive: zipfile.ZipFile, path: Path, name: str, removable: bool) -
 
 
 def create_backup() -> dict:
-    from app import main, support
+    from app import knowledge, main, support
     root = records_directory()
     logs = log_directory()
     log_files = source_files(logs, (".log", ".jsonl", ".active", ".gz")) if logs is not None else []
@@ -231,6 +232,11 @@ def create_backup() -> dict:
     include_support = support_path.exists()
     if include_support:
         estimated += regular_file(support_path).st_size
+    knowledge_directory = private_directory(os.getenv("STYL_KNOWLEDGE_DIR", str(support_path.parent / "knowledge")))
+    knowledge_files = source_files(knowledge_directory, KNOWLEDGE_SUFFIXES)
+    if any(not re.fullmatch(r"[a-f0-9]{64}\.(?:pdf|docx|txt|md|png|jpg|jpeg|webp|gif|svg|mp4|mov|webm|m4v|mkv|avi)", source.name) for source in knowledge_files):
+        raise RecordsError("Unexpected knowledge source filename; review private storage before backup.")
+    estimated += sum(regular_file(source).st_size for source in knowledge_files)
     if shutil.disk_usage(root).free < estimated * 2 + RESERVE_BYTES:
         raise RecordsError("Insufficient space to safely prepare a backup. Add storage; no records were deleted.")
     identifier = uuid4().hex
@@ -238,7 +244,8 @@ def create_backup() -> dict:
     manifest = {
         "format": FORMAT, "version": 1, "id": identifier, "createdAt": created,
         "cutoff": analytics.stamp(analytics.hour_start(datetime.fromisoformat(created))),
-        "websiteLogsConfigured": logs is not None, "supportIncluded": include_support, "files": [],
+        "websiteLogsConfigured": logs is not None, "supportIncluded": include_support,
+        "knowledgeIncluded": bool(knowledge_files), "files": [],
     }
     path = root / f"styl-records-{identifier}.zip"
     with TemporaryDirectory(prefix="prepare-", dir=root) as temporary:
@@ -253,6 +260,7 @@ def create_backup() -> dict:
             tables = [row[0] for row in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'") if re.fullmatch(r"analytics_[a-z_]+", row[0])]
             analytics_rows = sum(snapshot.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0] for table in tables)
         support_counts = {"supportConversations": 0, "supportMessages": 0}
+        required_knowledge: set[str] = set()
         support_snapshot = work / "support.sqlite3"
         if include_support:
             # A separate readonly connection avoids copying from SupportStore's open write transaction.
@@ -267,11 +275,24 @@ def create_backup() -> dict:
                     raise RecordsError("Support snapshot integrity check failed.")
                 support_counts["supportConversations"] = snapshot.execute("SELECT count(*) FROM conversations").fetchone()[0]
                 support_counts["supportMessages"] = snapshot.execute("SELECT count(*) FROM messages").fetchone()[0]
+                required_knowledge = knowledge.backup_blob_names(snapshot)
         candidate = work / "records.zip"
         with zipfile.ZipFile(candidate, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as archive:
             manifest["files"].append(add_file(archive, database, "analytics.sqlite3", False))
             if include_support:
                 manifest["files"].append(add_file(archive, support_snapshot, "support.sqlite3", False))
+            # Immutable source copies are published before their database references.
+            # Include every stored version; no age-based or unreferenced-file purge.
+            for source in source_files(knowledge_directory, KNOWLEDGE_SUFFIXES):
+                record = add_file(archive, source, "knowledge/" + source.name, False)
+                if record["sha256"] != source.stem:
+                    raise RecordsError("A stored knowledge source failed its content hash; repair it before creating a backup.")
+                manifest["files"].append(record)
+            copied_knowledge = {record["path"].removeprefix("knowledge/") for record in manifest["files"] if record["path"].startswith("knowledge/")}
+            if not required_knowledge.issubset(copied_knowledge):
+                raise RecordsError("A referenced knowledge source is missing. Restore it before creating a complete backup.")
+            manifest["knowledgeIncluded"] = bool(copied_knowledge)
+            manifest["knowledgeRequiredFiles"] = sorted("knowledge/" + name for name in required_knowledge)
             manifest["files"].append(add_file(archive, Path(records_archive.__file__), "restore_records.py", False))
             with main.INQUIRY_LOCK:
                 for source in source_files(main.INQUIRIES_PATH, (".json",)):
@@ -290,7 +311,8 @@ def create_backup() -> dict:
     value = {
         "id": identifier, "filename": path.name, "createdAt": created, "bytes": size, "sha256": checksum,
         "counts": {"inquiries": sum(record["path"].startswith("inquiries/") for record in manifest["files"]),
-                   "analyticsRows": analytics_rows, "websiteLogs": len(log_files), **support_counts},
+                   "analyticsRows": analytics_rows, "websiteLogs": len(log_files), **support_counts,
+                   "knowledgeFiles": sum(record["path"].startswith("knowledge/") for record in manifest["files"])},
         "verifiedAt": None, "removedAt": None, "removal": None, "archiveDeletedAt": None,
     }
     save_archive(value)
@@ -328,7 +350,14 @@ def remove_support(snapshot: Path) -> tuple[int, int]:
     removed = skipped = 0
     with closing(sqlite3.connect(snapshot)) as source, support.get_store().connection() as target:
         source.row_factory = sqlite3.Row
-        for table in ("conversations", "messages", "jobs"):
+        source_tables = {row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        target_tables = {row[0] for row in target.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if ("conversation_contacts" in source_tables) != ("conversation_contacts" in target_tables):
+            raise RecordsError("Support contact schema changed since backup; create a fresh backup.")
+        children = [("messages", "id"), ("jobs", "id")]
+        if "conversation_contacts" in source_tables:
+            children.append(("conversation_contacts", "conversation_id"))
+        for table in ("conversations", *(name for name, _order in children)):
             if [tuple(row) for row in source.execute(f"PRAGMA table_info({table})")] != [tuple(row) for row in target.execute(f"PRAGMA table_info({table})")]:
                 raise RecordsError("Support schema changed since backup; create a fresh backup.")
         for conversation in source.execute("SELECT * FROM conversations"):
@@ -337,9 +366,9 @@ def remove_support(snapshot: Path) -> tuple[int, int]:
             unchanged = current is not None and tuple(current) == tuple(conversation)
             eligible = conversation["state"] == "closed" and unchanged
             if eligible:
-                for table in ("messages", "jobs"):
-                    previous = [tuple(row) for row in source.execute(f"SELECT * FROM {table} WHERE conversation_id=? ORDER BY id", (identifier,))]
-                    latest = [tuple(row) for row in target.execute(f"SELECT * FROM {table} WHERE conversation_id=? ORDER BY id", (identifier,))]
+                for table, order in children:
+                    previous = [tuple(row) for row in source.execute(f"SELECT * FROM {table} WHERE conversation_id=? ORDER BY {order}", (identifier,))]
+                    latest = [tuple(row) for row in target.execute(f"SELECT * FROM {table} WHERE conversation_id=? ORDER BY {order}", (identifier,))]
                     if previous != latest:
                         eligible = False
                         break

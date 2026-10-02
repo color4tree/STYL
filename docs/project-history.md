@@ -1,6 +1,605 @@
 # STYL project history and handoff
 
-Last recorded: 2026-09-30
+Last recorded: 2026-10-01
+
+## Catalog-wide factual answer plans and partial publication - 2026-10-01
+
+The owner approved the reviewed accuracy plan with an explicit requirement:
+apply it to **every product/accessory and all public catalog information**, not
+only the Dip example or compatibility. Implemented a pure generic field registry
+and validated answer-plan engine, retaining the existing catalog, provider
+adapters, approved document library, private contacts and local-only deployment
+boundary. No proposed design-seed facts were written into the catalog.
+
+Supported planning covers identity/category/brand, descriptions/features,
+prices/MSRP, colours/finish/component colours, materials/components, dimensions,
+own weight, explicitly documented capacity/resistance, included contents,
+selling units/quantities, models/SKUs, stock/warranty/notes and compatibility
+fields. A known price/weight/material remains visible when another requested
+field is unknown. Partial answers can coexist with a team-attention flag;
+previously the publication layer discarded all useful text on that flag.
+Composite product/FAQ plans validate both the nested catalog plan and current
+approved policy evidence, including exact final text and references.
+
+Direct requirements are distinct from customer-specific fit checks. The original
+question “what the compatible upright size” now returns listed upright and hole
+facts without a model call, customer rack-model demand or unnecessary team flag.
+Conditional fit asks for missing customer measurements; numeric mismatches,
+nominal-versus-measured labels and unverified exact-model fit remain distinct.
+Hole requirements never supply unknown pin diameter/length, and own/component
+weight never becomes the product's safe load.
+
+Review found unsafe affirmative extraction from negated/hypothetical/historical
+prose and another component's “weighs” statement. Those projections were fixed
+and covered by publication tests. Component colour/material maps now retain
+independent known, unknown and conflicting values instead of collapsing them.
+Described finish is not automatically promoted to available colour choices.
+MSRP remains an answerable catalog fact even when it is not above selling price;
+the storefront's higher-only strike-through rule is unchanged.
+
+Schema four adds private `jobs.answer_plan_json` and `page_context_version`.
+Exact rendered answers/plans are validated against refreshed eligible sources
+again under the publication lock. Pending measurement context requires the
+latest relevant question, matching captured page version, no intervening team
+answer, and at most 30 minutes of inactivity; no messages/documents are deleted
+by this interpretation timeout. Retries keep their original page stamp and
+accepted work is not cancelled by navigation. Legacy unstamped receipt hashes
+remain compatible.
+
+Protected pre-migration backup:
+`%LOCALAPPDATA%\STYL\AI\migration-backups\before-catalog-answer-plans-20261001T220937Z.sqlite3`.
+It was still current with zero active jobs immediately before activation, so no
+redundant snapshot was needed. Old settings/message/conversation/contact/source/
+job columns were compared unchanged after migration and integrity was OK.
+
+### Accuracy and verification evidence
+
+The generic tests include 150 synthetic field-matrix cases and a separate
+100-question synthetic language benchmark across multiple product categories.
+These are executable review fixtures, not an owner-labeled real-customer
+accuracy percentage.
+
+A read-only consistency sweep covered **all 19 currently eligible local catalog
+items and all 224 populated public fields**. Every requested field was answered
+and its plan validated without invoking the mock provider. Initial gaps exposed
+description/overview requests unnecessarily using model selection and two
+storage-peg entries with the same display name. Explicit field lookups are now
+direct; a validated current page disambiguates identical titles without merging
+records or selecting one arbitrarily outside that context. Evidence is retained
+privately as `catalog-all-fields-consistency.json`.
+
+Actual local API probes verified:
+- Colour/material partial answers retain published material when colour is absent.
+- Bench own weight remains visible alongside unknown safe load.
+- The exact reported upright question returns both source-stated size and hole
+  requirement as a complete listed-facts answer, with no customer measurements.
+- Current Dip price remains visible alongside unknown own weight.
+
+All were provider-free checks; only the new verification threads were closed.
+The first full browser attempt was deliberately stopped after a local probe
+revealed a WH-question grammar variant still being treated as personal fit.
+The classifier and direct listed-requirements status were corrected, all three
+browser variants passed the expanded case, and a new full matrix was started.
+The exact interrupted fixture was identified by its owned API PID and removed.
+
+Further integration evidence caught lost conversation identity after leaving an
+item page: prior deterministic replies were not available to the new planner's
+user-only history resolution. The server now carries validated prior assistant
+catalog references as internal context, not arbitrary team-reply text, and keeps
+them out of provider metadata. Leaving a page retains conversational identity
+without reviving old measurement slots. An explicitly named pin measurement also
+cannot fill a pending hole-diameter slot; only an unlabeled measurement can use
+that narrowly scoped interpretation.
+
+Final candidate: base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 65 changed
+backend/frontend/credential-helper source/test/config files, excluding owner
+catalog data/docs. Sorted path/NUL/content/NUL SHA-256:
+`3e56a307e03640844c1e4a0ed9df636b5e8d42556012ccb54a9ea74e2391fa0e`.
+
+Frontend units: **48 passed**, 1.31s. Build/type/editor/whitespace validation passed;
+lint had zero errors and four existing image warnings. The full 520-browser
+attempt ended with **516 passed, 4 failed**, 36.5m: three instances of the identity
+continuation bug above, plus one generated document title whose all-numeric
+random suffix correctly triggered the private-phone-data guard. Fixture IDs are
+now alphabetic without reducing their entropy. All **12 document/continuation
+reruns passed**, 2.4m, then all **78 affected catalog/context browser cases passed**,
+6.4m, across all configured projects. This is not represented as one clean full
+520-test invocation.
+
+The final full backend baseline passed **807 tests**, 183.513s; the final
+measurement-boundary/plan/provider set passed **336 tests**, 13.735s. Physical device/assistive-tech behavior, exact tested fit,
+owner verification of missing catalog claims, real-customer language accuracy,
+production rollout and live-provider extraction remain separate gates. No commit,
+push, deployment, live provider call, billing change, original catalog rewrite or
+real email was performed for this accuracy upgrade.
+
+## Document library, general service Q&A and detail-page context - 2026-10-01
+
+The owner requested visible upload errors/statistics, consistent file/upload
+buttons, omitted-brand/flexible product matching, an All assignment control, and
+chat context from the current detail page. Clarified and approved both product
+documents and independent general customer-service Q&A, accepting PDF, DOCX,
+UTF-8 TXT and Markdown. Work remains local on the AI branch.
+
+Read-only diagnosis found the user's PDF was already saved: one pending uploaded
+document, 344,655 bytes, assigned to 19 items, among 92 catalog-media sources.
+It was not extracted or approved, and its metadata was buried in the old source
+view. The new dedicated Uploaded documents library shows title, format, size,
+original upload time, scope/assignments, state and actual assistant readiness.
+File and Upload controls match site buttons; missing title/file/assignments show
+inline errors and first-invalid focus. Select all captures current eligible items
+only, while General customer-service Q&A requires no product assignments.
+
+Added safe Word/text parsing and separate general approved-fact retrieval.
+Word paragraphs/headings/tables are supported; diagrams/external linked content
+remain explicitly unprocessed, never fetched or executed. ZIP/XML traversal,
+macro/OLE/bomb/encryption/control/binary limits reject unsafe input. All file
+versions remain private and participate in complete backup/restore. General
+answers cite only approved current source facts; publication rechecks versions.
+The default topic scope gains customer_service while customized restrictions
+and global disabled state remain intact.
+
+Product reference matching now handles omitted STYL, common aliases/short names
+and conservative alphabetic typos, while preserving ambiguity, foreign-brand and
+numeric-model guards. Verified public detail data supplies an About chip and a
+captured per-send itemRef. Explicit named products override the page default;
+general policies ignore it. Navigation/fetch/retry tests protect captured context
+and prevent stale/hidden detail data from leaking into a new question.
+
+Implementation review found and fixed readiness/retrieval disagreement for
+partially valid assignments/private titles/facts, and a monetary-clause loophole
+that could mix a false product price with a legitimate service fee. Shared
+eligibility and per-monetary-assertion validation now cover both.
+
+Integration testing also found that failed catalog media emitted an empty format,
+which invalidated the whole frontend library. It now emits explicit unknown
+metadata plus its existing error, keeping the rest of the library usable.
+Upload-field focus conflicted with the shared error notice's autofocus; an
+optional focus target preserves the common notice behavior and correctly targets
+the invalid upload control. Tests verify actual saved download bytes rather than
+assuming multipart/file bodies are retained by browser tracing.
+
+Protected local pre-migration backup:
+`%LOCALAPPDATA%\STYL\AI\migration-backups\before-general-documents-20261001T190355Z.sqlite3`.
+After schema-v3 activation, original message/contact/source columns were verified
+unchanged and integrity was OK. The original PDF is still pending, and no user
+document/media was sent externally or auto-approved. Live synthetic OpenAI checks
+passed: expanded catalog schema (711 tokens), approved general answer (724 tokens),
+Word extraction (5 draft facts) and Markdown extraction (3 draft facts).
+Actual local omitted-brand/typo checks returned the bench's approximately
+50 kg / 110 lb and Sandwich J-Cups' CAD $119.00; only the new test thread was closed.
+
+Final candidate: base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 59 changed
+backend/frontend/credential-helper source/test/config files, excluding owner
+catalog data/docs. Sorted path/NUL/content/NUL SHA-256:
+`95e1fa9a87a367d3a697f5a90888f966953f848f8ecea444ceaa8ec6cee6b8c3`.
+
+- **494 backend tests passed**, final full run 167.429s.
+- **48 frontend unit tests passed**, 1.12s; lint/type/build/editor checks passed,
+  with zero lint errors and four existing image warnings.
+- **484 browser executions passed**, clean full final run, exit 0, **33.3m**,
+  across desktop Chromium, phone Chromium and phone WebKit.
+- Focused new document and context runs covered real Word/TXT/MD upload/download
+  bytes, general Q&A in the customer widget, all-item snapshots, error focus and
+  14 detail-context cases. Physical keyboard/screen-reader and large real
+  document quality checks remain separate.
+
+The first expanded full matrix exposed fixture-capacity issues: aggregate
+loopback message traffic reached the normal 120/hour support limit, and a bulk
+fixture had 15 sources ahead of the target. The isolated test environment now
+uses bounded creation/message budgets, while normal local/production limits
+remain unchanged and regression-tested. Bulk completion waits are calculated
+from the observed acknowledged queue size, not a blind timeout increase. General
+FAQ fixture questions now use unique policy identifiers rather than expecting a
+particular citation among identical retained policies. A phone interaction also
+exposed smooth document-editor scrolling interfering with selection; intentional
+document/library jumps now use instant positioning, consistent with other admin
+error/navigation safeguards.
+
+One inactive OneDrive build artifact was inspected and removed by exact path
+after an EPERM. No broad cleanup, retries, forced interactions or worker-count
+increase was used. The final runner cleaned its own fixtures normally. Synthetic
+probe scripts were removed; the protected pre-migration backup remains. Local
+runtime is healthy and original catalog/home/profile hashes remain unchanged.
+SUP-024..026 and KNW-011..015/CTX-001..011 map the new coverage. No commit, push,
+deployment, billing change, actual user-document transmission or real email was
+authorized or performed.
+
+## GPT-6 Luna chat/documents and Gemini 3.8 video routing - 2026-10-01
+
+The owner requested OpenAI `gpt-6-luna` for chat and all nonvideo processing, with
+Gemini **`gemini-3.8-flash` for video only**, retained RAG-style architecture and
+an obvious interface for future documents. Implemented on the local AI branch;
+no commit, push, production deployment, credit purchase or billing configuration
+change was performed.
+
+The owner entered the OpenAI development key through a masked VS Code terminal.
+`configure-local-ai.ps1` generalizes the existing DPAPI helper and stores OpenAI
+and Gemini keys separately under LocalAppData, outside Git/OneDrive. The old
+Gemini helper remains compatible. An unnecessary ACL rewrite failed with
+SeSecurityPrivilege; inspection confirmed the directory was already restricted
+to its owner/SYSTEM/Administrators, so the helper now validates those existing
+permissions instead of rewriting them. Synthetic encrypted-key tests verified
+both loaders without reading/printing real keys. A native-PowerShell test fixture
+also needed case-insensitive removal of an inherited PowerShell 7 module path.
+
+Added a strict shared OpenAI Responses request/parser layer and chat adapter:
+fixed provider endpoint, provider-specific credential, `store:false`,
+`reasoning.effort:none`, bounded request/response, structured schema and explicit
+refusal/incomplete/tool-output/error handling. Existing direct catalog facts,
+local retrieval, source checks and question-linked team/contact privacy remain.
+OpenAI API retention controls are described accurately: `store:false` is not a
+zero-abuse-retention claim.
+
+Image/PDF extraction uses GPT-6 Luna with validated inline files. Video retains
+Gemini Files API processing/cleanup under the requested 3.8 model. Routes and
+cooldowns are independent; no wrong-provider key or silent fallback is used.
+Existing approved facts remain reusable. Previously queued work whose acknowledged
+provider changed pauses for renewed consent instead of silently transferring data.
+
+Bounded review found a pre-enqueue stale-consent gap. Added a canonical
+image/PDF/video `routeFingerprint`, pinned when the administrator acknowledges
+external processing and required by individual/bulk extraction. A missing/stale
+fingerprint rejects before any queue mutation; refreshed UI routing clears
+consent and requires explicit reconfirmation. Claim-time and runtime fences remain.
+
+**Customer support → Knowledge → Add documents** is now explicit. The UI compares
+authoritative chat/image/PDF/video routes rather than guessing they share one
+configuration, and preserves upload/assignment/extract/review/approve workflow.
+New documents join STYL-owned approved knowledge; they are not reuploaded on each
+question. This remains keyword/section retrieval with a compact item inventory,
+not a newly installed vector database or OpenAI-hosted file-search store.
+
+### Verification
+
+Private pre-routing backup:
+`%LOCALAPPDATA%\STYL\AI\migration-backups\before-provider-routing-20261001T170744Z.sqlite3`.
+Before switching, all 92 local knowledge sources were pending and no chat job was
+active. After local restart, verified chat/image/PDF routes as OpenAI
+`gpt-6-luna`, video as Gemini `gemini-3.8-flash`, valid route consent metadata,
+database integrity, and preserved pre-existing messages/contacts/jobs. No local
+catalog media was queued, extracted or approved automatically.
+
+- OpenAI model access check: HTTP 200 for `gpt-6-luna`.
+- Actual synthetic structured chat-adapter check: **passed**, 587 tokens.
+  The probe invokes the provider directly, preventing a local price shortcut from
+  falsely certifying connectivity.
+- Actual local application worker: an artificial summary question using only
+  published catalog facts completed through OpenAI, with a valid item citation
+  and **3,768 total tokens**. The synthetic thread was then closed; no private
+  transcripts/contact data or source code were sent.
+- Actual synthetic OpenAI image/PDF extraction: **passed**, 6/4 draft facts,
+  source locations present, no remote files awaiting cleanup.
+- Actual Gemini 3.8 video verification: **blocked by retryable provider
+  quota/service-unavailable responses**, on initial check and one later retry
+  after cooldown. The model remains exactly as requested; no fallback was used,
+  and no remote file remains pending cleanup. Real 3.8 video success is **not**
+  certified by the mocked tests or earlier 3.5 evidence.
+- Final full backend: **440 passed**, 142.985s.
+- Frontend units: **48 passed**, 0.89s.
+- Final full configured browser matrix: **421 passed**, exit 0, **20.9 minutes**,
+  including desktop Chromium, phone Chromium and phone WebKit.
+- Build/TypeScript/editor/whitespace checks passed. Lint: zero errors, four
+  existing image warnings. Nine focused document/routing-consent desktop cases
+  also passed in 1.5m. The only test-invocation correction was importing
+  `tests.test_support` consistently for combined unittest mode.
+
+Candidate base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 53 changed
+backend/frontend/private-loader source/test/config files (excluding owner catalog
+data/docs), sorted path/NUL/content/NUL SHA-256:
+`3f75758f513c645f78268312b085a6500832c2425d8e04ef9fcddd5da2829205`.
+The ignored local startup helper additionally holds the selected routes and
+clears provider-key variables from the frontend task. Original catalog/home/
+profile hashes are unchanged. Temporary synthetic check scripts/images were
+removed; private keys and protected database backup were retained. SUP-021..023
+and KNW-009/010 record coverage. Production rollout/privacy, physical devices,
+large real documents and successful live Gemini 3.8 video remain separate gates.
+
+## Private contact follow-up, clean conversational chat and 00:15 reports - 2026-10-01
+
+Completed locally after the question-reply work, as requested. Display identity is
+**STYL Assistant**. Removed the chat warning banner and manual help/refresh
+buttons; a compact Privacy link retains the actual data-use disclosure. Automatic
+unanswered-question handling keeps **Your request has been sent to our team.**
+and offers optional name/email fields for follow-up. Sharing contact details is a
+separate private form/API operation, not a chat message or model prompt, and does
+not block continued questions or promise email delivery.
+
+Guest-authenticated contact storage uses its own table and revision, strict
+name/email validation, explicit conflicting-edit handling, idempotent lost-ack
+retries and closed-thread protection. No contacts enter messages/receipts,
+provider history, analytics or mail-recipient settings. Admin sees contacts
+separately, with an encoded mailto link. Private SQLite backups include contacts;
+closed-thread removal compares them as well, retaining changed data.
+
+Before local activation, verified a consistent schema-v1 backup:
+`%LOCALAPPDATA%\STYL\AI\migration-backups\before-contact-details-20261001T065429Z.sqlite3`.
+After schema-v2 migration, verified all existing message/conversation/job rows
+unchanged and SQLite integrity OK. A synthetic actual-API smoke saved contact
+details separately from its transcript, then closed only that test thread.
+
+The composer remains focusable/read-only briefly during submit instead of
+disabled. Enter retains focus/caret through success or failure, and late replies
+do not steal focus after minimize/navigation/pointer movement. Contact and message
+forms are siblings; Enter in Email cannot send contact data as a chat message.
+Contact inputs have explicit 16px text, avoiding the existing global font-inherit
+override on small labels. Answers now use concise natural sentences around
+verified prices/specifications/approved evidence, without inventing facts or
+making basic catalog answers dependent on the external model.
+
+The owner selected **12:15 AM America/Los_Angeles on the following day** for daily
+analytics mail. Backend due-date/next-run calculation and admin wording now use
+00:15 for the previous completed calendar day. DST, completed-hour cutoffs,
+catch-up, per-recipient duplicate protection and non-production send guards are
+preserved. The existing quarter-hour timer need not change. Local API next-run
+was independently checked as `2026-10-01T00:15:00-07:00`; no actual email was sent.
+**Production scheduling remains unchanged until separately approved deployment.**
+
+Final candidate: base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 45 changed
+backend/frontend source/test/config files, excluding owner catalog data/docs.
+Sorted path/NUL/content/NUL SHA-256:
+`c6a4eb6e3a34df6a84533669ad9784fdd7b25c595d53ae7fa79136e7360f2e66`.
+
+- Full backend: **393 passed**, 92.178s.
+- Frontend units: **48 passed**, 0.75s.
+- Full configured browser attempt: **414 passed, 1 failed**, 20.4m. The failure
+  was a new test assumption that Tab from Minimize must focus the Privacy link.
+  WebKit's native traversal skipped links and correctly focused Start conversation
+  (confirmed in its screenshot). Updated the platform-specific expected target;
+  all **3 configured browser variants passed**, exit 0, in 40.4s. No focus forcing
+  or application keyboard behavior change was made for this expectation.
+- Final complete contact matrix: **15 passed**, exit 0, 1.7m, including the
+  added 16px input assertions. Earlier all-browser composer focus matrix:
+  **6 passed**, 40.8s. Initial hidden-composer state assertion was corrected to
+  include the deliberately minimized element rather than claiming it disappeared.
+- Build/TypeScript/editor/whitespace checks passed; lint had zero errors and four
+  existing image warnings. Bounded contact/privacy/timing review found no
+  significant issue. This is a full attempt plus targeted final verification,
+  not one clean 415-test full invocation.
+
+SUP-019/020 and AN-018 map contacts, keyboard continuity, grounded conversational
+copy and midnight reporting. Real SMTP delivery, production timer activation,
+physical keyboards/screen readers and production privacy review remain separate.
+Original catalog/home/profile hashes were preserved; private credentials remain
+outside Git/OneDrive, local runtime is healthy, test fixtures stopped cleanly, and
+no commit, push, deployment, billing change or real customer/provider/email
+transfer was performed for this work.
+
+## Question-linked team replies and simplified support controls - 2026-09-30
+
+The owner explicitly approved AI/team collaboration instead of conversation
+takeover. Admin now highlights each **Needs a team reply** customer question.
+Reply selects and pins that question above **Your reply**; **Send reply**
+publishes a team response with the exact server-resolved original quotation in
+both admin and customer views. Resolving one question leaves other pending
+questions highlighted and counted. Takeover/resume/clear-request controls were
+removed; reply and close remain, alongside the existing global scope settings.
+
+Team replies to older questions do not stop the latest assistant job. A team
+answer to the same question cancels only its duplicate AI work. Legacy open
+human-state conversations remain eligible for new assistant answers. Question
+answer-pointer preconditions allow unrelated conversation activity while
+protecting against competing answers; text/target/UUID retries remain idempotent.
+Drafts, targets and retry identities persist. A review found that refresh alone
+could leave an obsolete answer precondition; the UI now requires explicit
+**Review latest answer and continue** before updating that precondition.
+
+Atomic support migration adds four message fields and unlinked legacy attention
+metadata. No historical quote is guessed for old unlinked team replies.
+Before loading the migration locally, created and integrity-checked the private
+SQLite backup:
+`%LOCALAPPDATA%\STYL\AI\migration-backups\before-question-replies-20261001T054736Z.sqlite3`.
+Afterward verified all **22 pre-existing messages** retained their original nine
+column values unchanged, with SQLite integrity OK. Quote/resolution metadata
+survives records backup and cold restore; older-schema archives cannot authorize
+unsafe removal against a migrated schema.
+
+A reproduced context bug was fixed: a delayed team answer quoting an older item
+could change what "it" meant. Direct catalog follow-ups now prioritize the latest
+explicit customer item rather than the latest asynchronous team reply.
+
+Final candidate: base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 35 changed
+backend/frontend source/test/config files, excluding owner catalog data/docs,
+sorted path/NUL/content/NUL SHA-256:
+`99cbd9b11713dfd83b31423ff5cb2d693450bc7f502ff521ec0e5c17e2108d1d`.
+
+- Final full backend: **371 passed**, 90.465s.
+- Frontend units: **48 passed**, 0.72s; lint/type/build/editor checks passed,
+  with four existing image warnings.
+- Focused desktop and phone WebKit support runs: **22 passed each**, 1.7m/1.9m.
+  Two real conflict/acknowledgement-recovery cases passed in 31.4s.
+- Initial full browser attempt: 392/394 passed. An unknown-model question's digits
+  happened to match an unrelated timestamp-named fixture through the mock/evidence
+  score. Pure numeric search tokens no longer establish relevance, and detail
+  matching uses whole tokens. Added a regression; 46 focused backend tests and
+  all three missing-evidence browser variants passed.
+- Final full browser attempt: **393 passed, 1 failed**, 16.8m. The failure was
+  the unchanged phone-WebKit combined-catalog navigation case: successful requests
+  were recorded but the route did not update. Its unchanged isolated rerun passed
+  in 21.7s. This does not establish that the intermittent navigation cause is
+  fixed; it is not reported as a single clean full browser pass. The private trace
+  is retained as `question-replies-webkit-catalog-navigation.zip`.
+
+Actual local synthetic workflow verified two flagged questions, a quoted reply
+to the older question leaving exactly one pending, and a subsequent automatic
+CAD $119 J-cups answer. Only the synthetic thread was closed; existing customer
+threads were not manually edited. No external provider call was required.
+Local runtime is healthy, original catalog/home/profile hashes unchanged,
+and no commit, push, deployment, paid-service change or real email occurred.
+Physical assistive-device checks and production readiness remain separate.
+
+## Professional assistant, pending-human continuation and catalog answers - 2026-09-30
+
+Implemented the owner's follow-up on the AI branch, locally only. Customer
+identity now reads **STYL assistant**, actual human replies **STYL team**, and
+the saved request confirmation is **Your request has been sent to our team.**
+Ordinary chat no longer exposes provider/state reasons or raw HTTP/backend
+errors. Essential unpaid-provider privacy detail remains available behind the
+compact preview/privacy disclosure. Exact historical pause messages normalize
+only in the guest view; stored transcripts and admin diagnostics remain intact.
+
+Read-only investigation of the local prototype established a concrete failure
+chain: provider-unavailable jobs moved the conversation into `waiting_human`,
+and later saved catalog questions never created answering jobs. Pending human
+attention is now independent of assistant eligibility. New questions continue
+to receive answers while preserving the human-request flag/reason; repeated
+handoff is idempotent and does not drop acknowledged work. Actual human takeover,
+closure and disabled automatic replies still fence AI. Admin **Clear human
+request** removes pending attention without cancelling queued/running answers;
+true human-owned conversations retain explicit **Resume AI**.
+
+Straightforward unambiguous catalog questions now read verified public values
+directly before invoking Gemini: prices, weights/specifications, brand explicitly
+stated by a STYL item name, basic overviews and catalog listings. Current market,
+draft/missing-price visibility and configured scope remain enforced. Historical
+operator/model amounts cannot override catalog prices. Conservative full/unique
+names and latest-item context resolve follow-ups; unknown similar product names
+do not substitute a public item, ambiguous matches ask for clarification, and
+missing facts use the neutral human request. Complex interpretation still uses
+the provider/evidence pipeline; third-party availability is not claimed fixed.
+Old obvious contact-bearing messages are omitted from provider context rather
+than blocking every later clean question; current sensitive input still does not
+go to Gemini. This remains a synthetic-only local pilot, not comprehensive DLP.
+
+The reported price/brand/weight sequence was exercised through the real local
+API in a newly created synthetic thread after requesting human help:
+**STYL Sandwich J-Cups CAD $119.00**, **STYL Adjustable Bench brand STYL** and
+**Approx. 50 kg / 110 lb**. All replies retained pending human attention, returned
+no customer-visible diagnostic reason, and required no external model call.
+Only the synthetic thread was closed afterward; the user's existing transcript
+was not edited or automatically replayed. Existing waiting conversations need
+no reset or migration to ask another question.
+
+Final candidate: base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 34 changed
+backend/frontend source/test/config files, excluding owner catalog data/docs.
+Sorted path/NUL/content/NUL SHA-256:
+`72280b4f3cfa1e8b401c823d75aff8a14b960f66e0253962f7b076ffec522958`.
+
+- **359 backend tests passed**, full run 83.946s.
+- **48 frontend unit tests passed**, 0.80s.
+- **382 browser executions passed**, clean full configured run, exit 0,
+  **15.7 minutes**, desktop Chromium/phone Chromium/phone WebKit.
+- Runner production build/TypeScript and lint passed: zero lint errors, four
+  existing image warnings. Editor/whitespace checks passed.
+- Focused verification included 83 API/provider/knowledge-integration tests and
+  19 phone WebKit cases (1.5m). A new browser test initially selected an
+  `assistant` message for a persisted system handoff confirmation; corrected its
+  role selector without changing assertions or application behavior.
+- Tests explicitly cover pending/request/clear/takeover races, accepted-message
+  idempotency, privacy redaction versus admin reasons, old conversation behavior,
+  missing provider credentials, market/scope guards, item ambiguity and unrelated
+  item substitution. Provider tests separately exercise the external decision
+  contract; direct lookup tests fail if a model call is attempted.
+
+SUP-002/015/016 and WIDGET-009..011 capture the updated oracle. Physical devices,
+named staff production authentication, real human response SLAs and production
+rollout remain unverified/deferred. Local runtime was restarted and healthy;
+the displayed assistant title was checked, original catalog/home/profile hashes
+were unchanged, and no commit, push, deployment, billing change or real email was
+performed.
+
+## Floating chat, complete catalog retrieval and reviewed media knowledge - 2026-09-30
+
+Implemented locally on `ai-assistant/baseline-2026-09-29-2227-pt` after the owner's
+20:08 Pacific start authorization. No commit/push, paid-service change or
+production deployment was performed; `main` remains the deployed baseline.
+
+Customer chat now uses a persistent bottom-right avatar/dialog. Phone panels are
+nearly full width while leaving storefront space; customer bubbles are left,
+AI/human bubbles right with responder labels. It preserves conversation and
+draft/open state across Next navigation, animates only while responding, honors
+reduced motion, and uses unread badges without unsolicited opening. Keyboard,
+gallery/menu handoff, sticky commerce clearance and visual-viewport behavior are
+covered. Footer clearance prevents the floating icon from intercepting links,
+and the composer has an explicit 16px font to avoid inherited small-text sizing.
+The existing `/support` entry opens the shared widget instead of duplicating it.
+
+All published market-eligible item identities remain available to AI; complete
+text and every feature are searched before selecting relevant sections for model
+context. The old first-850-character/five-feature/eight-item exclusions are gone.
+Trusted rendering still supplies current prices and approved evidence, rejects
+invented references, and does not infer fit/load from dimensions. Published
+product-specific warranty can be quoted without deciding entitlement/refunds.
+
+Admin **Customer support → Knowledge** provides central upload/assignment,
+catalog-media synchronization, explicit external-processing acknowledgement,
+draft extraction, editing, approval/rejection and visible stale/paused/error
+states. Added pinned `pypdf==6.19.0`. Full native PDF text and visual drafts,
+supported images and complete accepted videos carry page/region/timestamp
+locations. Files stay private and content-addressed; source revisions/history
+are preserved without age cleanup. SVG/GIF require conversion before extraction;
+PDF/image/video bounds are documented rather than silently truncating accepted
+documents. Source facts remain unavailable to customer answers until approved.
+
+Two bounded-review findings were fixed and regression-tested: approved uploaded
+documents could follow a reused numeric product ID, and a provider quota error
+did not stop subsequent queued extraction. Product/accessory deletion now uses
+DB-before-catalog locking, commits invalidation before deleting JSON records and
+preserves historical versions. Assignment identity checks catch out-of-band
+replacement too. A durable provider/model cooldown retains untouched jobs queued;
+the failed source requires explicit retry. Approval/assignment/publication and
+source changes remain fenced against stale results.
+
+Catalog and records recovery now share one **Backup** tab, with compact guidance
+and expandable details. Download verification and destructive confirmation gates
+are unchanged. Records ZIPs include support/knowledge tables plus all retained
+immutable media/manual versions; referenced missing files or content-address
+mismatches fail explicitly. Closed-chat cleanup preserves the knowledge library.
+
+### Evidence
+
+Base `8863d63fe7e199ee3005b66b9ea0a323a9e7cc46` plus 31 changed backend/frontend
+source/test/config files (excluding owner catalog data and docs), sorted
+path/NUL/content/NUL SHA-256:
+`f3d1d14508eea7db0908f5e433d41c04b9cb03221ce167b1bf252960de0aa7dd`.
+
+- Full backend: **340 passed**, 77.373s.
+- Frontend units: **48 passed**, 1.13s.
+- Full configured browser attempt: **370 passed, 3 failed**, 15.9 minutes.
+  All failures were the same obsolete engineering-test heading expectation for
+  the intentionally consolidated Backup tab. Updated it to assert both the
+  Backup heading and actual catalog recovery section; **all 3 passed**, exit 0,
+  in 41.8s across desktop Chromium, phone Chromium and phone WebKit. Application
+  code was unchanged between these runs: all 373 configured cases are covered
+  across the full attempt plus targeted rerun, not one clean full-run result.
+- Production build/TypeScript passed in the runner. Full lint: zero errors,
+  four existing image warnings; final affected lint/editor/whitespace checks pass.
+- Targeted evidence included 8 desktop widget cases (33.5s), 7 central knowledge
+  desktop cases (1m), phone knowledge/backups and widget/retained support cases.
+  A fixture source lookup was corrected to use the current upload URL, since
+  old immutable sources correctly survive deleted/reused fixture product IDs.
+  Sticky-control tests now use a genuinely long product and scroll its primary
+  actions out of view rather than assuming a short page must show a sticky bar.
+- One stale OneDrive/Turbopack production cache emitted CSS without new widget
+  rules despite updated source; inspected the generated asset and removed only
+  the inactive versioned production cache. The next build included the rules.
+  No dependency reinstall, test retry allowance, forced click or assertion
+  disabling was used.
+
+Actual `gemini-3.5-flash` tests used newly generated synthetic diagram/PDF/video
+files only: **image 5 draft facts, PDF 4, video 5**, with source locations and
+zero remote files pending cleanup. Initial image/PDF requests were temporarily
+unavailable; only those failed modes were retried after the cooldown interval.
+The revised catalog/evidence decision schema also passed a synthetic price/source
+test (932 total tokens) after a transient 503 and bounded later retry. These are
+real API shape/cleanup checks, not certification of arbitrary document accuracy.
+
+Local runtime was restarted and remained healthy. All **19 local catalog items**
+are eligible; **92 local media sources** were synchronized into private pending
+copies. This synchronization sent nothing to Gemini, started no extraction and
+approved no facts. The one index warning was standard confidentiality guidance,
+not missing-media failure. The operator must explicitly start extraction and
+review/approve its results. Original catalog/home/profile hashes were unchanged.
+
+Local avatar and compact dialog were visually inspected (keyboard activation
+worked; the integrated browser's pointer-stability timeout was not bypassed).
+Physical phones/keyboards/screen readers, large real manuals/video quality,
+production capacity/privacy review, Linux operational signals/permissions and
+off-server disaster recovery remain manual or deferred. SUP-011..014,
+WIDGET-001..008 and KNW-001..008 map the new coverage. Temporary synthetic
+generation/probe files were removed, provider upload cleanup completed, and test
+API/web ports stopped normally. Private sources/keys stay outside Git and
+OneDrive; no actual customer/catalog media was sent externally during testing.
 
 ## AI development isolated from main - 2026-09-30 Pacific
 

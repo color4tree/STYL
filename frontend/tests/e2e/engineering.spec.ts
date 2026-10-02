@@ -118,7 +118,8 @@ test("ADM-013: engineering-only changes are dirty, retained after save errors, a
   await page.getByRole("button", { name: "Equipment", exact: true }).click();
   await expect(input).toHaveValue("Unsaved engineering title");
   await page.getByRole("button", { name: "Backup", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Catalog recovery backup", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Backup", level: 1, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Download a catalog recovery ZIP", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Home banner", exact: true }).click();
   await expect(input).toHaveValue("Unsaved engineering title");
   await page.route("**/api/hero", route => route.request().method() === "PUT"

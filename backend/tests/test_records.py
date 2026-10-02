@@ -37,6 +37,7 @@ class RecordsTests(unittest.TestCase):
                 "STYL_RECORDS_DIR": str(self.backups), "STYL_WEBSITE_LOG_DIR": str(self.logs),
                 "STYL_ANALYTICS_DB": str(self.database), "STYL_ANALYTICS_ENVIRONMENT": "test",
                 "STYL_SUPPORT_DB": str(self.root / "support.sqlite3"), "STYL_SUPPORT_ENVIRONMENT": "test",
+                "STYL_KNOWLEDGE_DIR": str(self.root / "knowledge"),
                 "STYL_ANALYTICS_EMAIL_ENABLED": "false", "STYL_ANALYTICS_RECIPIENTS": "",
                 "STYL_SMTP_PASSWORD": "SECRET_MUST_NOT_BE_ARCHIVED",
             }),
@@ -397,10 +398,12 @@ class RecordsTests(unittest.TestCase):
         closed, active = "c" * 32, "a" * 32
         with support.get_store().connection() as database:
             for identifier, state in ((closed, "closed"), (active, "ai")):
-                database.execute("INSERT INTO conversations VALUES(?,?,?,?,?,?,?,?,?,?)",
+                database.execute("""INSERT INTO conversations(id,token_hash,state,revision,generation,
+                                 created_at,updated_at,currency,needs_human,reason) VALUES(?,?,?,?,?,?,?,?,?,?)""",
                                  (identifier, hashlib.sha256(identifier.encode()).hexdigest(), state, 1, 0,
                                   "2020-01-01", "2020-01-01", "CAD", 0, None))
-                database.execute("INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?)",
+                database.execute("""INSERT INTO messages(id,conversation_id,role,text,created_at,references_json,
+                                 client_message_id,request_hash,response_json) VALUES(?,?,?,?,?,?,?,?,?)""",
                                  ("message-" + identifier, identifier, "customer", "Synthetic catalog question",
                                   "2020-01-01", "[]", "request-" + identifier, "hash", None))
         return closed, active
@@ -449,7 +452,8 @@ class RecordsTests(unittest.TestCase):
     def test_closed_support_thread_with_pending_job_is_not_removed(self) -> None:
         closed, _active = self.support_fixture()
         with support.get_store().connection() as database:
-            database.execute("INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?,?,?)",
+            database.execute("""INSERT INTO jobs(id,conversation_id,message_id,generation,settings_revision,status,
+                             payload,usage_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
                              ("pending-job", closed, "message-" + closed, 0, 0, "queued", "{}", "{}", "2020-01-01", "2020-01-01"))
         value = self.verify(self.create())
         response = self.remove(value, ["support"])
@@ -466,6 +470,43 @@ class RecordsTests(unittest.TestCase):
         self.assertIn("no support snapshot", response.json()["detail"])
         self.assertTrue((self.inquiries / "old.json").exists())
         self.assertEqual(records.get_archive(value["id"])["removalState"], "ready")
+
+    def test_sup014_knowledge_source_versions_are_backed_up_and_restored_but_not_removed_with_threads(self) -> None:
+        self.support_fixture()
+        knowledge = self.root / "knowledge"
+        knowledge.mkdir()
+        contents = b"%PDF-1.4\nSynthetic immutable manual version\n%%EOF"
+        name = hashlib.sha256(contents).hexdigest() + ".pdf"
+        (knowledge / name).write_bytes(contents)
+        value = self.create()
+        self.assertEqual(value["counts"]["knowledgeFiles"], 1)
+        saved = self.root / "knowledge-download.zip"
+        saved.write_bytes(self.download(value))
+        destination = self.root / "knowledge-restore"
+        manifest = records_archive.restore_archive(saved, destination)
+        self.assertTrue(manifest["knowledgeIncluded"])
+        self.assertEqual((destination / "knowledge" / name).read_bytes(), contents)
+        verified = self.verify(value)
+        response = self.remove(verified, ["support"])
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue((knowledge / name).exists())
+        self.assertEqual(response.json()["removal"]["supportConversations"], 1)
+
+    def test_sup014_arbitrary_files_in_knowledge_storage_fail_backup_explicitly(self) -> None:
+        knowledge = self.root / "knowledge"
+        knowledge.mkdir()
+        (knowledge / "credentials.env").write_text("synthetic-private-value")
+        response = self.client.post(self.base + "/archives", headers=self.headers)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertTrue((knowledge / "credentials.env").exists())
+
+    def test_sup014_changed_content_addressed_knowledge_blob_never_yields_successful_backup(self) -> None:
+        knowledge = self.root / "knowledge"
+        knowledge.mkdir()
+        (knowledge / ("a" * 64 + ".pdf")).write_bytes(b"Corrupt source with the wrong content address")
+        response = self.client.post(self.base + "/archives", headers=self.headers)
+        self.assertEqual(response.status_code, 409, response.text)
+        self.assertIn("content hash", response.json()["detail"])
 
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@ from pydantic import AfterValidator, BaseModel, EmailStr, Field, TypeAdapter, fi
 from app.media import VIDEO_FORMATS, upload_video, video_response
 from app.location import MarketContext, resolve_market
 from app.catalog_backup import BackupError, create_archive, validate_engineering_image
-from app import analytics, records, support
+from app import analytics, knowledge, records, support
 
 APP_PATH = Path(__file__).resolve().parent
 CONFIGURED_DATA_DIRECTORY = os.getenv("STYL_DATA_DIR")
@@ -983,7 +983,8 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
 
 @app.delete("/api/products/{product_id}", dependencies=[Depends(require_admin)])
 def delete_product(product_id: int) -> dict[str, str]:
-    with locked_catalog() as products:
+    with knowledge.catalog_delete_guard(f"product:{product_id}"):
+        products = load_products()
         deleted_product = next(
             (product for product in products if int(product.get("id", 0)) == product_id),
             None,
@@ -1067,7 +1068,7 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
 
 @app.delete("/api/accessories/{accessory_id}", dependencies=[Depends(require_admin)])
 def delete_accessory(accessory_id: int) -> dict[str, str]:
-    with ACCESSORIES_LOCK:
+    with knowledge.catalog_delete_guard(f"accessory:{accessory_id}"):
         accessories = load_accessories()
         deleted = next((item for item in accessories if int(item.get("id", 0)) == accessory_id), None)
         if deleted is None:
@@ -1223,5 +1224,6 @@ def get_uploaded_video(filename: str, range: str | None = Header(default=None)) 
 
 app.include_router(analytics.make_router(require_admin, ALLOWED_ORIGINS))
 app.include_router(records.make_router(require_admin))
+app.include_router(knowledge.make_router(require_admin))
 app.include_router(support.make_router(require_admin))
 app.mount("/api/uploads", StaticFiles(directory=UPLOAD_PATH), name="uploads")

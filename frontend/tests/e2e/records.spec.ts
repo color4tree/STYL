@@ -10,7 +10,7 @@ const headers = { Authorization: `Bearer ${process.env.STYL_E2E_TOKEN}` };
 type Archive = {
   id: string; filename: string; bytes: number; sha256: string; verifiedAt: string | null; removedAt: string | null; archiveDeletedAt: string | null;
   removalState?: "ready" | "removing" | "complete" | "failed";
-  counts: { inquiries: number; analyticsRows: number; websiteLogs: number };
+  counts: { inquiries: number; analyticsRows: number; websiteLogs: number; knowledgeFiles?: number };
   removal: { inquiries: number; analyticsRows: number; websiteLogs: number; skipped: number } | null;
 };
 type Database = {
@@ -42,12 +42,14 @@ async function signIn(page: Page) {
   await page.goto("/admin");
   await page.getByLabel("Admin token", { exact: true }).fill(process.env.STYL_E2E_TOKEN!);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Backup & Records", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Backup", exact: true })).toBeEnabled();
 }
 
 async function openRecords(page: Page) {
-  await page.getByRole("button", { name: "Backup & Records", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Backup & Records", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Backup", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Backup", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Business / log / support records", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 2, name: "Business, log and support records", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create persistent backup", exact: true })).toBeEnabled();
 }
 
@@ -60,6 +62,7 @@ async function createArchive(page: Page): Promise<Archive> {
   const archive: Archive = await result.json();
   await expect(page.getByLabel("Saved server backup", { exact: true })).toHaveValue(archive.id);
   await expect(page.getByRole("button", { name: "Download selected backup", exact: true })).toBeEnabled();
+  await expect(page.locator("dd").filter({ hasText: "knowledge source files" })).toContainText(`${archive.counts.knowledgeFiles ?? 0} knowledge source files`);
   return archive;
 }
 
@@ -306,7 +309,7 @@ test("REC-002: a corrupt same-sized ZIP fails full verification, retains the cho
 
 test("REC-004: unauthenticated routes and expired access expose no private archive; retry preserves selection", async ({ page, request }) => {
   await page.goto("/admin");
-  await expect(page.getByRole("button", { name: "Backup & Records", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Backup", exact: true })).toHaveCount(0);
   for (const authorization of [undefined, "Bearer invalid-records-token"]) {
     const options: { headers: Record<string, string> } = { headers: authorization ? { Authorization: authorization } : {} };
     for (const route of [endpoint, `${endpoint}/archives/${"0".repeat(32)}/download`]) {
@@ -357,7 +360,7 @@ test("REC-004: busy operations block navigation and duplicate actions; failed re
     const response = page.waitForResponse((value) => value.url() === `${endpoint}/archives`);
     await page.getByRole("button", { name: "Create persistent backup", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Creating persistent backup" })).toBeVisible();
-    for (const name of ["Create persistent backup", "Refresh records", "Equipment", "Accessories", "Home banner", "Backup", "Analytics", "Backup & Records", "Sign out"]) {
+    for (const name of ["Create persistent backup", "Refresh records", "Equipment", "Accessories", "Home banner", "Backup", "Analytics", "Catalog recovery", "Business / log / support records", "Customer support", "Sign out"]) {
       await expect(page.getByRole("button", { name, exact: true })).toBeDisabled();
     }
     await page.getByRole("button", { name: "Create persistent backup", exact: true }).evaluate((element: HTMLButtonElement) => element.click());
@@ -416,7 +419,10 @@ test("REC-004 REC-005: invalid/service/network responses recover, disk and absen
   await expect(page.getByRole("alert").filter({ hasText: "Disk usage" })).toContainText("at or above 80%");
   await expect(page.getByText(/Website log coverage is NOT configured/)).toBeVisible();
   await expect(page.getByRole("list", { name: "Records warnings" })).toContainText("missing website log configuration");
-  await expect(page.getByText("Confidential, unencrypted backup", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Confidential, unencrypted backup — includes personal information/)).toBeVisible();
+  await expect(page.getByText(/the upload is not stored/)).toBeHidden();
+  await page.getByText("Details: privacy, coverage and retention", { exact: true }).click();
+  await page.getByText("Details: removal scope and protected records", { exact: true }).click();
   await expect(page.getByText(/are not automatically deleted by age or size/)).toBeVisible();
   await expect(page.getByText(/the upload is not stored/)).toBeVisible();
   await expect(page.getByText(/Current-hour analytics, pending inquiries, mail duplicate-prevention metadata/)).toBeVisible();
@@ -440,8 +446,9 @@ test("REC-005: records navigation preserves unsaved editor data and existing cat
   await input.fill("Unsaved records navigation fixture");
   await openRecords(page);
   await expect(page.getByRole("status").filter({ hasText: "You have unsaved editor changes" })).toBeVisible();
-  await page.getByRole("button", { name: "Backup", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Catalog recovery backup", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Backup & Records", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Catalog recovery", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Backup", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download catalog backup", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Create persistent backup", exact: true })).toBeHidden();
   await page.getByRole("button", { name: "Equipment", exact: true }).click();

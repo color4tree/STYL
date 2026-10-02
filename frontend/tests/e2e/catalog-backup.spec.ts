@@ -66,7 +66,9 @@ async function signIn(page: Page) {
 
 async function openBackup(page: Page) {
   await page.getByRole("button", { name: "Backup", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Catalog recovery backup" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Backup", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Catalog recovery", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Download a catalog recovery ZIP", exact: true })).toBeVisible();
 }
 
 function backupResponse(page: Page) {
@@ -114,7 +116,9 @@ async function noOverflow(page: Page) {
 test("ADM-010 SYS-017: real private ZIP download, progress, duplicate guard, filename and URL cleanup", async ({ page }, testInfo) => {
   await signIn(page);
   await openBackup(page);
-  await expect(page.getByText("Private, unencrypted archive", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Private, unencrypted archive — store securely and never publish/)).toBeVisible();
+  await expect(page.getByText(/All equipment and accessories, including drafts/)).toBeHidden();
+  await page.getByText("Details: contents and recovery", { exact: true }).click();
   await expect(page.getByText("All equipment and accessories, including drafts, private provenance, CAD and USD prices and optional MSRPs, and record IDs.", { exact: true })).toBeVisible();
   await expect(page.getByText(/Saved changes only\./)).toBeVisible();
   await expect(page.getByText(/Browser upload\/import is not implemented/)).toBeVisible();
@@ -198,7 +202,7 @@ test("ADM-010 SYS-017: real missing-media rejection stays visible and retries af
     const detail = (await rejected.json()).detail;
     expect(typeof detail).toBe("string");
     await expect(page.locator("main").getByRole("alert")).toContainText(detail);
-    await expect(page.getByRole("heading", { level: 1, name: "Catalog recovery backup" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Backup", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Retry backup download", exact: true })).toBeEnabled();
     expect(downloads).toBe(0);
     await noOverflow(page);
@@ -274,7 +278,7 @@ test("ADM-010: Backup preserves all three unsaved editors and their navigation g
     expect(confirmation.message()).toContain("Discard your unsaved changes");
     await confirmation.dismiss();
     await signingOut;
-    await expect(page.getByRole("heading", { level: 1, name: "Catalog recovery backup" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Backup", exact: true })).toBeVisible();
     await page.getByRole("button", { name: editor.tab, exact: true }).click();
     await expect(input).toHaveValue(`Unsaved ${editor.name}`);
     await input.fill(editor.name);
@@ -300,7 +304,7 @@ for (const failure of ["service", "network", "invalid archive"] as const) {
     if (failure === "service") await expect(page.locator("main").getByRole("alert")).toContainText("Catalog backup generation is busy. Retry shortly.");
     if (failure === "invalid archive") await expect(page.locator("main").getByRole("alert")).toContainText("The server did not return a ZIP archive");
     await expect(page.getByRole("button", { name: "Retry backup download", exact: true })).toBeEnabled();
-    await expect(page.getByRole("heading", { level: 1, name: "Catalog recovery backup" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Backup", exact: true })).toBeVisible();
     expect(downloads).toBe(0);
     await noOverflow(page);
     await page.unroute(endpoint);

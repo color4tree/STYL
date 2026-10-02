@@ -8,9 +8,90 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Document library and detail-aware chat (2026-10-01)
+
+Use visible >=48px Choose file/Upload document buttons; missing upload fields
+produce inline errors and first-invalid focus, not a disabled button with no
+explanation. Preserve selected files/titles/assignments on failure. The dedicated
+Uploaded documents section shows title/format/size/time/status/scope and current
+readiness without requiring the operator to search through catalog media.
+All/Clear controls capture current eligible products only; general customer
+service Q&A removes the product-selection requirement. Keep long titles and
+assignments inside 320/390px pages.
+
+On verified item details, show a compact About chip using that public item name.
+Keep it plain text and within the chat width. Switching routes updates the
+default for a new send, not an in-flight/retried question or previous quote.
+Preserve chat visibility/draft/history, let explicit item names take precedence,
+and clear page context on unavailable/non-detail routes.
+
+### Clean contact follow-up and keyboard continuity (2026-10-01)
+
+Use **STYL Assistant** capitalization. Remove the customer warning banner and
+manual help/refresh controls; provide a small Privacy link with the substantive
+data-use disclosure on the privacy page. Automatic escalation offers optional
+name/email fields through a separate private form, never by composing an AI
+message. Display saved-contact acknowledgement quietly and permit deliberate
+editing. Contact drafts survive failures/conflicts and reset only for a new
+conversation, not ordinary polls.
+
+The message textarea stays focusable (read-only briefly during its HTTP submit,
+not disabled). Enter-send retains focus/caret so the next question needs no click;
+IME/Shift+Enter and error-draft behavior stay intact. Contact-form Enter cannot
+submit the message form. No completion, incoming answer or poll may steal focus
+after the customer clicks elsewhere, minimizes the chat or navigates.
+
+### Question-based team collaboration (2026-09-30)
+
+Admin highlights each **Needs a team reply** question and provides Reply on that
+question. The chosen question is pinned above **Your reply**; **Send reply**
+publishes a warm, clearly attributed team message with the quoted original
+question in both admin and customer views. Long quotes must remain readable
+without widening the page. Polling/new messages must not retarget an unsent draft.
+Keep only reply and close controls for a conversation; no takeover/resume modes.
+AI continues answering new questions while earlier questions receive team replies.
+Resolved status applies to the specific question, not every pending question in
+the thread. Customer and team bubble alignment remains left/right as approved.
+
+### Professional assistant and pending human requests (2026-09-30)
+
+Use **STYL assistant** instead of guest/implementation terminology; actual human
+messages use **STYL team**. A successful request displays only **Your request has
+been sent to our team.** Customer-visible errors are concise/actionable and retain
+drafts; raw HTTP/provider/state reasons stay in admin. A compact local-preview
+warning links to the essential privacy detail rather than filling the dialog.
+Pending human attention and active answering coexist: show preparing/available
+assistant status while retaining the pending notice, never "AI paused" merely
+because help was requested. Team identity belongs to its messages, not an
+exclusive conversation mode.
+
+### Floating support and focused admin tools (2026-09-30)
+
+The owner approved replacing the dedicated-page-first customer chat with a
+persistent bottom-right avatar/dialog. The icon stays with storefront navigation;
+it animates subtly only while AI is processing, respects reduced motion and shows
+unread replies. No unsolicited auto-open, sound or fake human-typing indication.
+Customer messages align left; AI/human messages align right with explicit labels.
+
+On desktop use a compact bottom-right panel. At 320/390px use nearly full width
+while retaining visible webpage space, safe-area/visual-viewport offsets and a
+reachable composer when the keyboard opens. Avoid sticky Add/quote/cart controls.
+Do not compete with gallery/menu dialogs for focus. Preserve guest conversation,
+open/minimized state and draft through Next navigation; source links remain safe.
+The legacy `/support` entry can open the same shared UI rather than duplicating
+chat state. Keep it absent from admin pages.
+
+Customer Support retains its page-style inbox and adds central Knowledge
+management for product assignment, extraction and mandatory draft approval.
+Merge business/log/support backups into the existing Backup tab alongside catalog
+recovery. Keep primary functions prominent; consolidate informational guidance
+into short notices/expandable details without hiding failures or destructive
+confirmation/verified-download requirements.
+
 ### Local Ask STYL / Support inbox (2026-09-29)
 
-Use a dedicated responsive `/support` page, linked unobtrusively from navigation
+Original pilot (presentation superseded by the floating widget above): use a
+dedicated responsive `/support` page, linked unobtrusively from navigation
 and footer, not an auto-opening overlay competing with galleries, cart stickies
 or the quote composer. Keep All products/Equipment/Accessories actions unchanged.
 Expose guest start, locally retained access, conversation messages, sources,

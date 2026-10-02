@@ -90,17 +90,41 @@ class AnalyticsReportTests(unittest.TestCase):
             "nextRunAt": reports.next_run_at(now or NOW).isoformat(),
         }
 
-    def test_an010_schedule_uses_named_timezone_and_dst(self) -> None:
+    def test_an010_schedule_boundary_and_utc_date_offset(self) -> None:
         zone = ZoneInfo("America/Los_Angeles")
-        self.assertEqual(reports.due_date(NOW).isoformat(), "2026-09-27")
-        self.assertEqual(reports.due_date(NOW - timedelta(minutes=1)).isoformat(), "2026-09-26")
-        spring = datetime(2026, 3, 8, 14, tzinfo=timezone.utc)
-        autumn = datetime(2026, 11, 1, 14, tzinfo=timezone.utc)
-        self.assertEqual(reports.next_run_at(spring, zone).hour, 15)
-        self.assertEqual(reports.next_run_at(autumn, zone).hour, 16)
-        self.assertEqual(reports.next_run_at(NOW).astimezone(zone).hour, 8)
-        with self.assertRaises(reports.ReportError):
-            reports.next_run_at(datetime(2026, 9, 28))
+        for instant, expected_day, next_instant in (
+            ("2026-09-28T07:14:59+00:00", "2026-09-26", "2026-09-28T07:15:00+00:00"),
+            ("2026-09-28T07:15:00+00:00", "2026-09-27", "2026-09-29T07:15:00+00:00"),
+            ("2026-09-28T00:05:00+00:00", "2026-09-26", "2026-09-28T07:15:00+00:00"),
+            ("2027-01-01T08:14:59+00:00", "2026-12-30", "2027-01-01T08:15:00+00:00"),
+            ("2027-01-01T08:15:00+00:00", "2026-12-31", "2027-01-02T08:15:00+00:00"),
+        ):
+            with self.subTest(instant=instant):
+                now = datetime.fromisoformat(instant)
+                self.assertEqual(reports.due_date(now, zone).isoformat(), expected_day)
+                self.assertEqual(reports.next_run_at(now, zone).isoformat(), next_instant)
+                settings = reports.get_email_settings(now)
+                self.assertEqual(settings["timezone"], zone.key)
+                self.assertEqual(settings["nextRunAt"], next_instant)
+        for function in (reports.next_run_at, reports.due_date):
+            with self.assertRaises(reports.ReportError):
+                function(datetime(2026, 9, 28))
+
+    def test_an010_schedule_tracks_midnight_offset_across_spring_and_fall_dst(self) -> None:
+        for instant, expected_day, next_instant in (
+            ("2026-03-08T08:14:59+00:00", "2026-03-06", "2026-03-08T08:15:00+00:00"),
+            ("2026-03-08T08:15:00+00:00", "2026-03-07", "2026-03-09T07:15:00+00:00"),
+            ("2026-03-09T07:15:00+00:00", "2026-03-08", "2026-03-10T07:15:00+00:00"),
+            ("2026-11-01T07:14:59+00:00", "2026-10-30", "2026-11-01T07:15:00+00:00"),
+            ("2026-11-01T07:15:00+00:00", "2026-10-31", "2026-11-02T08:15:00+00:00"),
+            ("2026-11-01T08:15:00+00:00", "2026-10-31", "2026-11-02T08:15:00+00:00"),
+            ("2026-11-01T09:15:00+00:00", "2026-10-31", "2026-11-02T08:15:00+00:00"),
+            ("2026-11-02T08:15:00+00:00", "2026-11-01", "2026-11-03T08:15:00+00:00"),
+        ):
+            with self.subTest(instant=instant):
+                now = datetime.fromisoformat(instant)
+                self.assertEqual(reports.due_date(now).isoformat(), expected_day)
+                self.assertEqual(reports.next_run_at(now).isoformat(), next_instant)
 
     def test_an010_concise_business_summary_omits_technical_block_and_escapes_html(self) -> None:
         rendered = reports.render_report(fixture_report(), "2026-09-27")
@@ -225,6 +249,25 @@ class AnalyticsReportTests(unittest.TestCase):
         self.assertIn("subject", result)
         send.assert_not_called()
 
+    def test_an010_late_partial_preview_keeps_date_cutoff_and_next_midnight_metadata(self) -> None:
+        now = datetime(2026, 9, 29, 6, 47, 59, tzinfo=timezone.utc)
+        cutoff = now.replace(minute=0, second=0, microsecond=0)
+        report = {**fixture_report(), "generatedAt": now.isoformat(), "cutoffAt": cutoff.isoformat()}
+        get_report = Mock(return_value=report)
+        with patch.dict(sys.modules, {"app.analytics": SimpleNamespace(get_report=get_report)}), \
+                patch.object(reports, "_send") as send:
+            result = reports.preview_report("2026-09-28", now)
+        get_report.assert_called_once_with("2026-09-28", "2026-09-28", cutoff=cutoff)
+        self.assertEqual(result["reportDate"], "2026-09-28")
+        self.assertEqual(result["timezone"], "America/Los_Angeles")
+        self.assertEqual(result["nextRunAt"], "2026-09-29T07:15:00+00:00")
+        self.assertEqual(result["subject"], "STYL daily usage | 2026-09-28")
+        for field in ("text", "html"):
+            self.assertIn("Through 23:00", result[field])
+            self.assertNotIn("+250%", result[field])
+            self.assertIn("USD", result[field])
+        send.assert_not_called()
+
     def test_an011_local_and_disabled_jobs_do_not_send(self) -> None:
         with patch.object(reports, "_send") as send:
             for environment, enabled in (("local", "true"), ("test", "true"), ("staging", "true"), ("production", "false")):
@@ -260,6 +303,71 @@ class AnalyticsReportTests(unittest.TestCase):
         history = reports.delivery_history()
         self.assertEqual(history[0]["status"], "accepted")
         self.assertEqual(history[0]["recipient"], "o***@example.com")
+
+    def test_an011_midnight_boundary_reopen_and_quarter_hour_ticks_keep_delivery_claims(self) -> None:
+        first_run = datetime(2026, 9, 27, 7, 15, tzinfo=timezone.utc)
+        boundary = first_run + timedelta(days=1)
+        with patch.object(reports, "preview_report", side_effect=self.preview) as preview, \
+                patch.object(reports, "_send", return_value=("accepted", None)) as send:
+            self.assertEqual(reports.run_due(first_run)["reportDate"], "2026-09-26")
+            with patch.object(reports, "_store", return_value=ReportStore(self.store.path)):
+                for now in (boundary - timedelta(minutes=15), boundary - timedelta(seconds=1)):
+                    self.assertEqual(reports.run_due(now)["reportDate"], "2026-09-26")
+                self.assertEqual(send.call_count, 1)
+                for now in (boundary, boundary + timedelta(minutes=15), boundary + timedelta(minutes=30),
+                            NOW, boundary + timedelta(hours=23, minutes=45)):
+                    self.assertEqual(reports.run_due(now)["reportDate"], "2026-09-27")
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(preview.call_count, 2)
+        with self.store.connection() as connection:
+            rows = connection.execute("SELECT report_date,status,attempts FROM analytics_report_delivery ORDER BY report_date").fetchall()
+            snapshots = connection.execute("SELECT report_date FROM analytics_report_snapshot ORDER BY report_date").fetchall()
+        self.assertEqual([tuple(row) for row in rows], [("2026-09-26", "accepted", 1), ("2026-09-27", "accepted", 1)])
+        self.assertEqual([row[0] for row in snapshots], ["2026-09-26", "2026-09-27"])
+
+    def test_an011_dst_clock_changes_do_not_resend_completed_reports(self) -> None:
+        for first_instant, next_instant, report_day in (
+            ("2026-03-08T08:15:00+00:00", "2026-03-09T07:15:00+00:00", "2026-03-07"),
+            ("2026-11-01T07:15:00+00:00", "2026-11-02T08:15:00+00:00", "2026-10-31"),
+        ):
+            with self.subTest(first_instant=first_instant):
+                first = datetime.fromisoformat(first_instant)
+                next_day = datetime.fromisoformat(next_instant)
+                store = ReportStore(self.root / f"dst-{report_day}.sqlite3")
+                with patch.object(reports, "_store", return_value=store), \
+                        patch.object(reports, "preview_report", side_effect=self.preview) as preview, \
+                        patch.object(reports, "_send", return_value=("accepted", None)) as send:
+                    for instant in (first, first + timedelta(minutes=15), first + timedelta(hours=1),
+                                    first + timedelta(hours=2), next_day - timedelta(minutes=15)):
+                        self.assertEqual(reports.run_due(instant)["reportDate"], report_day)
+                        self.assertEqual(send.call_count, 1)
+                    reports.run_due(next_day)
+                    reports.run_due(next_day + timedelta(minutes=15))
+                    self.assertEqual(send.call_count, 2)
+                    self.assertEqual(preview.call_count, 2)
+                    self.assertTrue(all(row["attempts"] == 1 for row in reports.delivery_history()))
+
+    def test_an011_delayed_restart_sends_latest_due_day_without_replaying_old_completed_reports(self) -> None:
+        first = datetime(2026, 9, 26, 7, 15, tzinfo=timezone.utc)
+        delayed = datetime(2026, 9, 28, 16, 45, tzinfo=timezone.utc)
+        with patch.object(reports, "preview_report", side_effect=self.preview) as preview, \
+                patch.object(reports, "_send", return_value=("accepted", None)) as send:
+            self.assertEqual(reports.run_due(first)["reportDate"], "2026-09-25")
+            with self.store.connection() as connection:
+                original = tuple(connection.execute("SELECT * FROM analytics_report_delivery").fetchone())
+                snapshot = tuple(connection.execute("SELECT * FROM analytics_report_snapshot").fetchone())
+            with patch.object(reports, "_store", return_value=ReportStore(self.store.path)):
+                self.assertEqual(reports.run_due(delayed)["reportDate"], "2026-09-27")
+                reports.run_due(delayed + timedelta(minutes=15))
+            self.assertEqual(send.call_count, 2)
+            self.assertEqual([call.args[0] for call in preview.call_args_list], ["2026-09-25", "2026-09-27"])
+        with self.store.connection() as connection:
+            self.assertEqual(tuple(connection.execute(
+                "SELECT * FROM analytics_report_delivery WHERE report_date='2026-09-25'"
+            ).fetchone()), original)
+            self.assertEqual(tuple(connection.execute(
+                "SELECT * FROM analytics_report_snapshot WHERE report_date='2026-09-25'"
+            ).fetchone()), snapshot)
 
     def test_an011_recipient_case_or_report_version_change_does_not_duplicate_accepted_mail(self) -> None:
         with patch.object(reports, "preview_report", side_effect=self.preview), \
@@ -408,10 +516,23 @@ class AnalyticsReportTests(unittest.TestCase):
             "STYL_SMTP_HOST": "smtp.example.com", "STYL_SMTP_USERNAME": "sender@example.com",
             "STYL_SMTP_PASSWORD": "synthetic-test-password", "STYL_SMTP_FROM": "sender@example.com", "STYL_SMTP_PORT": "587",
             "STYL_ANALYTICS_REPLY_TO": "",
-        }), patch.object(reports.smtplib, "SMTP") as smtp:
-            smtp.return_value.__enter__.return_value.send_message.side_effect = smtplib.SMTPServerDisconnected("PRIVATE_PROVIDER_DETAIL")
+        }), patch.object(reports.smtplib, "SMTP") as smtp, self.assertNoLogs(reports.logger, level="DEBUG"):
+            smtp.return_value.__enter__.return_value.send_message.side_effect = smtplib.SMTPServerDisconnected(
+                "PRIVATE_PROVIDER_DETAIL synthetic-test-password"
+            )
             result = reports._send(reports.render_report(fixture_report(), "2026-09-27"), "owner@example.com")
         self.assertEqual(result, ("ambiguous", "acceptance_unknown"))
+
+    def test_an011_scheduler_failure_logs_never_include_credentials_or_private_details(self) -> None:
+        for error_type in (reports.ReportError, OSError, sqlite3.OperationalError):
+            with self.subTest(error_type=error_type), \
+                    patch.object(sys, "argv", ["analytics_reports", "run-due"]), \
+                    patch.object(reports, "run_due", side_effect=error_type("synthetic-test-password PRIVATE_PROVIDER_DETAIL")), \
+                    self.assertLogs(reports.logger, level="ERROR") as captured:
+                self.assertEqual(reports.main(), 1)
+            self.assertIn(error_type.__name__, captured.output[0])
+            self.assertNotIn("synthetic-test-password", "\n".join(captured.output))
+            self.assertNotIn("PRIVATE_PROVIDER_DETAIL", "\n".join(captured.output))
 
     def test_an014_private_sqlite_backup_is_consistent_and_refuses_overwrite(self) -> None:
         with patch.object(reports, "preview_report", side_effect=self.preview), patch.object(reports, "_send", return_value=("accepted", None)):

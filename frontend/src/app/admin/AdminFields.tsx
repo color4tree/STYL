@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { emptyProvenance, type Provenance } from "@/lib/catalogDetails";
 import type { MarketCurrency, MarketPrices } from "@/lib/pricing";
 
@@ -29,14 +29,15 @@ export function AdminSaveBar({ children }: { children: ReactNode }) {
 
 export type AdminMessage = { type: "error" | "success"; text: string };
 
-export function AdminNotice({ message }: { message: AdminMessage | null }) {
+export function AdminNotice({ message, focusTarget }: { message: AdminMessage | null; focusTarget?: RefObject<HTMLElement | null> }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (message?.type === "error") {
-      ref.current?.scrollIntoView({ block: "center", behavior: "instant" });
-      ref.current?.focus({ preventScroll: true });
+      const target = focusTarget?.current ?? ref.current;
+      target?.scrollIntoView({ block: "center", behavior: "instant" });
+      target?.focus({ preventScroll: true });
     }
-  }, [message]);
+  }, [message, focusTarget]);
   if (!message) return null;
   return (
     <div ref={ref} tabIndex={-1} role={message.type === "error" ? "alert" : "status"} className={`my-4 rounded-xl border-2 p-4 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${message.type === "error" ? "border-red-600 bg-red-50 text-red-900 focus:ring-red-600" : "border-green-600 bg-green-50 text-green-900 focus:ring-green-600"}`}>

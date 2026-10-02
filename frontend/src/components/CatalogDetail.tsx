@@ -14,6 +14,7 @@ import AddToCartButton from "./AddToCartButton";
 import PhotoGallery from "./PhotoGallery";
 import CatalogPrice from "./CatalogPrice";
 import { CompatibilityDetails } from "./Compatibility";
+import { useSupportWidget } from "./SupportWidget";
 
 export default function CatalogDetail({ itemType, identifier }: { itemType: AnalyticsItemType; identifier?: string }) {
   const [item, setItem] = useState<PublicCatalogItem | null>(null);
@@ -24,6 +25,7 @@ export default function CatalogDetail({ itemType, identifier }: { itemType: Anal
   const [actionVisible, setActionVisible] = useState(true);
   const action = useRef<HTMLDivElement>(null);
   const { cart, add, loading: cartLoading, error, notice } = useCart();
+  const { registerPageContext } = useSupportWidget();
   const label = itemType === "product" ? "Equipment" : "Accessory";
   const requestKey = `${itemType}:${identifier}`;
 
@@ -32,6 +34,7 @@ export default function CatalogDetail({ itemType, identifier }: { itemType: Anal
     const endpoint = `${API_BASE}/api/${itemType === "product" ? "products" : "accessories"}/${encodeURIComponent(identifier)}`;
     const controller = new AbortController();
     let active = true;
+    let clearPageContext: (() => void) | undefined;
     async function load() {
       try {
         const response = await fetch(endpoint, { cache: "no-store", signal: controller.signal });
@@ -40,14 +43,17 @@ export default function CatalogDetail({ itemType, identifier }: { itemType: Anal
         if (!data || typeof data !== "object" || !("item" in data) || !isPublicCatalogItem(data.item) || data.item.publicationStatus === "draft") {
           throw new Error(`${label} not found`);
         }
-        if (active) { setItem(data.item); setProblem(""); }
+        if (active) {
+          setItem(data.item); setProblem("");
+          clearPageContext = registerPageContext({ itemType, id: data.item.id, name: data.item.name });
+        }
       } catch (failure) {
         if (active) { console.error(failure); setItem(null); setProblem(failure instanceof Error ? failure.message : `${label} is unavailable right now. Please retry.`); }
       } finally { if (active) { setLoading(false); setResolved(requestKey); } }
     }
     void load();
-    return () => { active = false; controller.abort(); };
-  }, [identifier, itemType, label, requestKey, retry]);
+    return () => { active = false; controller.abort(); clearPageContext?.(); };
+  }, [identifier, itemType, label, requestKey, retry, registerPageContext]);
 
   useEffect(() => {
     if (!action.current) return;

@@ -13,7 +13,7 @@ type Archive = {
   createdAt: string;
   bytes: number;
   sha256: string;
-  counts: { inquiries: number; analyticsRows: number; websiteLogs: number; supportConversations?: number; supportMessages?: number };
+  counts: { inquiries: number; analyticsRows: number; websiteLogs: number; supportConversations?: number; supportMessages?: number; knowledgeFiles?: number };
   verifiedAt: string | null;
   removedAt: string | null;
   archiveDeletedAt: string | null;
@@ -33,7 +33,8 @@ const date = (value: unknown): value is string => typeof value === "string" && N
 const nullableDate = (value: unknown) => value === null || date(value);
 const validCounts = (value: unknown) => record(value) && count(value.inquiries) && count(value.analyticsRows) && count(value.websiteLogs)
   && (value.supportConversations === undefined || count(value.supportConversations))
-  && (value.supportMessages === undefined || count(value.supportMessages));
+  && (value.supportMessages === undefined || count(value.supportMessages))
+  && (value.knowledgeFiles === undefined || count(value.knowledgeFiles));
 const bytes = (value: number) => value < 1024 ? `${value} B` : value < 1024 ** 2 ? `${(value / 1024).toFixed(1)} KiB` : value < 1024 ** 3 ? `${(value / 1024 ** 2).toFixed(1)} MiB` : `${(value / 1024 ** 3).toFixed(1)} GiB`;
 const timestamp = (value: string) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 const button = "min-h-12 rounded-full border border-[var(--line)] bg-white px-5 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50";
@@ -249,15 +250,16 @@ export default function RecordsManager({ adminToken, active, hasUnsavedChanges, 
 
   return <section aria-labelledby="records-title" className="min-w-0 max-w-4xl space-y-5">
     <div className="min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-5 sm:p-7">
-      <h2 id="records-title" className="text-xl font-semibold">Protect business records and website logs</h2>
-      <p className="mt-3 text-sm leading-6">Create a persistent backup → download and save it → select your saved local ZIP to verify → optionally remove exact, unchanged backed-up source records.</p>
+      <h2 id="records-title" className="text-xl font-semibold">Business, log and support records</h2>
+      <p className="mt-3 text-sm leading-6">1. Create → 2. Download and verify your saved ZIP → 3. Optional cleanup.</p>
+      <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Confidential, unencrypted backup — includes personal information. Store securely; never publish. Downloading or verifying does not delete records.</p>
+      <details className="mt-3 text-sm leading-6">
+        <summary className="min-h-11 cursor-pointer py-2 font-medium">Details: privacy, coverage and retention</summary>
       <p className="mt-3 text-sm leading-6">Website access, runtime and error logs, analytics, and inquiries are not automatically deleted by age or size. Operational logs have a separate 14-day retention policy. Downloading or verifying never removes records.</p>
-      <div className="mt-4 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-        <p className="font-semibold">Confidential, unencrypted backup</p>
-        <p>Contains customer inquiries, analytics, and website logs that may include personal information. Store it securely, restrict access, and never publish or share it publicly. Verification sends your selected ZIP privately back to this server for a streaming full-file comparison; the upload is not stored.</p>
-      </div>
-      <p className="mt-4 text-sm leading-6 text-[var(--muted)]">Includes a full SQLite snapshot, saved inquiry JSON, configured website log files, and a standalone offline verify/restore tool. This is separate from the catalog recovery ZIP under Backup. Current catalog, configuration and settings are not removal targets.</p>
-      {hasUnsavedChanges ? <p role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">You have unsaved editor changes. Opening Backup &amp; Records neither saves nor discards them.</p> : null}
+        <p className="mt-3">Verification sends your selected ZIP privately back to this server for a streaming full-file comparison; the upload is not stored.</p>
+        <p className="mt-3">Includes a full SQLite snapshot, saved inquiry JSON, configured website log files, support history and follow-up contact details, private knowledge source files, and a standalone offline verify/restore tool. Use Catalog recovery for the separate catalog ZIP. Current catalog, configuration and settings are not removal targets.</p>
+      </details>
+      {hasUnsavedChanges ? <p role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm">You have unsaved editor changes. Opening Backup neither saves nor discards them.</p> : null}
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button type="button" disabled={Boolean(busy)} onClick={() => void load()} className={button}>Refresh records</button>
         <button type="button" disabled={Boolean(busy) || !index} onClick={() => void create()} className={`${button} !bg-[var(--ink)] text-white`}>Create persistent backup</button>
@@ -285,7 +287,7 @@ export default function RecordsManager({ adminToken, active, hasUnsavedChanges, 
             <div><dt className="font-semibold">Archive</dt><dd className="break-all">{selected.filename} · {bytes(selected.bytes)}</dd></div>
             <div><dt className="font-semibold">Backup ID</dt><dd className="break-all font-mono">{selected.id}</dd></div>
             <div><dt className="font-semibold">SHA-256</dt><dd className="break-all font-mono">{selected.sha256}</dd></div>
-            <div><dt className="font-semibold">Backed-up records</dt><dd>{selected.counts.inquiries} inquiries · {selected.counts.analyticsRows} analytics rows (full database history) · {selected.counts.websiteLogs} website log files · {selected.counts.supportConversations ?? 0} support conversations / {selected.counts.supportMessages ?? 0} messages</dd></div>
+            <div><dt className="font-semibold">Backed-up records</dt><dd>{selected.counts.inquiries} inquiries · {selected.counts.analyticsRows} analytics rows (full database history) · {selected.counts.websiteLogs} website log files · {selected.counts.supportConversations ?? 0} support conversations / {selected.counts.supportMessages ?? 0} messages · {selected.counts.knowledgeFiles ?? 0} knowledge source files</dd></div>
             <div><dt className="font-semibold">Local-file verification</dt><dd>{verified ? `Verified ${timestamp(selected.verifiedAt!)}` : "Not verified for removal. Select the saved file and verify it below."}</dd></div>
             {selected.archiveDeletedAt ? <div><dt className="font-semibold">Server backup ZIP</dt><dd>Deleted {timestamp(selected.archiveDeletedAt)}. Audit history is retained; only your downloaded backup copy remains.</dd></div> : null}
           </dl>
@@ -303,10 +305,14 @@ export default function RecordsManager({ adminToken, active, hasUnsavedChanges, 
     </div> : null}
     {selected ? <div className="min-w-0 rounded-[28px] border border-red-200 bg-white/80 p-5 sm:p-7">
       <h3 className="text-lg font-semibold">Optional: remove backed-up source records</h3>
-      <p className="mt-3 text-sm leading-6">Nothing is selected by default. This changes historical analytics reports and saved-inquiry counts. Only exact, unchanged source records from this verified archive are eligible. Current-hour analytics, pending inquiries, mail duplicate-prevention metadata, current catalog, configuration, and settings stay untouched.</p>
+      <p className="mt-3 text-sm leading-6">Only selected, unchanged records in this verified backup can be removed, once per archive. This changes historical reports and inquiry counts; the backup is retained.</p>
+      <details className="mt-3 text-sm leading-6">
+        <summary className="min-h-11 cursor-pointer py-2 font-medium">Details: removal scope and protected records</summary>
+      <p className="mt-3 text-sm leading-6">Nothing is selected by default. Current-hour analytics, pending inquiries, mail duplicate-prevention metadata, current catalog, configuration, and settings stay untouched.</p>
       <p className="mt-3 text-sm leading-6">Analytics removal covers only completed-hour aggregate counts/items, not every row in the full database backup. Email report history and safety metadata stay: all report snapshots, delivery metadata, settings, analytics metadata, and legacy privacy-related rows are protected. Legacy records require separate review.</p>
-      <p className="mt-3 text-sm leading-6">Support cleanup removes only unchanged closed conversations and their messages/jobs. Active conversations, changed threads, pending work and support settings remain. Old archives without a support snapshot cannot authorize support cleanup.</p>
+      <p className="mt-3 text-sm leading-6">Support cleanup removes only unchanged closed conversations and their messages, jobs and contact details. Active conversations, changed contacts or threads, pending work, support settings and knowledge sources/files remain. Old archives without the current support schema cannot authorize support cleanup.</p>
       <p className="mt-3 text-sm leading-6">This selection can be processed only once per archive. Unselected categories stay untouched; create another backup for a later removal. Keep your verified local copy. Source removal retains the server archive; deleting that ZIP is a separate choice below.</p>
+      </details>
       {recoveryLocked ? <div role="alert" className="mt-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
         <p className="font-semibold">Recovery review required</p>
         <p>{removalUnconfirmed ? "The removal outcome could not be confirmed. Refresh records to check its status." : selected.removalState === "removing" ? "Source removal is in progress or may have been interrupted." : "A source-removal attempt failed."} Some selected records may already have been removed. The verified backup is retained and locked for recovery. Source removal and server-ZIP deletion are disabled; do not retry cleanup. Download the retained ZIP for administrator-led recovery review.</p>

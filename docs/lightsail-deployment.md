@@ -71,8 +71,14 @@ audit active retention jobs before release.
 Review infrastructure access logs and business inquiry/contact data separately:
 they may contain personal data even though new analytics is aggregate-only.
 
-Daily mail remains **08:00 America/Los_Angeles**, disabled outside production;
-previews exclude the incomplete hour. Served-market privacy review is required,
+The updated daily mail schedule is **00:15 America/Los_Angeles (12:15 AM Pacific)**
+early the next day, covering the previous completed local calendar day. Before
+00:15 the latest due date is still two days ago. The existing quarter-hour timer
+already aligns; persisted per-recipient claims prevent redelivery on later ticks
+or DST changes. This timing change is local only, **not deployed**; actual SMTP
+and inbox delivery remain **uncertified**, requiring separate deployment/send
+approval. Mail stays disabled outside production, and previews exclude the
+incomplete hour. Served-market privacy review is required,
 not replaced by a universal claim of consent exemption. Private storage,
 consistent backups, retention jobs, timer/recipient setup and rollback are covered
 in [analytics operations](traffic-analytics-operations.md). City/postal is deferred.

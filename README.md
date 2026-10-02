@@ -8,7 +8,7 @@ STYL is a premium fitness equipment brand website and lightweight commerce MVP.
 - [Traffic analytics and daily email requirements](docs/traffic-analytics-requirements.md) — aggregate-only production collection, concise daily summaries and admin reports; actual email sending disabled, City/postal deferred
   - [简体中文版：网站流量分析与每日使用情况邮件](docs/traffic-analytics-requirements.zh-CN.md)
 - [Traffic analytics local use and operations](docs/traffic-analytics-operations.md) — automatic first-party aggregates with Privacy-page opt-out, private hour-based counts, admin reports and guarded daily email jobs
-- [AI-assisted customer service](docs/customer-service-ai-architecture.md) — local guest chat, scoped Gemini adapter and protected human-support inbox; broader production architecture and rollout gates remain future
+- [AI-assisted customer service](docs/customer-service-ai-architecture.md) — local guest chat, GPT-6 Luna with retrieval-based catalog knowledge, Gemini video processing and a protected team inbox; broader production rollout gates remain future
   - [简体中文版：网站与 AI 辅助客户服务架构](docs/customer-service-ai-architecture.zh-CN.md)
 - [Living regression test plan](docs/regression-test-plan.md) — system and end-user cases, automation mapping, release gates, and an expandable run-record template
 - [Catalog backup and offline recovery](docs/catalog-backup-and-recovery.md) — private admin ZIP download, included media/checksums, and recovery on a clean installation; browser upload/import remains deferred
@@ -126,7 +126,8 @@ This is noninterrupting UX, not hidden notice or a universal legal claim of
 consent exemption. Business contact records and infrastructure logs are separate
 and may contain personal data.
 
-Daily reports use **08:00 America/Los_Angeles**. The scheduled-job implementation
+Daily reports use **00:15 America/Los_Angeles**, covering the previous completed
+calendar day. The scheduled-job implementation
 and timer templates remain subject to final verification; non-production mail
 is blocked, recipients are not approved and nothing is deployed by this change.
 Admin uses Pacific date filters/manual refresh and hour-level last activity;
@@ -140,21 +141,58 @@ configuration, previews, privacy review and safe production rollout.
 
 ### Local AI customer-service pilot
 
-The local API task supports guest chat at `/support` and **Support inbox** in
-admin. It uses only published market-eligible product facts, exact current prices
+The AI branch includes a persistent bottom-right guest-chat
+avatar/dialog (`/support` remains an entry), a page-style admin support inbox and
+central reviewed knowledge management. It uses only published market-eligible
+product facts, exact current prices
 and documented compatibility; missing information goes to a highlighted human
 queue. Existing admin access is a single-operator local exception, not named
 multi-agent production authentication. Chat is hard-gated to local/test and no
 production deployment is authorized.
 
-Use synthetic, non-sensitive messages only with Gemini's unpaid tier. Save a key
-through `.\configure-local-gemini.ps1 -Action Save`; the masked prompt writes
-Windows-user-encrypted data outside Git/OneDrive. The key is backend-only.
+The customer UI uses **STYL Assistant**. Requesting team help leaves the
+assistant available for further questions. Admin highlights individual unanswered
+questions; team replies quote the original question and resolve only its pending
+status. There is no takeover/resume step: the team and assistant collaborate,
+with reply and close controls. Ordinary named-item
+price/specification questions read verified current catalog facts directly,
+without depending on Gemini availability. Technical reasons stay in admin.
+Catalog questions now use validated per-field plans across all equipment and
+accessories. Known facts remain visible when another field is unknown; colors,
+materials, components, prices, units, weight and published compatibility are not
+handled as one all-or-nothing answer. Direct mounting requirements do not require
+the customer's rack model. Own weight, load capacity, nominal fit labels, measured
+dimensions and pin/hole information remain distinct. Pending clarifications use
+a transient page-context stamp, not a new analytics identifier or history expiry.
+Answers use concise conversational sentences while retaining exact catalog
+facts. After sending with Enter, the message box keeps focus. An unanswered
+question offers optional name/email fields for private team follow-up; these
+details are separate from messages, AI input and traffic analytics. The dialog
+has a compact Privacy link instead of a warning banner or manual help/refresh
+buttons.
+
+Chat/image/PDF processing uses OpenAI `gpt-6-luna`; video extraction uses
+Gemini `gemini-3.8-flash`. Save the OpenAI key through
+`.\configure-local-ai.ps1 -Provider OpenAI -Action Save`; the masked prompt writes
+Windows-user-encrypted data outside Git/OneDrive. Gemini's separate key remains
+available for videos. Keys are backend-only; provider usage may be chargeable.
 Provider/model, startup steps, isolated testing and the verified synthetic
 connection are documented in the [architecture guide](docs/customer-service-ai-architecture.md).
-Conversation history has no age expiry and is covered by Backup & Records;
+Complete catalog text/features are searched before selecting model context.
+Use **Customer support → Knowledge → Add documents** for PDF, DOCX, TXT and MD
+documents. Choose product assignments (including all currently published items)
+or general customer-service Q&A. The visible document library shows upload
+metadata, processing state and actual readiness. Photos/videos and centrally
+uploaded manuals produce review drafts; only current
+admin-approved facts are eligible for customer answers. Catalog recovery and
+business/log/support records are consolidated in the admin Backup tab.
+Conversation history has no age expiry and is covered by records backups;
 only explicitly selected unchanged closed threads can be removed after verifying
 the downloaded archive.
+Chat on a verified detail page defaults to that item and displays an About chip.
+An explicitly named product takes priority; submitted/retried questions retain
+their captured context even after navigation. Short names and minor alphabetic
+typos are handled conservatively; ambiguous matches are clarified.
 
 ### Frontend
 

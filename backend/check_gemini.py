@@ -25,18 +25,8 @@ def main() -> int:
         if not args.model:
             print("--support requires --model.")
             return 2
-        from app.support_ai import respond
-        result = asyncio.run(respond(
-            [{"role": "user", "text": "What is the price of the Synthetic Test Rack?"}],
-            [{"ref": "product:1", "type": "product", "id": 1, "name": "Synthetic Test Rack",
-              "category": "Racks", "price": 123.45, "currency": "CAD", "publicationStatus": "published",
-              "description": "A synthetic testing fixture, not a real product."}],
-            ["products", "pricing", "compatibility"], "gemini", args.model,
-        ))
-        valid = not result.needs_human and result.topic == "pricing" and "CAD $123.45" in result.text and result.references == ("product:1",)
-        print(json.dumps({"supportAdapterVerified": valid, "model": args.model, "reason": result.reason,
-                          "references": result.references, "usage": result.usage}))
-        return 0 if valid else 1
+        from check_ai import check
+        return asyncio.run(check("gemini", args.model))
     try:
         with httpx.Client(
             base_url="https://generativelanguage.googleapis.com/v1beta/",

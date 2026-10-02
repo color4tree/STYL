@@ -14,7 +14,8 @@ business recovery; neither is a full machine image.
 
 ## Admin workflow
 
-1. Sign in and open **Backup & Records**.
+1. Sign in and open **Backup**, then its business/log/support records section.
+   Catalog recovery remains a separate section inside that same tab.
 2. Review disk usage and website-log coverage. Missing log configuration is an
    explicit warning, not a claim that all production logs were backed up.
 3. Choose **Create backup**. A private persistent ZIP is created and verified on
@@ -62,6 +63,14 @@ GeoIP keys and unrelated server files.
   comparing every conversation/message/job value against the support snapshot
   in one write transaction. Active/reopened/changed threads and pending work are
   skipped; associated messages/jobs cascade only after this explicit comparison.
+  Question-attention flags, answered-by IDs and quoted-reply links are part of
+  those message rows and are preserved in a complete snapshot/restore. A schema
+  migration means an older archive cannot authorize deletion against a changed
+  schema; create a new verified backup rather than guessing missing metadata.
+  Private follow-up name/email live in a separate `conversation_contacts` table,
+  included in the same consistent snapshot. Cleanup compares contact rows as
+  well; changed contacts preserve the entire thread. Unchanged contacts cascade
+  only when the explicitly selected, verified closed thread is removed.
   Support configuration stays. Older archives without `support.sqlite3` cannot
   authorize support removal. Guest access to a removed conversation returns not
   found; downloaded archives remain confidential and require privacy controls.
@@ -113,6 +122,14 @@ Mailboxes and any external infrastructure logging have their own policies.
   exists it is consistently copied through SQLite's backup API, even while
   support is disabled. Missing means no support history to capture, not permission
   to ignore an unreadable/corrupt existing database.
+- `STYL_KNOWLEDGE_DIR`: private immutable knowledge-source copies (catalog
+  images/videos and uploaded PDF/DOCX/TXT/MD manuals or general Q&A). Defaults to `knowledge` beside the support
+  database. Copies use content-addressed filenames; backup verifies their SHA-256
+  and includes every retained version, along with knowledge/approval tables in
+  support SQLite. Closed-chat cleanup does not delete this library. Source files
+  are not publicly served as uploads; admin file access stays authenticated.
+  Document scope and approval state are stored in support SQLite, including
+  general customer-service sources with no product assignment.
 - Never place either directory inside public assets or uploads, share them with
   one another, or expose them through Caddy. Symlinks/hard-linked source files
   are rejected. Use restrictive owner/group permissions and enough free space.

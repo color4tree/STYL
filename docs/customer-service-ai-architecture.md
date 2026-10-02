@@ -1,8 +1,10 @@
 # STYL website and AI-assisted customer-service architecture
 
-Status: Local guest chat, single-operator inbox and scoped Gemini adapter
-implemented and locally verified (see project history for harness caveats). No production push/deployment
-or paid billing authorized. Synthetic Gemini adapter connectivity verified.
+Status: Local guest chat, single-operator inbox and scoped provider adapters
+implemented. GPT-6 Luna chat/image/PDF checks are verified with synthetic inputs;
+Gemini 3.8 Flash video is configured but its live check returned a provider
+quota/service-unavailable response. No production push/deployment or billing
+configuration change is authorized. See project history for final test evidence.
 
 Date: 2026-09-28
 
@@ -19,6 +21,403 @@ Related documents:
 - [Country/market selection](geoip-pricing.md)
 - [Living regression plan](regression-test-plan.md)
 - [Backup & Records policy](records-backup-and-retention.md)
+
+## 2026-10-01 catalog-wide answer accuracy upgrade
+
+The owner approved the accuracy-review plan explicitly for **all equipment,
+accessories and public catalog information**, not a Dip-specific compatibility
+patch. The Dip example is one regression fixture alongside benches, racks, bars,
+cable attachments, straps and trainers. The existing catalog and approved source
+library remain authoritative; no generated catalog or screenshot seed is promoted
+or written into existing product data.
+
+The implementation introduces a generic per-field answer plan rather than a
+single all-or-nothing answer flag. Coverage includes identity/category/brand,
+prices/MSRP, colors/finish/material, descriptions/features, dimensions, own weight,
+documented load/resistance data, inclusions/selling units/quantities, models/SKUs,
+availability/warranty and all published compatibility fields. Missing fields,
+conflicts, scope-disabled fields and clarification needs stay distinct. Known
+answers survive an unknown field or unrelated pending FAQ; a partial answer can
+coexist with a team-attention request.
+
+Published requirements are different from proof of a customer's exact fit.
+Direct upright/hole/size questions do not require a customer rack model. Pure
+rules can explain a stated requirement match, missing customer measurement or
+decisive mismatch, but matching nominal labels does not establish tested fit,
+safe load or manufacturing tolerances. No product-specific ID or magic dimension
+is used as the generic rule. Own weight is never a safe-load rating or resistance.
+Source-stated dual labels remain as stated; unit arithmetic is not fit evidence.
+
+Models may interpret wording into allowed fields/product references and
+user-stated measurement spans. Values, comparisons and customer-facing factual
+claims come from validated evidence and deterministic rendering. Progress may be
+shown, but no unvalidated model facts are streamed. Field-level private traces
+record the selected field/status/evidence and published plan, not chain-of-thought.
+
+Clarification state is scoped to its product, intent and captured page context.
+A transient page-context version accompanies each new send and is pinned for
+retry. A new navigation can prevent reuse of an old pending measurement, but must
+not cancel or retarget an already-submitted question. Old chats/contacts remain
+business records; this change is not an age-deletion policy or a login requirement.
+Only the most recent unanswered clarification can supply pending measurement
+slots, within 30 minutes and the same captured page context. A targeted team
+reply or an intervening customer question prevents reuse. Expiring this
+interpretation context never deletes messages or documents.
+
+Answer-plan traces are retained privately in the existing job records. At
+publication, exact rendered text/references/team flags must match a plan
+reconstructed from current eligible facts. Mixed catalog/FAQ replies use a
+separately validated composite plan and current approved general sources.
+Plan data is not returned as customer-facing implementation detail.
+
+Evaluation combines an offline multi-product/field benchmark, live-catalog
+read-only consistency checks, API publication/freshness tests and customer DOM
+checks for retained known fields. Synthetic approvals are test-only; workflow
+test counts are not marketed as a measured real-customer accuracy percentage.
+
+## 2026-10-01 visible document library, general Q&A and item context
+
+The document uploader now uses prominent, site-consistent **Choose file** and
+**Upload document** controls. Upload attempts remain clickable when fields are
+missing, then show readable inline errors and focus the first invalid field.
+Inputs are preserved; invalid attempts do not create a source. A dedicated
+**Uploaded documents** library remains visible even when many catalog media
+sources exist. It shows title, format, size, original upload time, assignments,
+status and whether approved content is actually available to the assistant.
+Uploading is not the same as approval; missing/private/stale/ineligible content
+is not shown as ready. Readiness uses the same eligibility checks as retrieval.
+
+Two document scopes are supported:
+
+- **Product documents:** assign particular published, priced items.
+  **Select all currently published items** captures the current list; it is not
+  a wildcard that silently applies to future products. Clear selection is
+  available. Assignment changes invalidate prior approval.
+- **General customer-service Q&A:** no product assignment is required. Approved
+  general policies can answer shipping/delivery, returns, warranty-policy and
+  support-process questions without inventing eligibility or commitments.
+  Product selling prices remain authoritative live catalog values; a mixed
+  product-price assertion cannot be laundered through a service-fee statement.
+  Private/contact/credential restrictions remain.
+
+PDF, Word **`.docx`**, UTF-8 **`.txt`** and **`.md`** are accepted. Word processing
+extracts text, headings and tables, not a rendered page layout; use PDF/images
+for diagrams. External relationships are never fetched, and macros/OLE/unsafe
+packages, traversal, duplicate/encrypted/bomb ZIPs and unsafe XML are rejected.
+Existing file/page/text bounds fail explicitly rather than truncating successful
+imports. All extraction results remain review drafts; original immutable files
+and source versions participate in backup/restore.
+
+The new `customer_service` answer topic is visible in Conversations settings.
+Schema v3 adds it to the prior default product/pricing/compatibility scope while
+preserving the global enabled/disabled choice. Customized narrower topic sets
+are retained; the library explains when an approved general document is not
+enabled for answering. General knowledge is loaded as a separate read-only
+approved snapshot, and its cited source revisions are rechecked before publishing.
+No unapproved or newly stale policy answer may escape the publication fence.
+
+Product reference resolution accepts omitted STYL branding, common short names
+and conservative alphabetic typo/alias matches. It does not reinterpret explicit
+other brands or nearby numeric model/SKU identifiers as STYL items; several
+plausible matches produce a clarification rather than a guessed selection.
+
+On verified equipment/accessory detail pages, a compact **About: [item]** chip
+shows the default chat context. The item reference is captured when a question
+is submitted, including its retry identity, so later navigation cannot retarget
+that pending question. An explicitly named product in the question overrides
+the page default. General service-policy queries are independent of page context;
+unavailable/draft/failed detail pages clear it. On other pages the usual
+conversation context remains available.
+
+## 2026-10-01 provider routing and reusable document knowledge
+
+The owner selected the following local routes:
+
+| Work | Provider/model |
+| --- | --- |
+| Customer chat requiring a model | OpenAI `gpt-6-luna` |
+| Image, PDF, DOCX and text/document extraction | OpenAI `gpt-6-luna` |
+| Video extraction only | Gemini `gemini-3.8-flash` |
+| Unambiguous live catalog price/spec lookup | Trusted local lookup; no model call required |
+
+The exact GPT model is documented at
+[GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
+It supports text/image input and structured output, not native video input.
+Video processing therefore has an independent provider/model setting, not the
+chat model reused accidentally. No automatic provider/model fallback is allowed.
+API usage can incur provider charges; configuring a key does not purchase credits,
+enable billing, change subscriptions or authorize bulk extraction.
+
+### RAG-style architecture retained by STYL
+
+```text
+Published catalog + uploaded documents/media
+    -> extraction drafts -> admin review/approval
+    -> STYL-owned current knowledge and source references
+Customer question -> local retrieval of relevant approved sections
+    -> selected model decision -> verified, cited response
+```
+
+Raw PDFs, pictures and videos are processed at ingestion, not uploaded again on
+each customer question. Current catalog text is read live; approved document facts
+and immutable source versions are stored privately in STYL. Existing approved
+knowledge remains reusable after changing model providers. New or changed source
+facts still require approval. The current retrieval is keyword/section based,
+with a compact eligible-item inventory and bounded relevant context; this change
+does not introduce embeddings, a vector database or OpenAI-hosted file search.
+
+### Adding more documents
+
+Use **Admin → Customer support → Knowledge → Add documents**. Supply a title,
+select product assignments or general Q&A scope, and upload a PDF, DOCX, TXT, MD
+or supported media file. Start extraction after acknowledging the selected provider, review
+the draft facts/page or timestamp references, then approve. Approved facts become
+available to later questions without model retraining or code edits. Uploading
+alone does not approve facts or expand allowed answering topics. General policy
+topics outside the existing approved scope still require separate approval.
+Extraction consent is pinned to the displayed provider/model routing fingerprint.
+If routing changes while an admin page is open, the old confirmation is rejected
+before enqueueing any files; refresh and explicitly reconfirm the new routing.
+Queued jobs also preserve their acknowledged route and pause rather than silently
+moving to a different provider after a configuration change.
+
+### Private configuration
+
+`configure-local-ai.ps1 -Provider OpenAI -Action Save` opens a masked prompt and
+saves an encrypted `openai-key.dpapi` under the current user's LocalAppData STYL
+AI folder. `-Provider Gemini` uses the existing separate `gemini-key.dpapi`.
+The legacy Gemini helper remains a wrapper for compatibility. Existing private
+directory permissions are validated, not unnecessarily rewritten. No API key
+belongs in chat, source, screenshots, frontend variables or backups.
+
+The branch-aware local API starter loads the two keys into the backend process.
+The frontend task clears all provider-key environment variables. Active settings:
+
+```dotenv
+STYL_SUPPORT_PROVIDER=openai
+STYL_SUPPORT_MODEL=gpt-6-luna
+STYL_KNOWLEDGE_PROVIDER=openai
+STYL_KNOWLEDGE_MODEL=gpt-6-luna
+STYL_KNOWLEDGE_VIDEO_PROVIDER=gemini
+STYL_KNOWLEDGE_VIDEO_MODEL=gemini-3.8-flash
+```
+
+OpenAI Responses requests use `store: false` and validated structured output.
+[OpenAI's API data controls](https://developers.openai.com/api/docs/guides/your-data)
+state API data is not used for training by default unless the account opts in;
+abuse-monitoring retention can still apply. `store: false` is not a claim of zero
+retention. Gemini's data terms still apply to acknowledged video processing.
+Private follow-up contacts remain outside either provider's prompts.
+
+Use `backend/check_ai.py --provider openai --model gpt-6-luna` only after privately
+loading the key in that shell. The check calls the provider decision adapter
+directly with synthetic facts so the local price shortcut cannot produce a false
+connectivity pass. A model-list/access response alone is not proof of generation
+quota, billing readiness or document processing.
+
+## 2026-10-01 clean conversation and private follow-up contacts
+
+The owner requested the display name **STYL Assistant**, removal of the warning
+banner and manual **Ask for human help / Refresh conversation** buttons, and
+continued composer focus after Enter. Normal chat now uses concise conversational
+sentences based on the same verified values/references, rather than field-label
+snippets. Complex provider decisions still cannot invent prices, compatibility
+or unsupported policy. Failed sends retain their draft/retry identity; minimizing,
+navigation or deliberate focus elsewhere must not be reversed by a late response.
+Privacy/data-use information remains available through a small Privacy link.
+
+When a question needs the team, retain **Your request has been sent to our team.**
+and offer optional **Your name / Email address** fields for follow-up. These are
+a separate form/API record, not a chat message or model input. Capturing them does
+not require login, block further questions, resolve the question, send an email,
+or promise an immediate response. Admin can see the saved contact separately and
+use an encoded mailto link. Do not put real personal/confidential information into
+unpaid AI chat; the contact form is the private channel for follow-up details.
+
+Guest-only `PUT /api/support/conversations/{id}/contact` saves a trimmed Unicode
+name (1–120 characters), a validated single email (up to 254), and an independent
+`expectedRevision`. Unknown/other guest tokens cannot read or update it, closed
+threads reject changes, stale conflicting edits are explicit, and identical
+lost-ack retries do not inflate revisions. Contact updates do not cancel AI jobs
+or overwrite newer messages. Contacts never enter model history, message receipts,
+traffic analytics or mail-recipient configuration.
+
+Schema v2 keeps `conversation_contacts` separate, linked to the conversation with
+explicit cascading removal. Private full SQLite backups include it; closed-thread
+cleanup compares those rows too and retains changed contacts. A backup lacking
+the current contact schema cannot authorize unsafe cleanup. A protected local
+pre-migration snapshot is required before activating the new schema.
+
+The daily analytics report is now scheduled for **00:15 Pacific the next day**,
+not 08:00. It covers the previous completed calendar day, retains DST/date-window
+and per-recipient duplicate protections, and does not change recipient enablement
+or send real email in local/test. Production timing changes require a separately
+approved deployment.
+
+## 2026-09-30 question-based collaborative replies
+
+The owner explicitly chose collaboration instead of conversation takeover:
+the assistant continues answering new questions while team members reply to
+individual earlier questions. The selected-conversation controls are **Reply**
+and **Close conversation**, not takeover/resume/clear-request mode controls.
+Global automatic-answer settings, source/scope safeguards and closed-state
+protection still apply. Legacy open `human` threads no longer represent exclusive
+ownership; they can receive new assistant answers without manual resumption.
+
+Each customer question carries its own pending-team status and answered-by link.
+The admin transcript highlights **Needs a team reply**, with a Reply action on
+the question. A reply pins the original question, previews its quote, and sends
+that exact same-conversation customer-message identity. Team replies display the
+quote in both customer and admin chat. Sending a reply clears only the target
+question; other unresolved questions remain highlighted and counted. Existing
+unlinked historical team messages are not retroactively assigned guessed quotes.
+
+The composer uses **Your reply**, **Write a helpful message…**, and **Send reply**.
+Draft text, chosen question and its concurrency precondition survive polling,
+navigation and recoverable errors. New unrelated customer/assistant activity
+must not retarget a draft or make it impossible to send: target-level
+`expectedAnsweredBy` checks protect against a competing team answer, while
+message ID/text/target define idempotency. No client-supplied quote text is trusted.
+If a refreshed question has a different answer than the draft captured, sending
+remains blocked until **Review latest answer and continue** is explicitly
+confirmed. That confirmation updates only the question precondition, preserving
+the draft, target and retry UUID; ordinary refresh is not permission to override
+a competing answer.
+
+Replying to an older question leaves the latest AI job untouched. If the team
+answers the very question currently being processed, only that question's AI job
+is cancelled to avoid a duplicate response; future questions remain eligible.
+Closing the conversation still fences outstanding work. Follow-up item resolution
+prioritizes the customer's most recent explicit item, not a late team response
+that quotes a different, older product question.
+
+Private SQLite migration adds question/reply metadata without deleting records;
+quotes and resolution links participate in existing complete support backups.
+Legacy failed-job questions are conservatively identified for review rather than
+pretending an unlinked old team reply resolved a specific question. Customer
+payloads omit internal question-reason codes; admin retains diagnostic evidence.
+
+## 2026-09-30 professional wording and continued assistance
+
+Customer-facing identity is **STYL Assistant**, with **STYL team** for actual
+human replies. The saved handoff confirmation is only:
+**"Your request has been sent to our team."** It does not claim that a person is
+online, that email was delivered, or that a response deadline exists. Diagnostic
+reason codes remain in authenticated admin views; guest views return no reason.
+Known historical pause messages are normalized for customer presentation without
+rewriting the stored transcript. Necessary unpaid-provider privacy information is
+available through concise preview/privacy details, not repeated implementation
+explanations in the ordinary conversation.
+
+A **pending human request does not pause the assistant**. Customers can ask new
+questions; answers retain the outstanding human-attention flag and its admin
+reason. Repeated requests are idempotent and do not interrupt acknowledged work.
+The later question-based collaboration decision above supersedes takeover and
+resume controls. Closure, disabled automatic assistance or an answer to the
+same current question can fence relevant work; an unrelated team reply cannot.
+Existing waiting conversations use this behavior on their next message, without
+rewriting history or automatically replaying old questions.
+
+Read-only local diagnosis established that provider failures were followed by
+the old waiting state suppressing later catalog jobs. Straightforward, unambiguous
+catalog lookups now use verified current public facts directly before requesting
+Gemini: prices, weights/specifications, explicitly stated STYL branding, basic
+overviews and catalog listings. Price values never come from prior human/model
+messages. Exact/current item references and conservative unique-name matching
+resolve follow-ups such as "what is the weight of it"; ambiguous names ask for
+clarification rather than picking a similar item. Missing facts still request
+human help, without exposing technical reasons.
+
+More complex questions retain the provider/evidence workflow, so upstream service
+availability is not claimed fixed. A clean follow-up is not permanently blocked
+because an earlier message contained contact information: obvious sensitive prior
+messages are omitted from provider context, while current sensitive input still
+does not go to Gemini. This is not comprehensive DLP; local free-tier tests remain
+synthetic/non-sensitive.
+
+## 2026-09-30 floating chat and reviewed knowledge expansion
+
+The owner approved local development on the AI branch after clarifying:
+
+- Persistent bottom-right avatar on customer pages. Open a compact bottom-right
+  chat dialog; on phones it is nearly full width but leaves some storefront
+  visible. Customer bubbles are **left**, AI/human bubbles **right**, with
+  responder labels. Minimize without losing the conversation or draft across
+  navigation. Animate only during a real pending AI response, respect reduced
+  motion, show unread replies and do not auto-open unsolicited conversations.
+- Keep the page-style Customer Support admin workspace, adding central knowledge
+  upload/product assignment and draft review there.
+- Search **complete** published catalog text and every feature, not truncated
+  first paragraphs or eight-item-only context. Refresh live prices and visibility
+  per turn. The entire eligible item inventory is available; relevant complete
+  text sections are retrieved from the full source before bounding model context.
+- Reuse catalog images/videos and accept centrally uploaded manuals/documents.
+  Extract media/document facts into drafts; none become customer knowledge until
+  explicitly approved. Quote approved facts with their source/page/timestamp.
+  Changed/removed source material or assignments invalidate approval.
+- Consolidate catalog recovery and business/log/support records under one Backup
+  tab. Short contextual guidance and expandable details replace repeated warning
+  blocks; failures, downloaded-file verification and destructive confirmations
+  remain explicit and mandatory.
+
+This is still local/test only, text chat only, with no paid upgrade, production
+push/deployment, customer accounts or voice features. Free-tier extraction is
+started explicitly for approved, non-sensitive source material. Quota/service
+failures must remain visible, resumable and bounded rather than pretending
+extraction succeeded or switching to a paid provider.
+
+Published product-specific warranty text is part of catalog facts; quoting it
+does not decide a customer's warranty eligibility or authorize a refund.
+Shipping/return/refund policies without approved scope remain human work.
+Media analysis is not a guarantee of correct fit/load/safety: every derived fact
+is an admin-reviewed draft, and missing evidence still requires human help.
+
+Knowledge source copies are private, immutable, content-addressed files. The
+support database stores their assignments, extracted versions and approval state.
+Both database and source versions participate in private records backup/restore;
+closed-conversation cleanup must not remove the knowledge library.
+
+### Using the central knowledge workflow
+
+Open **Admin → Customer support → Knowledge**:
+
+1. **Sync catalog media** discovers eligible equipment/accessory images and videos,
+   preserving private content-addressed copies and historical versions. Complete
+   public catalog text is already live and requires no second upload.
+2. Upload a manual/document with a title and one or more published product
+   assignments. Sources are private attachments, not publicly served executable
+   documents.
+3. Confirm the material is approved public/non-sensitive information, then choose
+   **Extract draft** or **Extract pending**. This is the explicit boundary before
+   files are sent to Gemini; sync/upload alone does not call the model.
+4. Review every extracted draft, its page/timestamp/region and assigned products.
+   Edit or reject unsupported/private/price claims. Only **Approve** publishes
+   current facts to the customer AI. Changed sources/assignments require review
+   again; an item deleted and replaced under the same numeric ID cannot inherit
+   its old approved manual.
+
+Current upload/processing bounds are exposed in the UI: PDF 25 MiB/100 pages,
+images 8 MiB, videos 50 MiB/10 minutes; at most 1,000 sources/2 GiB source storage.
+Oversized, encrypted, malformed or unreadable sources fail explicitly; no
+successful first-N-page import is substituted for the complete document.
+All native PDF text is split into reviewable page/paragraph chunks, alongside
+visual extraction drafts. Native and visual chunks may overlap and need review.
+JPEG/PNG/WebP, PDFs and supported videos have automated extraction. SVG/GIF sources
+are retained but currently require conversion to a supported raster format before
+extraction; this limitation is shown as an error, not silently skipped.
+
+Quota/service errors pause the attempted source and establish a persistent
+provider/model cooldown. Subsequent sources remain queued, rather than repeatedly
+uploading files during the same restriction. Retry the failed source explicitly
+after the displayed time; interrupted work also becomes a visible paused state.
+Known uploaded provider files are deleted after processing, with failed cleanup
+identities retained for bounded retry. This does not erase provider safety logs
+or supersede the unpaid-service data terms.
+
+`STYL_KNOWLEDGE_DIR` defaults to `knowledge` beside `STYL_SUPPORT_DB`. It must remain
+private and outside public uploads. Records ZIPs include its immutable source
+versions and database references; missing or content-hash-mismatched sources
+prevent a misleading complete backup.
 
 ## 2026-09-29 local implementation request and readiness
 
@@ -102,11 +501,13 @@ analytics or transmit private catalog provenance to an AI provider.
 
 ### Implemented local pilot versus the broader proposal
 
-- `/support`: opt-in guest conversation start, browser-token resume, scoped
+- Original pilot `/support`: opt-in guest conversation start, browser-token resume, scoped
   messages, current state and sources, explicit human-help button. No intrusive
-  popup; Ask STYL links remain separate from shopping/quote controls.
+  popup; the approved floating-widget enhancement above supersedes the original
+  dedicated-page presentation while retaining guest access and messages.
 - Admin **Support inbox**: separate guest threads, attention count/highlights,
-  takeover, human replies, explicit resume for subsequent messages and close.
+  question-linked team replies and close. The earlier takeover/resume controls
+  were removed by the later collaborative-reply decision.
   Configurable automatic replies and topic checkboxes; provider/model/credential
   readiness is visible but keys never appear in the UI.
 - Private SQLite conversations/messages/jobs/settings, one bounded in-process
@@ -116,7 +517,8 @@ analytics or transmit private catalog provenance to an AI provider.
   boundary; there is no customer account system or cross-device recovery yet.
 - Catalog evidence is refreshed before inference and rechecked before publishing;
   drafts, missing-market items and changed prices/details cannot produce stale
-  queued answers. Human takeover/settings changes fence late AI publication.
+  queued answers. Same-question team answers, close/settings changes fence
+  relevant late AI publication, without interrupting newer unrelated questions.
 - Gemini returns a constrained topic/reference/field decision, **not unrestricted
   factual prose**. Trusted code renders published values and exact currency
   amounts, or flags missing/unverified compatibility for a human. This intentionally
@@ -129,8 +531,8 @@ analytics or transmit private catalog provenance to an AI provider.
 - Support SQLite is included in Backup & Records. Optional cleanup only removes
   complete, unchanged, closed threads and their children from a verified archive;
   active/changed/pending work and current settings remain.
-- No automatic expiry, named staff login, email notification/outbox, file/voice
-  upload, arbitrary FAQ authoring, analytics correlation, or production enablement
+- No automatic expiry, named staff login, email notification/outbox, customer
+  file/voice upload, arbitrary FAQ authoring, analytics correlation, or production enablement
   was added. Those broader sections below remain future design.
 
 ### Local configuration and verification commands
@@ -464,30 +866,30 @@ is needed before forwarding a transcript, especially to an external helpdesk.
 
 | State | Customer sees | Allowed responder |
 | --- | --- | --- |
-| `ai_active` | AI assistant label and grounded replies | AI through policy-controlled worker |
-| `handoff_requested` | Request is being saved | AI may send acknowledgement only, not continue guessing |
-| `queued` | Saved request; live availability or offline follow-up explained | No new substantive AI reply |
-| `human_active` | Named STYL team member joined | Assigned human |
+| `ai` | STYL assistant and grounded replies | Policy-controlled assistant |
+| `waiting_human` | Your request has been sent to our team | Assistant remains available; pending human attention is retained |
+| Legacy `human` | STYL assistant remains available | Open legacy threads participate in question-based collaboration |
 | `waiting_customer` | Team needs a clarification | Human remains owner |
 | `resolved` | Resolution and optional feedback | No new answer until explicit reopen |
 | `closed` | Read-only history where retained | None; new/reopened request follows a defined route |
 
-Provider failures are recorded separately from conversation ownership. They must
-not silently switch a human-owned conversation back to AI.
+Provider failures are recorded on the relevant question. They do not change
+collaborative eligibility; explicit close and global settings remain authoritative.
 
 ### Handoff requirements
 
-- Persist a ticket before displaying "Your request has been saved."
+- Persist the human request before displaying "Your request has been sent to our team."
 - Save reason code, item references, market, last question, available source
   references and the authorized transcript. A machine-generated summary must be
   labelled and must not replace the transcript as the evidence.
 - Assignment/claim is transactional. Two staff members cannot unknowingly claim
   the same conversation. Audit who claimed, transferred, replied and resolved it.
-- Taking over increments an ownership/generation version, cancels in-flight AI
-  work and fences stale replies. A late model result must not reach the customer
-  after human takeover. This is a database/server rule, not only a hidden UI button.
-- Returning control to AI requires an explicit staff action and customer-visible
-  notice. No automatic "AI resumes after N minutes" while a human owns the chat.
+- Team replies target a particular customer question. The quote is resolved
+  server-side within that conversation, never accepted as arbitrary client text.
+- A team answer cancels only an outstanding AI job for that same question.
+  Replies to older questions do not cancel the latest job or require AI resume.
+- Requesting human help marks the relevant question but does not stop assistance.
+  Per-question resolution drives pending counts; closing the thread fences work.
 - Presence combines staffed hours, assignment/capacity and recent staff heartbeat.
   A configured schedule alone does not justify "A person is online."
 - Outside coverage, say the team is offline and offer follow-up. Ask for a contact
@@ -726,7 +1128,7 @@ show "not sent/saved" and the existing contact route instead of claiming success
   embeddings, exports and backup expiry/replay. Provider deletion capability is
   a selection gate, not an assumed promise.
 
-Attachments are deferred. Adding them later requires private storage, file/type/
+Customer attachments are deferred. Adding them later requires private storage, file/type/
 size validation, malware handling, metadata stripping, access expiry and a
 separate decision on whether an AI may process them.
 
@@ -765,7 +1167,8 @@ inquiry counts are association, not evidence that AI caused the conversion.
 Do not count a handoff ticket as a lead/quote unless it meets the separately
 defined business record criteria.
 
-Daily email contains aggregates only; the approved schedule remains 08:00 Pacific,
+Daily email contains aggregates only; the approved schedule is 00:15 Pacific on
+the following day,
 with incomplete-hour exclusion for previews. Traffic visitors/sessions, medians,
 individual journeys and per-session attribution remain unavailable. Do not email
 full transcripts or feed them to an external summarizing agent merely to produce
@@ -862,7 +1265,7 @@ All cases below are planned; none are certified by this draft.
 | CS-004 | Unsupported model-specific compatibility/load claims, including 75 mm versus 3 inch, escalate safely |
 | CS-005 | Customer can request a person at any time; offline/unavailable support is honestly labelled |
 | CS-006 | Handoff persists before confirmation; assignment is atomic; simultaneous claims and transfer races are handled |
-| CS-007 | Human takeover cancels/fences delayed AI work; no late AI message appears after takeover, including reconnect |
+| CS-007 | A team answer fences delayed AI only for its exact target; later unrelated questions remain answerable, including reconnect |
 | CS-008 | Retry, double-click, disconnection, BFCache and server restart preserve message order without duplicate messages/tickets |
 | CS-009 | Provider timeout/outage/quota and database/SMTP failure retain safe fallback and never fake a saved/delivered state |
 | CS-010 | No cross-conversation or staff-role access; guest expiry/recovery/revocation and CSRF/origin protections verified |

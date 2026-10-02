@@ -136,7 +136,7 @@ export default function DailyEmailSettings({ adminToken, active, onSaved }: {
               ? "Sending is blocked: add at least one recipient."
               : settings.effectiveEnabled ? "Scheduled sending is on." : "Scheduled sending is off."}
         </p>
-        <p className="text-xs leading-5 text-[var(--muted)]">Schedule: 8:00 AM Pacific. When enabled, the latest due report may send on the next scheduler check (within 15 minutes). Changes apply to future deliveries; an email already in progress cannot be recalled. Server SMTP settings are unchanged.</p>
+        <p className="text-xs leading-5 text-[var(--muted)]">Schedule: 12:15 AM Pacific (00:15 America/Los_Angeles), covering the previous completed calendar day. When enabled, the latest due report may send on the next scheduler check (within 15 minutes). Changes apply to future deliveries; an email already in progress cannot be recalled. Server SMTP settings are unchanged.</p>
         <div className="flex flex-wrap items-center gap-3">
           <button type="submit" disabled={!dirty} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-2 text-sm text-white disabled:opacity-50">{saving ? "Saving settings..." : "Save email settings"}</button>
           {dirty ? <span className="text-sm text-[var(--muted)]">Unsaved changes</span> : null}

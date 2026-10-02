@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import BrandLogo from "./BrandLogo";
 import { catalogViews } from "@/lib/publicCatalog";
+import { SupportLink } from "./SupportWidget";
 
 const links = [
   ...catalogViews,
@@ -34,7 +35,7 @@ export default function StoreHeader({ cartCount }: { cartCount: number }) {
       <div className="container flex min-h-16 flex-wrap items-center justify-between gap-2 py-2 lg:min-h-20">
         <Link href="/" className="inline-flex min-h-11 items-center" aria-label="STYL home"><BrandLogo markClassName="h-8 w-auto" /></Link>
         <nav aria-label="Main navigation" className="hidden items-center gap-4 text-sm lg:flex">
-          {links.map((link) => <Link key={link.href} href={link.href} scroll={link.href !== "/#contact"} className="inline-flex min-h-12 items-center hover:underline">{link.label}</Link>)}
+          {links.map((link) => link.href === "/support" ? <SupportLink key={link.href} className="inline-flex min-h-12 items-center hover:underline">{link.label}</SupportLink> : <Link key={link.href} href={link.href} scroll={link.href !== "/#contact"} className="inline-flex min-h-12 items-center hover:underline">{link.label}</Link>)}
         </nav>
         <div className="flex items-center gap-2">
           <Link href="/cart" className="inline-flex min-h-11 items-center rounded-full border border-[var(--line)] px-3 text-sm font-medium">Cart ({cartCount})</Link>
@@ -47,7 +48,7 @@ export default function StoreHeader({ cartCount }: { cartCount: number }) {
       <dialog ref={dialog} aria-label="Site navigation" className="fixed inset-0 m-auto w-[calc(100%-32px)] max-w-md rounded-2xl bg-white p-5 text-[var(--ink)] backdrop:bg-black/60" onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }} onClose={() => { setOpen(false); trigger.current?.focus(); }}>
         <div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Explore STYL</h2><button type="button" onClick={() => dialog.current?.close()} className="min-h-11 px-3">Close</button></div>
         <nav aria-label="Mobile navigation" className="mt-4 grid gap-2">
-          {links.map((link) => <Link key={link.href} href={link.href} data-analytics-action="menu" scroll={link.href !== "/#contact"} className="rounded-lg px-3 py-4 hover:bg-neutral-100" onClick={() => dialog.current?.close()}>{link.label}</Link>)}
+          {links.map((link) => link.href === "/support" ? <SupportLink key={link.href} data-analytics-action="menu" className="rounded-lg px-3 py-4 hover:bg-neutral-100" onClick={() => dialog.current?.close()}>{link.label}</SupportLink> : <Link key={link.href} href={link.href} data-analytics-action="menu" scroll={link.href !== "/#contact"} className="rounded-lg px-3 py-4 hover:bg-neutral-100" onClick={() => dialog.current?.close()}>{link.label}</Link>)}
         </nav>
       </dialog>
     </header>

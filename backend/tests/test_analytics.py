@@ -305,6 +305,31 @@ class AnalyticsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             analytics.get_report("2026-09-28", "2026-09-28", cutoff=NOW.replace(tzinfo=None))
 
+    def test_an010_midnight_email_includes_completed_calendar_day_not_current_hour(self) -> None:
+        zone = ZoneInfo("America/Los_Angeles")
+        for day, scheduled in (
+            ("2026-09-27", "2026-09-28T07:15:00+00:00"),
+            ("2026-03-08", "2026-03-09T07:15:00+00:00"),
+            ("2026-11-01", "2026-11-02T08:15:00+00:00"),
+        ):
+            with self.subTest(day=day):
+                first, last = analytics.day_window(day, day, zone)
+                for instant in (first, last - timedelta(seconds=1), last, last + timedelta(minutes=14)):
+                    with patch.object(analytics, "utcnow", return_value=instant):
+                        self.assertEqual(self.post().status_code, 200)
+                now = datetime.fromisoformat(scheduled)
+                self.assertEqual(analytics_reports.due_date(now).isoformat(), day)
+                with patch.object(analytics, "utcnow", return_value=now), patch.object(analytics_reports, "_send") as send:
+                    report = analytics.get_report(day, day, cutoff=now)
+                    preview = analytics_reports.preview_report(day, now)
+                self.assertEqual(report["summary"]["pageViews"], 2)
+                self.assertEqual(report["cutoffAt"], analytics.stamp(last))
+                self.assertEqual(preview["reportDate"], day)
+                self.assertIn("Page views: 2", preview["text"])
+                self.assertNotIn("Through", preview["text"])
+                self.assertNotIn("Not started", preview["text"])
+                send.assert_not_called()
+
     def test_an010_page_view_baseline_compares_daily_averages(self) -> None:
         with patch.object(analytics, "utcnow", return_value=NOW - timedelta(days=7)):
             self.post([self.event() for _ in range(14)])

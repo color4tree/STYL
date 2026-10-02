@@ -18,6 +18,7 @@ import sqlite3
 from threading import Lock
 import time
 from typing import Literal
+import unicodedata
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -25,19 +26,22 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from httpx import HTTPError
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app import analytics
 from app.location import MarketContext
 
 
 logger = logging.getLogger(__name__)
-TOPICS = ("products", "pricing", "compatibility")
+TOPICS = ("products", "pricing", "compatibility", "customer_service")
 NOTICE = (
-    "Local testing only. Use synthetic, non-sensitive information; do not enter personal information. "
+    "Local testing only. Use synthetic test information. "
     "AI can make mistakes. Ask for human help at any time. Chats are retained as business records."
 )
-HELP_TEXT = "Your message is saved. Human help has been requested; AI replies are paused."
+HELP_TEXT = "Your request has been sent to our team."
+LEGACY_HELP_TEXT = "Your message is saved. Human help has been requested; AI replies are paused."
+AI_ELIGIBLE_STATES = ("ai", "waiting_human", "human")
+SCHEMA_VERSION = 4
 IDENTIFIER = re.compile(r"[a-f0-9]{32}")
 TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 rate_lock = Lock()
@@ -69,10 +73,21 @@ def create_limit() -> int:
     return int(value)
 
 
+def message_limit() -> int:
+    if environment() != "test":
+        return 120
+    value = os.getenv("STYL_SUPPORT_MESSAGE_LIMIT", "120")
+    if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= 1000:
+        raise ValueError("Test support message limit must be between 1 and 1000.")
+    return int(value)
+
+
 def provider_settings() -> tuple[str, str]:
-    provider = os.getenv("STYL_SUPPORT_PROVIDER", "gemini")
-    model = os.getenv("STYL_SUPPORT_MODEL", "gemini-3.5-flash")
-    if provider not in ("gemini", "mock") or not re.fullmatch(r"[a-zA-Z0-9._-]{1,100}", model):
+    from app import support_ai
+
+    provider = os.getenv("STYL_SUPPORT_PROVIDER", "openai")
+    model = os.getenv("STYL_SUPPORT_MODEL", support_ai.DEFAULT_MODELS.get(provider, ""))
+    if provider not in support_ai.DEFAULT_MODELS or not re.fullmatch(r"[a-zA-Z0-9._-]{1,100}", model):
         raise ValueError("Invalid support provider configuration.")
     if provider == "mock" and environment() not in ("local", "test"):
         raise ValueError("Mock support is local only.")
@@ -115,10 +130,21 @@ class SupportStore:
         db = sqlite3.connect(self.path, timeout=5)
         db.row_factory = sqlite3.Row
         try:
-            db.execute("PRAGMA journal_mode=WAL")
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    db.execute("PRAGMA journal_mode=WAL")
+                    break
+                except sqlite3.OperationalError as error:
+                    # WAL conversion can return SQLITE_BUSY immediately even with
+                    # busy_timeout when another process opens a legacy database.
+                    if error.sqlite_errorcode != sqlite3.SQLITE_BUSY or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.01)
             db.execute("PRAGMA foreign_keys=ON")
             db.execute("PRAGMA secure_delete=ON")
             db.executescript("""
+                BEGIN IMMEDIATE;
                 CREATE TABLE IF NOT EXISTS settings(
                     id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL,
                     allowed_topics TEXT NOT NULL, revision INTEGER NOT NULL,
@@ -129,13 +155,15 @@ class SupportStore:
                     revision INTEGER NOT NULL, generation INTEGER NOT NULL,
                     created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
                     currency TEXT NOT NULL CHECK(currency IN ('CAD','USD')),
-                    needs_human INTEGER NOT NULL, reason TEXT);
+                    needs_human INTEGER NOT NULL, reason TEXT, unlinked_human_reason TEXT);
                 CREATE TABLE IF NOT EXISTS messages(
                     id TEXT PRIMARY KEY,
                     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
                     role TEXT NOT NULL CHECK(role IN ('customer','assistant','human','system')),
                     text TEXT NOT NULL, created_at TEXT NOT NULL, references_json TEXT NOT NULL,
                     client_message_id TEXT, request_hash TEXT, response_json TEXT,
+                    reply_to_id TEXT, needs_human INTEGER NOT NULL DEFAULT 0,
+                    human_reason TEXT, answered_by_id TEXT,
                     UNIQUE(conversation_id,role,client_message_id));
                 CREATE TABLE IF NOT EXISTS jobs(
                     id TEXT PRIMARY KEY,
@@ -153,6 +181,7 @@ class SupportStore:
                 CREATE UNIQUE INDEX IF NOT EXISTS one_running_job
                     ON jobs(status) WHERE status='running';
             """)
+            self._migrate(db)
             db.execute("INSERT OR IGNORE INTO settings VALUES(1,1,?,0,?)",
                        (json.dumps(TOPICS), environment()))
             if db.execute("SELECT environment FROM settings WHERE id=1").fetchone()[0] != environment():
@@ -163,6 +192,62 @@ class SupportStore:
                 yield db
         finally:
             db.close()
+
+    @staticmethod
+    def _migrate(db: sqlite3.Connection) -> None:
+        # Schema inspection, ALTERs, backfill and version commit share the writer lock.
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version >= SCHEMA_VERSION:
+            return
+        if version < 1:
+            for table, additions in (
+                ("messages", {"reply_to_id": "TEXT", "needs_human": "INTEGER NOT NULL DEFAULT 0",
+                              "human_reason": "TEXT", "answered_by_id": "TEXT"}),
+                ("conversations", {"unlinked_human_reason": "TEXT"}),
+            ):
+                columns = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
+                for column, definition in additions.items():
+                    if column not in columns:
+                        db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            # Only durable job links identify legacy questions. Unlinked staff replies
+            # cannot prove which question was answered, and must never acquire a quote.
+            db.execute("""
+                UPDATE messages SET needs_human=1,human_reason=COALESCE(human_reason,
+                    CASE WHEN EXISTS(SELECT 1 FROM jobs WHERE message_id=messages.id
+                        AND conversation_id=messages.conversation_id AND status='interrupted')
+                        THEN 'interrupted' ELSE 'needs_human' END)
+                WHERE role='customer' AND answered_by_id IS NULL AND EXISTS(
+                    SELECT 1 FROM jobs WHERE message_id=messages.id
+                    AND conversation_id=messages.conversation_id AND status IN ('failed','interrupted'))
+            """)
+            db.execute("""
+                UPDATE conversations SET unlinked_human_reason=COALESCE(reason,'needs_human')
+                WHERE needs_human=1 AND unlinked_human_reason IS NULL AND NOT EXISTS(
+                    SELECT 1 FROM messages WHERE conversation_id=conversations.id
+                    AND role='customer' AND needs_human=1)
+            """)
+        if version < 2:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS conversation_contacts(
+                    conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL, email TEXT NOT NULL,
+                    revision INTEGER NOT NULL CHECK(revision>=1), updated_at TEXT NOT NULL)
+            """)
+        if version < 3:
+            settings = db.execute("SELECT allowed_topics FROM settings WHERE id=1").fetchone()
+            if settings is not None:
+                topics = json.loads(settings["allowed_topics"])
+                if (not isinstance(topics, list) or not topics or any(not isinstance(topic, str) or topic not in TOPICS for topic in topics)
+                        or len(set(topics)) != len(topics)):
+                    raise ValueError("Stored support topics are invalid.")
+                if set(topics) == {"products", "pricing", "compatibility"}:
+                    db.execute("UPDATE settings SET allowed_topics=?,revision=revision+1 WHERE id=1", (json.dumps(TOPICS),))
+        if version < 4:
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)")}
+            for column in ("page_context_version", "answer_plan_json"):
+                if column not in columns:
+                    db.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT")
+        db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
 
 def get_store() -> SupportStore:
@@ -177,10 +262,35 @@ class EmptyInput(Input):
     pass
 
 
+class ContactInput(Input):
+    name: str = Field(min_length=1, max_length=120)
+    email: EmailStr = Field(max_length=254)
+    expectedRevision: int = Field(ge=0)
+
+    @field_validator("name", "email", mode="before")
+    @classmethod
+    def trim_contact(cls, value: object) -> object:
+        if isinstance(value, str):
+            if any(unicodedata.category(character) in ("Cc", "Cs") for character in value):
+                raise ValueError("Contact details cannot contain control characters.")
+            return value.strip()
+        return value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def single_address(cls, value: object) -> object:
+        if isinstance(value, str) and (len(value) > 254 or any(
+            character in "<>,;" or character.isspace() for character in value.strip()
+        )):
+            raise ValueError("A single email address is required.")
+        return value
+
+
 class MessageInput(Input):
     clientMessageId: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     text: str = Field(min_length=1, max_length=2000)
     itemRef: str | None = Field(default=None, pattern=r"^(product|accessory):[1-9][0-9]{0,15}$")
+    pageContextVersion: str | None = Field(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
     @field_validator("text")
     @classmethod
@@ -192,8 +302,10 @@ class MessageInput(Input):
 
 class HumanMessageInput(MessageInput):
     expectedRevision: int = Field(ge=0)
+    replyToMessageId: str | None = Field(pattern=r"^[a-f0-9]{32}$")
+    expectedAnsweredBy: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
-    @field_validator("itemRef")
+    @field_validator("itemRef", "pageContextVersion")
     @classmethod
     def no_item_context(cls, value: str | None) -> None:
         if value is not None:
@@ -203,7 +315,7 @@ class HumanMessageInput(MessageInput):
 
 class SettingsInput(Input):
     enabled: bool
-    allowedTopics: list[Literal["products", "pricing", "compatibility"]] = Field(min_length=1, max_length=3)
+    allowedTopics: list[Literal["products", "pricing", "compatibility", "customer_service"]] = Field(min_length=1, max_length=4)
     expectedRevision: int = Field(ge=0)
 
     @field_validator("allowedTopics")
@@ -215,14 +327,15 @@ class SettingsInput(Input):
 
 
 class ActionInput(Input):
-    action: Literal["takeover", "resume_ai", "close"]
+    action: Literal["close"]
     expectedRevision: int = Field(ge=0)
 
 
-def _limit(request: Request, action: str, maximum: int, period: int = 3600) -> None:
+def _limit(request: Request, action: str, maximum: int, period: int = 3600,
+           scope: str | None = None) -> None:
     # The server-observed address exists only in this salted, bounded in-memory window.
     address = request.client.host if request.client else "unknown"
-    key = hashlib.sha256(rate_salt + f"{action}:{address}".encode()).hexdigest()
+    key = hashlib.sha256(rate_salt + f"{action}:{scope or address}".encode()).hexdigest()
     current = time.monotonic()
     with rate_lock:
         for existing in list(rate_windows):
@@ -263,21 +376,78 @@ def _conversation(db: sqlite3.Connection, identifier: str, request: Request | No
     return row
 
 
+def _attention(db: sqlite3.Connection, row: sqlite3.Row) -> tuple[int, str | None]:
+    if row["state"] == "closed":
+        return 0, None
+    pending = list(db.execute(
+        """SELECT human_reason FROM messages WHERE conversation_id=?
+           AND role='customer' AND needs_human=1 ORDER BY created_at,rowid""", (row["id"],)
+    ))
+    return len(pending), (pending[0]["human_reason"] or "needs_human"
+                          if pending else row["unlinked_human_reason"])
+
+
+def _refresh_attention(db: sqlite3.Connection, identifier: str) -> None:
+    row = _conversation(db, identifier)
+    count, reason = _attention(db, row)
+    state = "closed" if row["state"] == "closed" else "waiting_human" if count or reason else "ai"
+    db.execute("UPDATE conversations SET state=?,needs_human=?,reason=? WHERE id=?",
+               (state, int(bool(count or reason)), reason, identifier))
+
+
+def _mark_question(db: sqlite3.Connection, identifier: str, message_id: str, reason: str) -> None:
+    db.execute(
+        """UPDATE messages SET needs_human=1,human_reason=COALESCE(human_reason,?),answered_by_id=NULL
+           WHERE id=? AND conversation_id=? AND role='customer'""", (reason, message_id, identifier),
+    )
+    _refresh_attention(db, identifier)
+
+
+def _contact(db: sqlite3.Connection, identifier: str) -> dict[str, object] | None:
+    row = db.execute("SELECT * FROM conversation_contacts WHERE conversation_id=?", (identifier,)).fetchone()
+    return ({"name": row["name"], "email": row["email"], "revision": row["revision"],
+             "updatedAt": row["updated_at"]} if row else None)
+
+
 def _snapshot(db: sqlite3.Connection, identifier: str) -> dict[str, object]:
     row = _conversation(db, identifier)
+    count, reason = _attention(db, row)
     return {
         "id": row["id"], "state": row["state"], "revision": row["revision"],
         "createdAt": row["created_at"], "updatedAt": row["updated_at"], "currency": row["currency"],
-        "needsHuman": bool(row["needs_human"]), "reason": row["reason"],
+        "needsHuman": bool(count or reason), "needsHumanQuestions": count, "reason": reason,
+        "contact": _contact(db, identifier),
         "processing": bool(db.execute(
             "SELECT 1 FROM jobs WHERE conversation_id=? AND status IN ('queued','running')", (identifier,)
         ).fetchone()),
         "messages": [{
             "id": message["id"], "role": message["role"], "text": message["text"],
             "createdAt": message["created_at"], "references": json.loads(message["references_json"]),
+            "needsHuman": bool(message["needs_human"]) if message["role"] == "customer" else False,
+            "humanReason": message["human_reason"] if message["role"] == "customer" else None,
+            "answeredBy": message["answered_by_id"],
+            "replyTo": {"id": message["target_id"], "text": message["target_text"]}
+            if message["target_id"] else None,
         } for message in db.execute(
-            "SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at,rowid", (identifier,)
+            """SELECT message.*,target.id AS target_id,target.text AS target_text
+               FROM messages AS message LEFT JOIN messages AS target
+               ON target.id=message.reply_to_id AND target.conversation_id=message.conversation_id
+               AND target.role='customer' WHERE message.conversation_id=?
+               ORDER BY message.created_at,message.rowid""", (identifier,)
         )],
+    }
+
+
+def _public_conversation(snapshot: dict[str, object]) -> dict[str, object]:
+    # Apply this to saved receipts too, without rewriting diagnostic history.
+    return {
+        **snapshot, "reason": None,
+        "messages": [
+            {**message, "humanReason": None,
+             "text": HELP_TEXT if message["role"] == "system" and message["text"] == LEGACY_HELP_TEXT
+             else message["text"]}
+            for message in snapshot["messages"]
+        ],
     }
 
 
@@ -304,16 +474,25 @@ def _check_revision(row: sqlite3.Row, expected: int) -> None:
 
 def _append(db: sqlite3.Connection, identifier: str, role: str, text: str,
             references: list[dict[str, object]] | None = None,
-            client_id: str | None = None, request_hash: str | None = None) -> str:
+            client_id: str | None = None, request_hash: str | None = None,
+            reply_to_id: str | None = None) -> str:
     message_id = uuid4().hex
-    db.execute("INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,NULL)",
-               (message_id, identifier, role, text, now(), json.dumps(references or []), client_id, request_hash))
+    db.execute("""INSERT INTO messages(id,conversation_id,role,text,created_at,references_json,
+                  client_message_id,request_hash,reply_to_id) VALUES(?,?,?,?,?,?,?,?,?)""",
+               (message_id, identifier, role, text, now(), json.dumps(references or []),
+                client_id, request_hash, reply_to_id))
     return message_id
 
 
 def _fence(db: sqlite3.Connection, identifier: str, state: str, reason: str | None,
            needs_human: bool = True) -> None:
     timestamp = now()
+    if needs_human and reason:
+        for job in db.execute(
+            "SELECT message_id FROM jobs WHERE conversation_id=? AND status IN ('queued','running')",
+            (identifier,),
+        ).fetchall():
+            _mark_question(db, identifier, job["message_id"], reason)
     db.execute(
         """UPDATE conversations SET state=?,reason=?,needs_human=?,generation=generation+1,
            revision=revision+1,updated_at=? WHERE id=?""",
@@ -321,11 +500,14 @@ def _fence(db: sqlite3.Connection, identifier: str, state: str, reason: str | No
     )
     db.execute("UPDATE jobs SET status='cancelled',updated_at=? WHERE conversation_id=? AND status IN ('queued','running')",
                (timestamp, identifier))
+    _refresh_attention(db, identifier)
 
 
 def _fingerprint(body: BaseModel) -> str:
-    # The revision is an admission precondition, not the identity of a saved reply.
-    payload = body.model_dump(exclude={"expectedRevision"})
+    # Admission preconditions are not the identity of a saved reply.
+    payload = body.model_dump(exclude={"expectedRevision", "expectedAnsweredBy"})
+    if payload.get("pageContextVersion") is None:
+        payload.pop("pageContextVersion", None)
     return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
@@ -338,11 +520,17 @@ def _receipt(db: sqlite3.Connection, identifier: str, role: str, body: MessageIn
         return None
     if previous["request_hash"] != _fingerprint(body):
         raise HTTPException(409, "This message ID was already used for different content.")
-    return json.loads(previous["response_json"])
+    return {**json.loads(previous["response_json"]), "contact": _contact(db, identifier)}
+
+
+def _save_receipt(db: sqlite3.Connection, message_id: str, snapshot: dict[str, object]) -> None:
+    # Contact details live only in their own table, never in message history/receipts.
+    receipt = {key: value for key, value in snapshot.items() if key != "contact"}
+    db.execute("UPDATE messages SET response_json=? WHERE id=?", (json.dumps(receipt), message_id))
 
 
 def _public_catalog_locked(market: MarketContext) -> list[dict[str, object]]:
-    from app import main
+    from app import knowledge, main
     result = []
     for kind, items in (("product", main.load_products()), ("accessory", main.load_accessories())):
         for item in items:
@@ -353,6 +541,10 @@ def _public_catalog_locked(market: MarketContext) -> list[dict[str, object]]:
             url = (f"/products/{quote(str(public['slug']), safe='')}" if kind == "product"
                    else f"/accessories/{identifier}")
             result.append({**public, "ref": f"{kind}:{identifier}", "type": kind, "id": identifier, "url": url})
+    approved = knowledge.approved_facts(result)
+    for item in result:
+        if facts := approved.get(str(item["ref"])):
+            item["approvedKnowledge"] = facts
     return result
 
 
@@ -363,13 +555,14 @@ def public_catalog(market: MarketContext) -> list[dict[str, object]]:
 
 
 def _customer_message(identifier: str, body: MessageInput, request: Request, response: Response) -> dict[str, object]:
-    from app import main
+    from app import main, support_ai
+    effective_item_ref = None if support_ai.is_service_only_question(body.text) else body.itemRef
     store = get_store()
     with store.connection() as db:
         _conversation(db, identifier, request)
         receipt = _receipt(db, identifier, "customer", body)
         if receipt is not None:
-            return receipt
+            return _public_conversation(receipt)
     market = main.request_market(request, response)
     try:
         catalog = public_catalog(market)
@@ -380,54 +573,107 @@ def _customer_message(identifier: str, body: MessageInput, request: Request, res
         row = _conversation(db, identifier, request)
         receipt = _receipt(db, identifier, "customer", body)
         if receipt is not None:
-            return receipt
+            return _public_conversation(receipt)
         if row["state"] == "closed":
             raise HTTPException(409, "This conversation is closed. Start a new conversation.")
         if db.execute("SELECT 1 FROM jobs WHERE conversation_id=? AND status IN ('queued','running')", (identifier,)).fetchone():
             raise HTTPException(409, "A reply is still processing. Wait or ask for human help.")
-        _limit(request, "message", 120)
+        _limit(request, "message", message_limit())
         settings = _settings(db)
+        first_question = not db.execute(
+            "SELECT 1 FROM messages WHERE conversation_id=? AND role='customer'", (identifier,)
+        ).fetchone()
         message_id = _append(db, identifier, "customer", body.text, client_id=body.clientMessageId,
                              request_hash=_fingerprint(body))
+        if first_question and row["unlinked_human_reason"]:
+            _mark_question(db, identifier, message_id, row["unlinked_human_reason"])
+            db.execute("UPDATE conversations SET unlinked_human_reason=NULL WHERE id=?", (identifier,))
         db.execute(
             "UPDATE conversations SET currency=?,revision=revision+1,generation=generation+1,updated_at=? WHERE id=?",
             (market["currency"], now(), identifier),
         )
         reason = None
-        if row["state"] != "ai":
-            db.execute("UPDATE conversations SET needs_human=1 WHERE id=?", (identifier,))
+        if not settings["enabled"]:
+            reason = "ai_disabled"
+        elif not catalog_available:
+            reason = "catalog_unavailable"
+        elif (effective_item_ref is not None and not any(item["ref"] == effective_item_ref for item in catalog)
+              and not support_ai.resolve_catalog_items(
+                  support_ai.public_evidence(catalog, json.loads(settings["allowed_topics"])), body.text)):
+            reason = "missing_information"
+        if reason:
+            _mark_question(db, identifier, message_id, reason)
+            _append(db, identifier, "system", HELP_TEXT, reply_to_id=message_id)
         else:
-            if not settings["enabled"]:
-                reason = "ai_disabled"
-            elif not catalog_available:
-                reason = "catalog_unavailable"
-            elif body.itemRef is not None and not any(item["ref"] == body.itemRef for item in catalog):
-                reason = "missing_information"
-            if reason:
-                _fence(db, identifier, "waiting_human", reason)
-                _append(db, identifier, "system", HELP_TEXT)
-            else:
-                provider, model = provider_settings()
-                history = list(db.execute(
-                    """SELECT role,text FROM messages WHERE conversation_id=? AND role!='system'
-                       ORDER BY created_at DESC,rowid DESC LIMIT 20""", (identifier,)
-                ))
-                payload = {
-                    "messages": [{"role": "user" if message["role"] == "customer" else "model", "text": message["text"]}
-                                 for message in reversed(history)],
-                    "catalog": catalog, "allowed_topics": json.loads(settings["allowed_topics"]),
-                    "provider": provider, "model": model, "item_ref": body.itemRef,
-                }
-                timestamp = now()
-                db.execute(
-                    """INSERT INTO jobs(id,conversation_id,message_id,generation,settings_revision,status,payload,created_at,updated_at)
-                       VALUES(?,?,?,?,?,'queued',?,?,?)""",
-                    (uuid4().hex, identifier, message_id, row["generation"] + 1, settings["revision"],
-                     json.dumps(payload, ensure_ascii=False), timestamp, timestamp),
-                )
-        snapshot = _snapshot(db, identifier)
-        db.execute("UPDATE messages SET response_json=? WHERE id=?", (json.dumps(snapshot), message_id))
+            provider, model = provider_settings()
+            history = list(db.execute(
+                """SELECT message.role,message.text,message.references_json,target.text AS question_text
+                   FROM messages AS message LEFT JOIN messages AS target
+                   ON target.id=message.reply_to_id AND target.conversation_id=message.conversation_id
+                   AND target.role='customer' WHERE message.conversation_id=? AND message.role!='system'
+                   ORDER BY message.created_at DESC,message.rowid DESC LIMIT 20""", (identifier,)
+            ))
+            payload = {
+                "messages": [_history_context(message) for message in reversed(history)],
+                "catalog": catalog, "allowed_topics": json.loads(settings["allowed_topics"]),
+                "provider": provider, "model": model, "item_ref": effective_item_ref,
+                "pending_context": _pending_plan(db, identifier, body.pageContextVersion, message_id),
+            }
+            timestamp = now()
+            db.execute(
+                """INSERT INTO jobs(id,conversation_id,message_id,generation,settings_revision,status,payload,created_at,updated_at,page_context_version)
+                   VALUES(?,?,?,?,?,'queued',?,?,?,?)""",
+                (uuid4().hex, identifier, message_id, row["generation"] + 1, settings["revision"],
+                 json.dumps(payload, ensure_ascii=False), timestamp, timestamp, body.pageContextVersion),
+            )
+        _refresh_attention(db, identifier)
+        snapshot = _public_conversation(_snapshot(db, identifier))
+        _save_receipt(db, message_id, snapshot)
         return snapshot
+
+
+def _history_context(message: sqlite3.Row) -> dict[str, str]:
+    value = {
+        "role": "user" if message["role"] == "customer" else "model",
+        "text": (f"Reply to earlier question: {message['question_text']}\nTeam reply: {message['text']}"
+                 if message["role"] == "human" and message["question_text"] is not None else message["text"]),
+    }
+    if message["role"] == "assistant":
+        references = json.loads(message["references_json"])
+        if not isinstance(references, list):
+            raise ValueError("Stored answer references are invalid.")
+        if references:
+            if any(not isinstance(reference, dict) or reference.get("type") not in ("product", "accessory")
+                   or type(reference.get("id")) is not int or reference["id"] < 1 for reference in references):
+                raise ValueError("Stored answer references are invalid.")
+            value["catalogRefs"] = json.dumps([f"{reference['type']}:{reference['id']}" for reference in references])
+    return value
+
+
+def _pending_plan(db: sqlite3.Connection, identifier: str, page_version: str | None,
+                  current_message_id: str | None = None) -> dict | None:
+    previous = db.execute(
+        "SELECT * FROM jobs WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1", (identifier,)
+    ).fetchone()
+    if previous is None or previous["status"] != "completed" or not previous["answer_plan_json"]:
+        return None
+    if previous["page_context_version"] != page_version:
+        return None
+    latest_question = db.execute(
+        """SELECT id FROM messages WHERE conversation_id=? AND role='customer' AND (? IS NULL OR id!=?)
+           ORDER BY created_at DESC,rowid DESC LIMIT 1""", (identifier, current_message_id, current_message_id)
+    ).fetchone()
+    if latest_question is None or latest_question["id"] != previous["message_id"]:
+        return None
+    age = (datetime.fromisoformat(now()) - datetime.fromisoformat(previous["updated_at"])).total_seconds()
+    if not 0 <= age <= 1800:
+        return None
+    if db.execute("SELECT 1 FROM messages WHERE reply_to_id=? AND role='human'", (previous["message_id"],)).fetchone():
+        return None
+    plan = json.loads(previous["answer_plan_json"])
+    if not isinstance(plan, dict):
+        raise ValueError("Stored answer plan is invalid.")
+    return plan
 
 
 class PrivateRoute(APIRoute):
@@ -491,10 +737,12 @@ def make_router(require_admin: Callable) -> APIRouter:
             if db.execute("SELECT COUNT(*) FROM conversations WHERE created_at>?", (recent,)).fetchone()[0] >= 200:
                 raise HTTPException(429, "Support is busy. Please try later.", headers={"Retry-After": "3600"})
             ai = bool(_settings(db)["enabled"])
-            db.execute("INSERT INTO conversations VALUES(?,?,?,?,?,?,?,?,?,?)",
+            db.execute("""INSERT INTO conversations(id,token_hash,state,revision,generation,created_at,updated_at,
+                          currency,needs_human,reason,unlinked_human_reason) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                        (identifier, hashlib.sha256(token.encode()).hexdigest(), "ai" if ai else "waiting_human",
-                        0, 0, timestamp, timestamp, market["currency"], int(not ai), None if ai else "ai_disabled"))
-            return {"conversation": _snapshot(db, identifier), "token": token}
+                        0, 0, timestamp, timestamp, market["currency"], int(not ai),
+                        None if ai else "ai_disabled", None if ai else "ai_disabled"))
+            return {"conversation": _public_conversation(_snapshot(db, identifier)), "token": token}
 
     @router.get("/api/support/conversations/{identifier}")
     def get_conversation(identifier: str, request: Request) -> dict[str, object]:
@@ -502,13 +750,45 @@ def make_router(require_admin: Callable) -> APIRouter:
         _identifier(identifier)
         with get_store().connection() as db:
             _conversation(db, identifier, request)
-            return _snapshot(db, identifier)
+            return _public_conversation(_snapshot(db, identifier))
 
     @router.post("/api/support/conversations/{identifier}/messages")
     def customer_message(identifier: str, body: MessageInput, request: Request, response: Response) -> dict[str, object]:
         _require_feature()
         _identifier(identifier)
         return _customer_message(identifier, body, request, response)
+
+    @router.put("/api/support/conversations/{identifier}/contact")
+    def save_contact(identifier: str, body: ContactInput, request: Request) -> dict[str, object]:
+        _require_feature()
+        _identifier(identifier)
+        from app import main
+        origin = request.headers.get("origin")
+        if origin is not None and origin not in (str(request.base_url).rstrip("/"), *main.ALLOWED_ORIGINS):
+            raise HTTPException(403, "This request is not allowed.")
+        with get_store().connection() as db:
+            row = _conversation(db, identifier, request)
+            if row["state"] == "closed":
+                raise HTTPException(409, "This conversation is closed.")
+            contact = _contact(db, identifier)
+            revision = contact["revision"] if contact else 0
+            unchanged = contact and contact["name"] == body.name and contact["email"] == body.email
+            if unchanged and body.expectedRevision in (revision, revision - 1):
+                return _public_conversation(_snapshot(db, identifier))
+            if body.expectedRevision != revision:
+                raise HTTPException(409, "Contact details changed. Refresh before trying again.")
+            _limit(request, "contact", 30)
+            _limit(request, "contact-conversation", 10, scope=identifier)
+            _limit(request, "contact-global", 200, scope="global")
+            timestamp = now()
+            db.execute("""
+                INSERT INTO conversation_contacts(conversation_id,name,email,revision,updated_at)
+                VALUES(?,?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET
+                name=excluded.name,email=excluded.email,revision=excluded.revision,updated_at=excluded.updated_at
+            """, (identifier, body.name, body.email, revision + 1, timestamp))
+            db.execute("UPDATE conversations SET revision=revision+1,updated_at=? WHERE id=?",
+                       (timestamp, identifier))
+            return _public_conversation(_snapshot(db, identifier))
 
     @router.post("/api/support/conversations/{identifier}/handoff")
     def handoff(identifier: str, body: EmptyInput, request: Request) -> dict[str, object]:
@@ -518,8 +798,20 @@ def make_router(require_admin: Callable) -> APIRouter:
             row = _conversation(db, identifier, request)
             if row["state"] == "closed":
                 raise HTTPException(409, "This conversation is closed.")
-            _fence(db, identifier, "human" if row["state"] == "human" else "waiting_human", "customer_request")
-            return _snapshot(db, identifier)
+            question = db.execute(
+                """SELECT * FROM messages WHERE conversation_id=? AND role='customer'
+                   ORDER BY created_at DESC,rowid DESC LIMIT 1""", (identifier,)
+            ).fetchone()
+            if question is not None and not question["needs_human"]:
+                _mark_question(db, identifier, question["id"], "customer_request")
+            elif question is None and not row["unlinked_human_reason"]:
+                db.execute("UPDATE conversations SET unlinked_human_reason='customer_request' WHERE id=?", (identifier,))
+            else:
+                return _public_conversation(_snapshot(db, identifier))
+            db.execute("UPDATE conversations SET revision=revision+1,updated_at=? WHERE id=?", (now(), identifier))
+            _append(db, identifier, "system", HELP_TEXT, reply_to_id=question["id"] if question else None)
+            _refresh_attention(db, identifier)
+            return _public_conversation(_snapshot(db, identifier))
 
     @router.get("/api/admin/support/config", dependencies=admin)
     def admin_config() -> dict[str, object]:
@@ -545,15 +837,18 @@ def make_router(require_admin: Callable) -> APIRouter:
         with get_store().connection() as db:
             items = []
             for row in db.execute("SELECT * FROM conversations ORDER BY updated_at DESC,id"):
+                count, reason = _attention(db, row)
                 last = db.execute(
                     "SELECT text FROM messages WHERE conversation_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1",
                     (row["id"],),
                 ).fetchone()
+                contact = _contact(db, row["id"])
                 items.append({
                     "id": row["id"], "state": row["state"], "currency": row["currency"],
                     "revision": row["revision"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
-                    "lastMessage": last["text"] if last else "", "needsHuman": bool(row["needs_human"]),
-                    "reason": row["reason"], "guestLabel": "Guest " + row["id"][:8],
+                    "lastMessage": last["text"] if last else "", "needsHuman": bool(count or reason),
+                    "needsHumanQuestions": count, "reason": reason, "guestLabel": "Guest " + row["id"][:8],
+                    "contactName": contact["name"] if contact else None,
                     "messageCount": db.execute("SELECT COUNT(*) FROM messages WHERE conversation_id=?", (row["id"],)).fetchone()[0],
                 })
             return {"items": items, "needsHumanCount": sum(bool(item["needsHuman"]) for item in items)}
@@ -572,10 +867,7 @@ def make_router(require_admin: Callable) -> APIRouter:
             _check_revision(row, body.expectedRevision)
             if row["state"] == "closed":
                 raise HTTPException(409, "This conversation is closed.")
-            if body.action == "resume_ai" and not _settings(db)["enabled"]:
-                raise HTTPException(409, "Enable automatic AI replies before resuming.")
-            state = {"takeover": "human", "resume_ai": "ai", "close": "closed"}[body.action]
-            _fence(db, identifier, state, "human_takeover" if state == "human" else None, state == "human")
+            _fence(db, identifier, "closed", None, False)
             return _snapshot(db, identifier)
 
     @router.post("/api/admin/support/conversations/{identifier}/messages", dependencies=admin)
@@ -586,15 +878,40 @@ def make_router(require_admin: Callable) -> APIRouter:
             receipt = _receipt(db, identifier, "human", body)
             if receipt is not None:
                 return receipt
-            _check_revision(row, body.expectedRevision)
-            if row["state"] != "human":
-                raise HTTPException(409, "Take over the conversation before replying.")
+            if row["state"] == "closed":
+                raise HTTPException(409, "This conversation is closed.")
+            if body.expectedRevision > row["revision"]:
+                raise HTTPException(409, "This record changed. Refresh before trying again.")
+            if body.replyToMessageId is None:
+                if db.execute("SELECT 1 FROM messages WHERE conversation_id=? AND role='customer'",
+                              (identifier,)).fetchone():
+                    raise HTTPException(422, "Select the customer question to reply to.")
+                _check_revision(row, body.expectedRevision)
+                if body.expectedAnsweredBy is not None:
+                    raise HTTPException(422, "A greeting cannot reference a previous answer.")
+            else:
+                target = db.execute(
+                    "SELECT answered_by_id FROM messages WHERE id=? AND conversation_id=? AND role='customer'",
+                    (body.replyToMessageId, identifier),
+                ).fetchone()
+                if target is None:
+                    raise HTTPException(404, "Customer question not found.")
+                if target["answered_by_id"] != body.expectedAnsweredBy:
+                    raise HTTPException(409, "This question received another answer. Refresh before replying.")
             message_id = _append(db, identifier, "human", body.text, client_id=body.clientMessageId,
-                                 request_hash=_fingerprint(body))
-            db.execute("UPDATE conversations SET revision=revision+1,updated_at=?,needs_human=0,reason=NULL WHERE id=?",
+                                 request_hash=_fingerprint(body), reply_to_id=body.replyToMessageId)
+            if body.replyToMessageId is not None:
+                db.execute("""UPDATE messages SET needs_human=0,human_reason=NULL,answered_by_id=?
+                              WHERE id=? AND conversation_id=?""",
+                           (message_id, body.replyToMessageId, identifier))
+                db.execute("""UPDATE jobs SET status='cancelled',updated_at=? WHERE conversation_id=?
+                              AND message_id=? AND status IN ('queued','running')""",
+                           (now(), identifier, body.replyToMessageId))
+            db.execute("UPDATE conversations SET revision=revision+1,updated_at=?,unlinked_human_reason=NULL WHERE id=?",
                        (now(), identifier))
+            _refresh_attention(db, identifier)
             snapshot = _snapshot(db, identifier)
-            db.execute("UPDATE messages SET response_json=? WHERE id=?", (json.dumps(snapshot), message_id))
+            _save_receipt(db, message_id, snapshot)
             return snapshot
 
     return router
@@ -607,9 +924,10 @@ def recover_interrupted(store: SupportStore | None = None) -> int:
         for job in jobs:
             row = _conversation(db, job["conversation_id"])
             db.execute("UPDATE jobs SET status='interrupted',updated_at=? WHERE id=?", (now(), job["id"]))
-            if row["state"] == "ai" and row["generation"] == job["generation"]:
-                _fence(db, row["id"], "waiting_human", "interrupted")
-                _append(db, row["id"], "system", HELP_TEXT)
+            if row["state"] in AI_ELIGIBLE_STATES and row["generation"] == job["generation"]:
+                _mark_question(db, row["id"], job["message_id"], "interrupted")
+                db.execute("UPDATE conversations SET revision=revision+1,updated_at=? WHERE id=?", (now(), row["id"]))
+                _append(db, row["id"], "system", HELP_TEXT, reply_to_id=job["message_id"])
         return len(jobs)
 
 
@@ -625,7 +943,7 @@ def _claim(store: SupportStore) -> sqlite3.Row | bool:
         if job is None:
             return False
         row, settings = _conversation(db, job["conversation_id"]), _settings(db)
-        if row["state"] != "ai" or row["generation"] != job["generation"]:
+        if row["state"] not in AI_ELIGIBLE_STATES or row["generation"] != job["generation"]:
             db.execute("UPDATE jobs SET status='cancelled',updated_at=? WHERE id=?", (now(), job["id"]))
             return True
         if not settings["enabled"] or settings["revision"] != job["settings_revision"]:
@@ -645,12 +963,11 @@ def _save_current_payload(store: SupportStore, job: sqlite3.Row, payload: dict[s
         if current is None or current["status"] != "running":
             return False
         row, settings = _conversation(db, job["conversation_id"]), _settings(db)
-        if (row["state"] != "ai" or row["generation"] != job["generation"] or not settings["enabled"]
-                or settings["revision"] != job["settings_revision"] or not feature_enabled()):
-            if row["state"] == "ai":
-                _fence(db, row["id"], "waiting_human", "settings_changed")
-            else:
-                db.execute("UPDATE jobs SET status='cancelled',updated_at=? WHERE id=?", (now(), job["id"]))
+        if row["state"] not in AI_ELIGIBLE_STATES or row["generation"] != job["generation"]:
+            db.execute("UPDATE jobs SET status='cancelled',updated_at=? WHERE id=?", (now(), job["id"]))
+            return False
+        if (not settings["enabled"] or settings["revision"] != job["settings_revision"] or not feature_enabled()):
+            _fence(db, row["id"], "waiting_human", "settings_changed" if settings["enabled"] else "ai_disabled")
             return False
         db.execute("UPDATE jobs SET payload=?,updated_at=? WHERE id=?",
                    (json.dumps(payload, ensure_ascii=False), now(), job["id"]))
@@ -659,18 +976,20 @@ def _save_current_payload(store: SupportStore, job: sqlite3.Row, payload: dict[s
 
 def _publish(store: SupportStore, job: sqlite3.Row, failure: str | None, text: str,
              references: list[dict[str, object]], usage: dict[str, int],
-             evidence: list[dict[str, object]]) -> None:
-    from app import main
+             evidence: list[dict[str, object]], general_evidence: list[dict[str, object]] | None = None,
+             knowledge_sources: tuple[str, ...] = (), answer_plan: dict | None = None,
+             needs_human: bool = False, attention_reason: str | None = None) -> None:
+    from app import knowledge, main, support_ai
     with store.connection() as db:
         current = db.execute("SELECT * FROM jobs WHERE id=?", (job["id"],)).fetchone()
         if current is None or current["status"] != "running":
             return
         row, settings = _conversation(db, job["conversation_id"]), _settings(db)
-        if (row["state"] != "ai" or row["generation"] != job["generation"] or
-                not settings["enabled"] or settings["revision"] != job["settings_revision"] or not feature_enabled()):
+        if row["state"] not in AI_ELIGIBLE_STATES or row["generation"] != job["generation"]:
             db.execute("UPDATE jobs SET status='cancelled',updated_at=? WHERE id=?", (now(), job["id"]))
-            if row["state"] == "ai":
-                _fence(db, row["id"], "waiting_human", "settings_changed")
+            return
+        if not settings["enabled"] or settings["revision"] != job["settings_revision"] or not feature_enabled():
+            _fence(db, row["id"], "waiting_human", "settings_changed" if settings["enabled"] else "ai_disabled")
             return
         # Acquire the database first so a busy support store cannot monopolize the catalog.
         # Catalog writers share this lock through validation and the publication commit.
@@ -679,21 +998,49 @@ def _publish(store: SupportStore, job: sqlite3.Row, failure: str | None, text: s
                 try:
                     current_catalog = {item["ref"]: item for item in _public_catalog_locked(_job_market(job))}
                     previous = {item["ref"]: item for item in evidence}
-                    if any(current_catalog.get(f"{ref['type']}:{ref['id']}") !=
+                    if answer_plan is None and any(current_catalog.get(f"{ref['type']}:{ref['id']}") !=
                            previous.get(f"{ref['type']}:{ref['id']}") for ref in references):
                         failure = "catalog_changed"
+                    current_general = knowledge.approved_general_facts() if knowledge_sources or answer_plan else []
+                    if answer_plan is not None:
+                        planned_answer = support_ai.Answer(
+                            text=text, references=tuple(f"{ref['type']}:{ref['id']}" for ref in references),
+                            needs_human=needs_human, reason=attention_reason, usage=usage,
+                            knowledge_sources=knowledge_sources, answer_plan=answer_plan,
+                        )
+                        topics = json.loads(settings["allowed_topics"])
+                        if not support_ai.answer_matches_plan(
+                            planned_answer, support_ai.public_evidence(list(current_catalog.values()), topics),
+                            topics, current_general,
+                        ):
+                            failure = "catalog_changed"
+                    if knowledge_sources:
+                        for source_id in knowledge_sources:
+                            before = [fact for fact in general_evidence or [] if fact.get("sourceId") == source_id]
+                            after = [fact for fact in current_general if fact.get("sourceId") == source_id]
+                            if not before or before != after:
+                                failure = "knowledge_changed"
+                                break
                 except (OSError, ValueError, KeyError, TypeError, HTTPException) as error:
                     logger.warning("Support catalog validation unavailable (%s).", type(error).__name__)
                     failure = "catalog_unavailable"
-            db.execute("UPDATE jobs SET status=?,usage_json=?,updated_at=? WHERE id=?",
-                       ("failed" if failure else "completed", json.dumps(usage), now(), job["id"]))
+            db.execute("UPDATE jobs SET status=?,usage_json=?,answer_plan_json=?,updated_at=? WHERE id=?",
+                       ("failed" if failure else "completed", json.dumps(usage),
+                        json.dumps(answer_plan, ensure_ascii=False) if not failure and answer_plan is not None else None,
+                        now(), job["id"]))
             if failure:
-                _fence(db, row["id"], "waiting_human", failure)
-                _append(db, row["id"], "system", HELP_TEXT)
+                _mark_question(db, row["id"], job["message_id"], failure)
+                _append(db, row["id"], "system", HELP_TEXT, reply_to_id=job["message_id"])
             else:
-                _append(db, row["id"], "assistant", text, references)
-                db.execute("UPDATE conversations SET revision=revision+1,updated_at=?,needs_human=0,reason=NULL WHERE id=?",
-                           (now(), row["id"]))
+                if needs_human:
+                    _mark_question(db, row["id"], job["message_id"], attention_reason or "missing_information")
+                answer_id = _append(db, row["id"], "assistant", text, references, reply_to_id=job["message_id"])
+                db.execute("UPDATE messages SET answered_by_id=? WHERE id=? AND needs_human=0",
+                           (answer_id, job["message_id"]))
+                if needs_human and HELP_TEXT not in text:
+                    _append(db, row["id"], "system", HELP_TEXT, reply_to_id=job["message_id"])
+            db.execute("UPDATE conversations SET revision=revision+1,updated_at=? WHERE id=?", (now(), row["id"]))
+            _refresh_attention(db, row["id"])
             db.commit()
 
 
@@ -706,16 +1053,28 @@ async def process_one(store: SupportStore | None = None) -> bool:
     if isinstance(job, bool):
         return job
     payload = json.loads(job["payload"])
+    from app import support_ai
+    if payload["messages"] and support_ai.is_service_only_question(payload["messages"][-1]["text"]):
+        payload["item_ref"] = None
     failure = None
     text, references, usage = HELP_TEXT, [], {}
+    knowledge_sources: tuple[str, ...] = ()
+    answer_plan = None
+    needs_human = False
+    attention_reason = None
     try:
         payload["catalog"] = await asyncio.to_thread(public_catalog, _job_market(job))
+        from app import knowledge
+        payload["general_knowledge"] = (await asyncio.to_thread(knowledge.approved_general_facts)
+                                        if "customer_service" in payload["allowed_topics"] else [])
     except (OSError, ValueError, KeyError, TypeError, HTTPException) as error:
         logger.warning("Support catalog refresh unavailable (%s).", type(error).__name__)
         failure = "catalog_unavailable"
-    if failure is None and payload["item_ref"] is not None and not any(
-        item["ref"] == payload["item_ref"] for item in payload["catalog"]
-    ):
+    if (failure is None and payload["item_ref"] is not None
+            and not any(item["ref"] == payload["item_ref"] for item in payload["catalog"])
+            and not support_ai.resolve_catalog_items(
+                support_ai.public_evidence(payload["catalog"], payload["allowed_topics"]),
+                payload["messages"][-1]["text"])):
         failure = "catalog_changed"
     if failure:
         await asyncio.to_thread(_publish, store, job, failure, text, references, usage, payload["catalog"])
@@ -727,7 +1086,31 @@ async def process_one(store: SupportStore | None = None) -> bool:
         answer = await support_ai.respond(**payload)
         local_reply = support_ai.is_greeting_answer(answer, payload["messages"], payload["allowed_topics"])
         lookup = {item["ref"]: item for item in payload["catalog"]}
-        if answer.needs_human:
+        supplied_sources = {fact["sourceId"] for fact in payload["general_knowledge"]}
+        answer_sources = getattr(answer, "knowledge_sources", ())
+        service_answer = bool(answer.topic == "customer_service" and answer_sources
+                              and all(isinstance(source_id, str) and source_id in supplied_sources for source_id in answer_sources))
+        plan = getattr(answer, "answer_plan", None)
+        valid_plan = plan is not None and support_ai.answer_matches_plan(
+            answer, support_ai.public_evidence(payload["catalog"], payload["allowed_topics"]),
+            payload["allowed_topics"], payload["general_knowledge"],
+        )
+        if plan is not None and not valid_plan:
+            failure = "invalid_answer"
+        elif valid_plan:
+            if (not isinstance(answer.text, str) or not answer.text.strip() or len(answer.text) > 8000
+                    or any(ref not in lookup for ref in answer.references)
+                    or any(source_id not in supplied_sources for source_id in answer_sources)):
+                failure = "invalid_answer"
+            else:
+                answer_plan = plan
+                text = answer.text
+                references = [{"type": lookup[ref]["type"], "id": lookup[ref]["id"], "url": lookup[ref]["url"],
+                               "label": lookup[ref]["name"]} for ref in dict.fromkeys(answer.references)]
+                knowledge_sources = tuple(dict.fromkeys(answer_sources))
+                needs_human = answer.needs_human
+                attention_reason = answer.reason
+        elif answer.needs_human:
             failure = answer.reason if answer.reason in (
                 "missing_information", "out_of_scope", "customer_request", "provider_failure", "not_configured",
                 "quota", "timeout", "unsafe_input", "invalid_response",
@@ -737,13 +1120,15 @@ async def process_one(store: SupportStore | None = None) -> bool:
         elif not local_reply and answer.topic not in payload["allowed_topics"]:
             failure = "out_of_scope"
         elif (not isinstance(answer.text, str) or not answer.text.strip() or len(answer.text) > 8000
-              or (not local_reply and not answer.references)
+              or (not local_reply and not answer.references and not service_answer)
+              or answer_sources and not service_answer
               or any(ref not in lookup for ref in answer.references)):
             failure = "missing_information"
         else:
             text = answer.text
             references = [{"type": lookup[ref]["type"], "id": lookup[ref]["id"], "url": lookup[ref]["url"],
                            "label": lookup[ref]["name"]} for ref in dict.fromkeys(answer.references)]
+            knowledge_sources = tuple(dict.fromkeys(answer_sources))
         usage = {key: value for key, value in answer.usage.items()
                  if key in ("input_tokens", "output_tokens", "total_tokens", "promptTokenCount",
                             "candidatesTokenCount", "thoughtsTokenCount", "totalTokenCount")
@@ -752,7 +1137,9 @@ async def process_one(store: SupportStore | None = None) -> bool:
         # Never expose SDK exception bodies, provider keys, prompts or response payloads.
         logger.warning("Support provider response failed (%s).", type(error).__name__)
         failure = "provider_failure"
-    await asyncio.to_thread(_publish, store, job, failure, text, references, usage, payload["catalog"])
+    await asyncio.to_thread(_publish, store, job, failure, text, references, usage, payload["catalog"],
+                            payload.get("general_knowledge", []), knowledge_sources, answer_plan,
+                            needs_human, attention_reason)
     return True
 
 
@@ -773,16 +1160,18 @@ async def _worker(store: SupportStore) -> None:
 
 @asynccontextmanager
 async def lifespan(_app):
-    task = None
+    tasks = []
     try:
         if feature_enabled():
-            task = asyncio.create_task(_worker(get_store()))
+            from app import knowledge
+            tasks = [asyncio.create_task(_worker(get_store())), asyncio.create_task(knowledge.worker())]
     except (OSError, ValueError):
         logger.warning("Support worker unavailable; commerce remains active.")
     try:
         yield
     finally:
-        if task is not None:
+        for task in tasks:
             task.cancel()
+        for task in tasks:
             with suppress(asyncio.CancelledError):
                 await task

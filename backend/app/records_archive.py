@@ -57,6 +57,7 @@ def allowed_name(name: str) -> bool:
     return (
         parts[0] == "inquiries" and parts[1].endswith(".json")
         or parts[0] == "website-logs" and parts[1].endswith((".log", ".jsonl", ".active", ".gz"))
+        or parts[0] == "knowledge" and bool(re.fullmatch(r"[a-f0-9]{64}\.(?:pdf|docx|txt|md|png|jpg|jpeg|webp|gif|svg|mp4|mov|webm|m4v|mkv|avi)", parts[1]))
     )
 
 
@@ -99,6 +100,12 @@ def verify_archive(path: Path) -> dict:
                 raise RecordsError("Incomplete or oversized backup.")
             if not {"analytics.sqlite3", "restore_records.py"}.issubset(expected):
                 raise RecordsError("Backup is missing required recovery files.")
+            required_sources = manifest.get("knowledgeRequiredFiles", [])
+            if (not isinstance(required_sources, list) or any(
+                not isinstance(name, str) or not name.startswith("knowledge/") or name not in expected
+                for name in required_sources
+            )):
+                raise RecordsError("Backup is missing a required knowledge source.")
             for entry in entries:
                 if entry.is_dir() or entry.flag_bits & 1 or stat.S_ISLNK(entry.external_attr >> 16):
                     raise RecordsError("Links, directories and encrypted entries are not supported.")

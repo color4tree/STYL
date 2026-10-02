@@ -330,11 +330,19 @@ of new anonymous aggregates. Its presence is not a claim that old data was purge
 
 ### Schedule and destination: TA-010
 
-The approved schedule remains **08:00 America/Los_Angeles**, for the preceding
-local calendar day, using IANA timezone rules for DST. A persistent server job
+The approved schedule is **00:15 America/Los_Angeles (12:15 AM Pacific)** early
+the next day, replacing 08:00. It covers the preceding **completed local calendar
+day**, not the current day, using IANA timezone rules for DST. Before 00:15 the
+latest due report is two calendar days ago; at/after 00:15 it is yesterday.
+Previews retain the strict completed-hour cutoff. A delayed restart processes
+the latest due date without replaying older completed deliveries; persisted
+snapshots and per-recipient claims prevent duplicate sends across quarter-hour
+checks and DST changes. A persistent server job
 must work independently of VS Code/chat. Sending remains disabled outside
 production and requires explicit production enablement and separately approved
 internal analytics recipients. **Recipients are not yet approved.**
+This timing change is local only and not deployed; actual SMTP/inbox delivery is
+not certified. Production deployment and a real-mail test need separate approval.
 
 Reuse protected SMTP transport without inheriting inquiry recipients or changing
 customer Reply-To. Use only a configured business Reply-To and a credential-free
@@ -488,8 +496,9 @@ separately by the implementation/testing owner; documentation is not a test pass
 ## 12. Approved decisions and outstanding release gates
 
 Approved: aggregate-only automatic collection with opt-out/exclusions, no
-storefront consent/status UI, independent hour/coarse dimensions, and 08:00
-Pacific daily schedule. The 2026-09-29 owner decision replaces age-based retention
+storefront consent/status UI, independent hour/coarse dimensions, and a 00:15
+America/Los_Angeles (12:15 AM Pacific) daily schedule for the preceding completed
+calendar day. The 2026-09-29 owner decision replaces age-based retention
 with verified backup/download before optional removal. No identified-mode fallback.
 
 Outstanding: final local implementation/test evidence, served-market privacy
