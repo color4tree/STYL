@@ -1,5 +1,60 @@
 # STYL project history and handoff
 
+## Non-AI production activation verified - 2026-10-02 UTC
+
+Application **`3ead5c679db41be21c1d5296a05df295826a8714`** was activated at
+**2026-10-02T03:24:09Z / October 1, 20:24 Pacific**. Main was pushed only after
+the local non-AI baseline passed. No customer-chat/knowledge/model implementation
+was deployed; `/support` and `/api/support/config` return 404.
+
+The isolated Linux build reused matching dependency manifests. Turbopack rejected
+an external node_modules symlink, so a separate dependency copy was used without
+installing/upgrading packages. Build completed successfully; all **82 Linux
+deployment tests passed**, including the two process-group cases unavailable on
+Windows. The reviewed installer and configuration payload were copied into a
+root-protected release directory and pinned across preparation/cutover/retention.
+
+Release backup: `/var/backups/styl/release-3ead5c6`. Old source, mode-only Git
+changes, environment, consistent analytics SQLite, complete data archive and
+previous Next build were preserved. Code fast-forward and build swap used a
+rollback trap; catalog products/accessories/home hashes matched before cutover.
+Existing environment values, including SMTP/GeoIP, and saved analytics email
+settings were compared unchanged. All six API/web/Caddy/backup/report/GeoIP
+services/timers were active after deployment.
+
+Saved daily mail remains enabled at revision 2; actual nextRunAt was verified as
+`2026-10-02T07:15:00+00:00` (**00:15 Pacific**), with no forced send or recipient
+change. Apex/www/static-IP HTTP redirects retain their prior same-host 308
+behavior; HTTPS health and canonical www redirect remain working. Website
+capture was verified with 134 Caddy access entries and no request objects.
+
+The protected historical journal exports were captured before any retention
+change. A production Records ZIP was downloaded, hash-verified and cold-restored
+locally; SQLite integrity and both gzip journal exports passed. The actual saved
+file was then re-uploaded through the authenticated verification endpoint:
+
+- Archive ID: `01e71c4e796d46f5aa86a48117e2c1c0`
+- Bytes: **11,510,526**
+- SHA-256: `83ac6c9dfae02f8ae4e3328ff83a272783d6f167371ee5a3fb4ae8b3f3a5f222`
+- Contents: three inquiries, 968 database rows, six website-log files.
+- Verified server receipt: `2026-10-02T03:44:33.166333+00:00`.
+- Private local copy/restore:
+  `%LOCALAPPDATA%\STYL\CatalogMirrors\production-records-release-20261002`.
+
+Only after that proof, operational **journald** retention was activated at
+14 days / 250 MB. Website/business archives have no automatic age/size expiry,
+and no business records or server archives were removed. Other vendor OS
+logrotate policies were inventoried but deliberately not rewritten.
+
+Browser-console background-tab throttling caused delayed rendering and one
+mistyped temporary stage path; literal paths, focused/visible terminal input,
+source hashes and syntax guards prevented unreviewed execution. The temporary
+empty wrong-path directory was cleaned. The activation script required explicit
+CRLF-to-LF normalization; its verified Linux hash was
+`6eb3ddfc09cf689e93ce72cdf2d0f1f94510f6a528e65153ba07439aa452e1fd`.
+The retired stage dependency copy was removed and source artifacts retained
+under the protected release backup.
+
 ## Non-AI main release preparation - 2026-10-01
 
 The owner explicitly approved moving analytics, backup/log retention and shared
