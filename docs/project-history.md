@@ -2,6 +2,37 @@
 
 Last recorded: 2026-10-01
 
+## Shared non-AI release merged back; AI remains isolated - 2026-10-02 UTC
+
+AI work was first preserved at `1bb6272`; per-country paired selling price/optional
+MSRP was added as `92c09ba`. Main received the same layout as `744a781`, then the
+non-AI release as `3ead5c6`. That application was deployed at
+**2026-10-02T03:24:09Z / October 1, 20:24 Pacific**. The main deployment record is
+`80e68f5`. No AI application, provider code, chat route or knowledge workflow was
+deployed; public `/support` and `/api/support/config` remain 404.
+
+Main's local release baseline passed 240 backend tests, 54 frontend units and
+310 browser executions. All 82 operational tests passed on isolated Linux
+staging. Production catalog/home hashes, other environment settings, saved
+email enablement/recipients and GeoIP operation were preserved. Production daily
+reports now target **00:15 Pacific for the previous completed day**.
+
+Historical website journals were preserved before 14-day operational-journal
+retention. Records archive `01e71c4e796d46f5aa86a48117e2c1c0` was saved off-server,
+verified and cold-restored; SHA-256:
+`83ac6c9dfae02f8ae4e3328ff83a272783d6f167371ee5a3fb4ae8b3f3a5f222`.
+Both journal exports and restored SQLite integrity passed. Only then was
+journald retention enabled. Website/business records and archives have no
+automatic age/size expiry; other OS logrotate policies remain unchanged.
+
+The shared release is merged into this AI branch while retaining AI-specific
+records/knowledge support, routes, interfaces and documentation. The main-only
+no-AI boundary test is deliberately absent here. The missing-analytics-source
+backup guard and isolated test initialization are retained on both branches;
+no silent empty-database replacement may claim a complete backup. Owner local
+catalog files, private credentials and the production mirror remain uncommitted
+and preserved. AI continuation remains local, not pushed/deployed.
+
 ## Catalog-wide factual answer plans and partial publication - 2026-10-01
 
 The owner approved the reviewed accuracy plan with an explicit requirement:

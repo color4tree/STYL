@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app import knowledge, main, records_archive, support, support_ai
+from app import analytics, knowledge, main, records_archive, support, support_ai
 
 
 class GeneralKnowledgeFlowTests(unittest.TestCase):
@@ -41,6 +41,8 @@ class GeneralKnowledgeFlowTests(unittest.TestCase):
         ):
             replacement.start()
             self.addCleanup(replacement.stop)
+        with analytics.get_store().connection():
+            pass
         with support.rate_lock:
             support.rate_windows.clear()
         self.client = TestClient(main.app)

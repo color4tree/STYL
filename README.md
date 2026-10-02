@@ -218,6 +218,24 @@ Then open http://localhost:8000/docs
 
 ## Current phase
 
+`main` is the non-AI production line. AI assistant, document knowledge and
+provider development remain on `ai-assistant/baseline-2026-09-29-2227-pt`.
+Shared per-country pricing layout is present on both branches.
+
+Admin **Backup** contains **Catalog recovery** and **Business / log records**.
+Business history and website logs do not expire by age or size. Create a
+persistent private ZIP, download/save it, and verify the actual saved file before
+any optional exact-record cleanup. Downloading alone never deletes records.
+See [records backup and retention](docs/records-backup-and-retention.md).
+Missing analytics storage is an explicit failure, not a newly created empty
+database presented as a complete backup.
+
+Production logging installation uses staged prepare/cutover/retention phases
+in [install-records-logging.py](deploy/install-records-logging.py). The 14-day
+retention applies to operational **journals**, only after website capture and
+verified off-instance historical backup. Other OS logrotate policies are not
+silently changed.
+
 Initial storefront MVP plus a lightweight product management workflow for catalog editing.
 
 ## Product management requirement
@@ -288,7 +306,7 @@ This approved 2026-09-29 change supersedes the earlier visible-detail/desktop-ca
 and automatic-full-mobile behavior.
 
 Both admin editors support optional independent **CAD MSRP** / **USD MSRP**
-alongside Price. Empty MSRP is valid; public MSRP is crossed out only when
+alongside selling Price on the same row for each country. Empty MSRP is valid; public MSRP is crossed out only when
 strictly greater than the current market's selling price. Missing/equal/lower
 MSRP does not show a discount. No currency copying/conversion occurs, and MSRP
 never affects market visibility, cart totals or quote prices.

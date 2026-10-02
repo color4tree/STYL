@@ -24,6 +24,9 @@ def main() -> None:
         json.dump({"pid": os.getpid(), "directory": str(directory),
                    "ownerHash": hashlib.sha256(token.encode()).hexdigest()}, output)
     sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "backend"))
+    from app import analytics
+    with analytics.get_store().connection():
+        pass
     uvicorn.run("app.main:app", host="127.0.0.1", port=8102)
 
 

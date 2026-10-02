@@ -226,8 +226,9 @@ def create_backup() -> dict:
     inquiry_files = source_files(main.INQUIRIES_PATH, (".json",))
     estimated = sum(regular_file(path).st_size for path in log_files + inquiry_files)
     store = analytics.get_store()
-    if store.path.exists():
-        estimated += regular_file(store.path).st_size
+    if not store.path.is_file():
+        raise HTTPException(503, "Analytics source is unavailable. Restore it before creating a complete backup.")
+    estimated += regular_file(store.path).st_size
     support_path = support.configured_path()
     include_support = support_path.exists()
     if include_support:
@@ -251,12 +252,15 @@ def create_backup() -> dict:
     with TemporaryDirectory(prefix="prepare-", dir=root) as temporary:
         work = Path(temporary)
         database = work / "analytics.sqlite3"
-        with store.connection() as source, closing(sqlite3.connect(database)) as destination:
+        with closing(sqlite3.connect(store.path.as_uri() + "?mode=ro", uri=True, timeout=5)) as source, closing(sqlite3.connect(database)) as destination:
             source.backup(destination)
         database.chmod(0o600)
         with closing(sqlite3.connect(database)) as snapshot:
             if snapshot.execute("PRAGMA quick_check").fetchone()[0] != "ok":
                 raise RecordsError("Analytics snapshot integrity check failed.")
+            saved_environment = snapshot.execute("SELECT value FROM analytics_meta WHERE key='environment'").fetchone()
+            if saved_environment is None or saved_environment[0] != os.getenv("STYL_ANALYTICS_ENVIRONMENT", "local"):
+                raise RecordsError("Analytics backup environment does not match the application.")
             tables = [row[0] for row in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'") if re.fullmatch(r"analytics_[a-z_]+", row[0])]
             analytics_rows = sum(snapshot.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0] for table in tables)
         support_counts = {"supportConversations": 0, "supportMessages": 0}

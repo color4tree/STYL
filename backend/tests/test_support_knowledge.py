@@ -15,7 +15,7 @@ import zipfile
 
 from fastapi.testclient import TestClient
 
-from app import knowledge, main, support, support_ai
+from app import analytics, knowledge, main, support, support_ai
 
 
 PNG = base64.b64decode(
@@ -55,6 +55,8 @@ class SupportKnowledgeTests(unittest.TestCase):
         ):
             replacement.start()
             self.addCleanup(replacement.stop)
+        with analytics.get_store().connection():
+            pass
         with support.rate_lock:
             support.rate_windows.clear()
         self.client = TestClient(main.app)

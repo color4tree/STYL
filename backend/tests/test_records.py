@@ -69,6 +69,15 @@ class RecordsTests(unittest.TestCase):
         self.assertEqual(response.status_code, 201, response.text)
         return response.json()
 
+    def test_missing_analytics_source_is_not_recreated_as_an_empty_success(self) -> None:
+        held = self.root / "held-analytics.sqlite3"
+        self.database.rename(held)
+        response = self.client.post(self.base + "/archives", headers=self.headers)
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertFalse(self.database.exists())
+        self.assertEqual(list(self.backups.glob("styl-records-*.zip")), [])
+        self.assertTrue(held.exists())
+
     def url(self, value: dict, suffix: str = "") -> str:
         return f"{self.base}/archives/{value['id']}" + suffix
 
