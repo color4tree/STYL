@@ -8,8 +8,15 @@ User=styl
 Group=styl
 WorkingDirectory=/opt/styl/frontend
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+SupplementaryGroups=styl-logs
+UMask=0027
+ExecStart=/usr/bin/python3 /usr/local/lib/styl/capture_website_logs.py --directory /var/log/styl-website --prefix web -- /usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+KillMode=mixed
+TimeoutStopSec=45
+StandardOutput=journal
+StandardError=journal
 Restart=on-failure
+RestartPreventExitStatus=74
 RestartSec=5
 PrivateTmp=true
 

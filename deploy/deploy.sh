@@ -6,6 +6,9 @@ if [[ $EUID -ne 0 ]]; then
 	exit 1
 fi
 
+script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+/usr/bin/python3 "$script_directory/check_logging_install.py"
+
 sudo -u styl git -C /opt/styl pull --ff-only
 sudo -u styl /opt/styl/backend/.venv/bin/pip install -r /opt/styl/backend/requirements.txt
 

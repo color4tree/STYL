@@ -305,6 +305,31 @@ class AnalyticsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             analytics.get_report("2026-09-28", "2026-09-28", cutoff=NOW.replace(tzinfo=None))
 
+    def test_an010_midnight_email_includes_completed_calendar_day_not_current_hour(self) -> None:
+        zone = ZoneInfo("America/Los_Angeles")
+        for day, scheduled in (
+            ("2026-09-27", "2026-09-28T07:15:00+00:00"),
+            ("2026-03-08", "2026-03-09T07:15:00+00:00"),
+            ("2026-11-01", "2026-11-02T08:15:00+00:00"),
+        ):
+            with self.subTest(day=day):
+                first, last = analytics.day_window(day, day, zone)
+                for instant in (first, last - timedelta(seconds=1), last, last + timedelta(minutes=14)):
+                    with patch.object(analytics, "utcnow", return_value=instant):
+                        self.assertEqual(self.post().status_code, 200)
+                now = datetime.fromisoformat(scheduled)
+                self.assertEqual(analytics_reports.due_date(now).isoformat(), day)
+                with patch.object(analytics, "utcnow", return_value=now), patch.object(analytics_reports, "_send") as send:
+                    report = analytics.get_report(day, day, cutoff=now)
+                    preview = analytics_reports.preview_report(day, now)
+                self.assertEqual(report["summary"]["pageViews"], 2)
+                self.assertEqual(report["cutoffAt"], analytics.stamp(last))
+                self.assertEqual(preview["reportDate"], day)
+                self.assertIn("Page views: 2", preview["text"])
+                self.assertNotIn("Through", preview["text"])
+                self.assertNotIn("Not started", preview["text"])
+                send.assert_not_called()
+
     def test_an010_page_view_baseline_compares_daily_averages(self) -> None:
         with patch.object(analytics, "utcnow", return_value=NOW - timedelta(days=7)):
             self.post([self.event() for _ in range(14)])
@@ -407,7 +432,7 @@ class AnalyticsTests(unittest.TestCase):
             self.assertIsNone(connection.execute("SELECT session_id FROM analytics_receipts").fetchone()[0])
         self.assertEqual(self.report()["summary"]["pageViews"], 1)
 
-    def test_an014_thirteen_calendar_month_retention_and_bounded_legacy_raw_retention(self) -> None:
+    def test_an014_maintenance_never_deletes_business_history_by_age(self) -> None:
         self.legacy(NOW - timedelta(days=31))
         old = datetime(2025, 8, 27, 23, tzinfo=timezone.utc)
         retained = datetime(2025, 8, 28, 7, tzinfo=timezone.utc)
@@ -416,15 +441,15 @@ class AnalyticsTests(unittest.TestCase):
                 self.post()
         analytics.get_store().prune(NOW)
         with analytics.get_store().connection() as connection:
-            self.assertEqual(connection.execute("SELECT min(hour) FROM analytics_aggregate_counts").fetchone()[0], analytics.stamp(retained))
+            self.assertEqual(connection.execute("SELECT min(hour) FROM analytics_aggregate_counts").fetchone()[0], analytics.stamp(old))
             for table in ("analytics_events", "analytics_sessions", "analytics_visitors", "analytics_receipts"):
-                self.assertEqual(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 0)
+                self.assertEqual(connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0], 1)
             self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 1)
         self.assertEqual(self.report("2025-08-28")["summary"]["pageViews"], 1)
         analytics.get_store().prune(datetime(2028, 1, 1, tzinfo=timezone.utc))
         with analytics.get_store().connection() as connection:
-            self.assertEqual(connection.execute("SELECT count(*) FROM analytics_aggregate_counts").fetchone()[0], 0)
-            self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 0)
+            self.assertGreater(connection.execute("SELECT count(*) FROM analytics_aggregate_counts").fetchone()[0], 0)
+            self.assertEqual(connection.execute("SELECT count(*) FROM analytics_rollups").fetchone()[0], 1)
 
     def test_an013_admin_reports_require_auth_and_csv_is_safe(self) -> None:
         for endpoint in ("report?start=2026-09-28&end=2026-09-28", "export?start=2026-09-28&end=2026-09-28", "email-preview?date=2026-09-28", "deliveries", "email-settings"):

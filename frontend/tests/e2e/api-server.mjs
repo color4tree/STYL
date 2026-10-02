@@ -1,5 +1,5 @@
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,8 @@ if (!data || !path.basename(data).startsWith("styl-e2e-") || !process.env.STYL_E
   throw new Error("Run through the Playwright config, which creates isolated test data.");
 }
 mkdirSync(data, { recursive: true });
+mkdirSync(path.join(data, "records"), { recursive: true });
+mkdirSync(path.join(data, "website-logs"), { recursive: true });
 // Synthetic dual-market prices keep fixtures visible without changing real catalog data.
 for (const catalog of ["products", "accessories"]) {
   const items = JSON.parse(readFileSync(path.join(repository, "backend", "app", "data", `${catalog}.json`), "utf8"));
@@ -26,7 +28,7 @@ execFileSync(ffmpeg, [
   "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
   "-t", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", path.join(data, "clip.mov"),
 ]);
-const child = spawn(python, ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8102"], {
+const child = spawn(python, [path.join(root, "tests", "e2e", "api_server.py")], {
   cwd: path.join(repository, "backend"), stdio: "inherit",
   env: {
     ...process.env, STYL_DATA_DIR: data, STYL_ADMIN_TOKEN: process.env.STYL_E2E_TOKEN,
@@ -34,13 +36,14 @@ const child = spawn(python, ["-m", "uvicorn", "app.main:app", "--host", "127.0.0
     STYL_SMTP_USERNAME: "", STYL_SMTP_PASSWORD: "",
     STYL_ANALYTICS_ENABLED: "true", STYL_ANALYTICS_ENVIRONMENT: "test",
     STYL_ANALYTICS_DB: path.join(data, "analytics.sqlite3"),
+    STYL_RECORDS_DIR: path.join(data, "records"),
+    STYL_WEBSITE_LOG_DIR: path.join(data, "website-logs"),
     STYL_ANALYTICS_TIMEZONE: "America/Los_Angeles", STYL_ANALYTICS_CAMPAIGN_ALLOWLIST: "launch,test-campaign",
     STYL_ANALYTICS_EMAIL_ENABLED: "false", STYL_ANALYTICS_RECIPIENTS: "",
   },
 });
 child.on("error", (error) => { console.error(error); process.exitCode = 1; });
 child.on("exit", (code) => {
-  rmSync(data, { recursive: true, force: true });
-  process.exit(code ?? 0);
+  process.exit(!existsSync(data) || existsSync(path.join(data, "stop.request")) ? 0 : code ?? 0);
 });
 for (const signal of ["SIGTERM", "SIGINT"]) process.on(signal, () => child.kill(signal));

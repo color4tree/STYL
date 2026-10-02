@@ -39,6 +39,8 @@ test("AN-017: email on/off and recipients persist, normalize duplicates and neve
   expect((await request.get(endpoint)).status()).toBe(401);
   expect((await request.put(endpoint, { data: { enabled: true, recipients: ["owner@example.com"], expectedRevision: 0 } })).status()).toBe(401);
   const panel = await openSettings(page);
+  await expect(panel).toContainText("Schedule: 12:15 AM Pacific (00:15 America/Los_Angeles)");
+  await expect(panel).toContainText("covering the previous completed calendar day");
   const toggle = panel.getByRole("checkbox", { name: "Enable daily summary emails", exact: true });
   const recipients = panel.getByLabel("Daily email recipients", { exact: true });
   await expect(toggle).not.toBeChecked();
@@ -50,7 +52,11 @@ test("AN-017: email on/off and recipients persist, normalize duplicates and neve
   await expect(panel.getByRole("status")).toContainText("Daily email settings saved");
   await expect(recipients).toHaveValue("owner@example.com\nsales@example.com");
   await expect(panel.getByTestId("daily-email-effective-state")).toContainText("real emails are never sent");
-  expect(await settings(request)).toMatchObject({ enabled: true, effectiveEnabled: false, environment: "test", recipients: ["owner@example.com", "sales@example.com"] });
+  const savedSettings = await settings(request);
+  expect(savedSettings).toMatchObject({ enabled: true, effectiveEnabled: false, environment: "test", recipients: ["owner@example.com", "sales@example.com"], timezone: "America/Los_Angeles" });
+  expect(new Intl.DateTimeFormat("en-GB", {
+    timeZone: savedSettings.timezone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).format(new Date(savedSettings.nextRunAt))).toBe("00:15");
   await page.getByRole("button", { name: "Preview daily email", exact: true }).click();
   await expect(page.getByLabel("Daily email preview", { exact: true })).toBeVisible();
   await expect(page.getByText(/Real email: disabled/)).toBeVisible();

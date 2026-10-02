@@ -233,6 +233,8 @@ test("AN-010 AN-011 AN-013: aggregate dashboard/CSV/email preserve unsaved edito
   await expect(page.getByTestId("analytics-page-view-count")).toBeVisible();
   await expect(page.getByTestId("analytics-unavailable-metrics")).toContainText("Not measured");
   await expect(page.getByText("Tracked sessions", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/A short daily business summary/)).toContainText("12:15 AM Pacific (00:15 America/Los_Angeles) early the next day");
+  await expect(page.getByText(/A short daily business summary/)).toContainText("covering the previous completed calendar day");
   await page.getByLabel("Email report date", { exact: true }).fill(reportDate());
   await page.getByRole("button", { name: "Preview daily email", exact: true }).click();
   const preview = page.getByLabel("Daily email preview", { exact: true });
@@ -246,6 +248,7 @@ test("AN-010 AN-011 AN-013: aggregate dashboard/CSV/email preserve unsaved edito
   await expect(preview).not.toContainText("13 calendar months");
   await expect(preview).toContainText("Page views");
   await expect(preview).toContainText("Saved inquiries");
+  await expect(page.getByText(/Next scheduled time:/)).toContainText("12:15:00 AM");
   await expect(page.getByText(/Real email: disabled/)).toBeVisible();
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download aggregate CSV", exact: true }).click();

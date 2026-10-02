@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, TypeAdapter, Valida
 
 logger = logging.getLogger(__name__)
 REPORT_VERSION = 3
+REPORT_TIME = time(0, 15)
 MAX_ATTEMPTS = 3
 EMAILS = TypeAdapter(list[EmailStr])
 
@@ -163,15 +164,15 @@ def next_run_at(now: datetime, zone: ZoneInfo | None = None) -> datetime:
         raise ReportError("A timezone-aware timestamp is required.")
     zone = zone or report_timezone()
     local = now.astimezone(zone)
-    day = local.date() + (timedelta(days=1) if local.time() >= time(8) else timedelta())
-    return datetime.combine(day, time(8), zone).astimezone(timezone.utc)
+    day = local.date() + (timedelta(days=1) if local.time() >= REPORT_TIME else timedelta())
+    return datetime.combine(day, REPORT_TIME, zone).astimezone(timezone.utc)
 
 
 def due_date(now: datetime, zone: ZoneInfo | None = None) -> date:
     if now.tzinfo is None:
         raise ReportError("A timezone-aware timestamp is required.")
     local = now.astimezone(zone or report_timezone())
-    return local.date() - timedelta(days=1 if local.time() >= time(8) else 2)
+    return local.date() - timedelta(days=1 if local.time() >= REPORT_TIME else 2)
 
 
 def _mapping(value: object) -> dict[str, object]:
@@ -537,13 +538,10 @@ def run_due(now: datetime | None = None) -> dict[str, object]:
     store.prune()
     with store.connection() as connection:
         _ensure_tables(connection)
-        expiry = (now - timedelta(days=90)).isoformat()
         connection.execute(
             "UPDATE analytics_report_delivery SET status='ambiguous',error='interrupted_send',updated_at=? WHERE status='sending' AND updated_at < ?",
             (now.isoformat(), (now - timedelta(minutes=10)).isoformat()),
         )
-        connection.execute("DELETE FROM analytics_report_delivery WHERE updated_at < ?", (expiry,))
-        connection.execute("DELETE FROM analytics_report_snapshot WHERE created_at < ?", (expiry,))
     if not email_enabled() or os.getenv("STYL_ANALYTICS_ENVIRONMENT", "local") != "production":
         return {"status": "disabled", "nextRunAt": next_run_at(now).isoformat()}
     addresses = recipients()

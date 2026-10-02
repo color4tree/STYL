@@ -268,23 +268,20 @@ or claim all first-party aggregate measurement is legally consent-exempt.
 
 | Data | Retention and transition rule |
 | --- | --- |
-| New anonymous hour/dimension aggregates | 13 calendar months; enforce calendar-based expiry, including backups/exports |
+| New anonymous hour/dimension aggregates | No automatic age expiry; optional explicit removal after backup/download verification |
 | New raw events/identifiers/journeys | Never persist |
-| Legacy private session/event data | Not read by new-mode reports; no destructive migration by this change. Existing 30-local-calendar-day raw retention and approved cleanup/deletion obligations still apply |
-| Legacy reports/backups | Keep restricted, subject to existing expiry/deletion obligations; never serve as new aggregate-only report content |
-| New aggregate email snapshots/delivery metadata | 90 days; operational report/delivery IDs are not browser/event IDs |
-| Business inquiries and infrastructure logs | Separate purpose, access and retention policies; not made anonymous by this feature |
+| Legacy private session/event data | Private and excluded from new reports; no routine age deletion, explicit privacy obligations/deletion requests remain |
+| Legacy reports/backups | Keep restricted and honor privacy deletions; never serve as new aggregate-only report content |
+| New aggregate email snapshots/delivery metadata | No age expiry; removal retains delivery claims to prevent duplicate mail |
+| Business inquiries and website logs | Retain until explicitly removed after verified backup/download; operational logs separately expire after 14 days |
 
-Do not claim legacy data has already been deleted. Verify its maintenance path or
-approve a bounded cleanup before release; disabling legacy reporting must not
-silently retain old personal/pseudonymous records forever. Backups must honor
-expiry and previously approved deletions when restored.
-
-Analytics maintenance expires legacy raw/session tables after their existing
-30-day window and legacy rollups after 13 calendar months. It does not rewrite
-authoritative inquiry JSON or protected backup copies. Any historical inquiry
-`analyticsAttribution` fields and backup contents remain private and subject to
-their separate approved retention/cleanup process, not an implicit purge here.
+The owner's 2026-09-29 [Backup & Records policy](records-backup-and-retention.md)
+supersedes the former 30-day legacy, 13-month aggregate and 90-day report-history
+automatic expiry. It is not a claim of universal legal permission to retain
+personal data indefinitely. Review applicable privacy requirements and honor
+withdrawal/deletion obligations across server records and downloaded copies.
+Do not claim legacy data has been deleted. Maintenance checkpoints storage but
+does not purge records by age; prior privacy deletions must be reapplied on restore.
 
 Caddy/Uvicorn/infrastructure access logs and business inquiry/contact records
 may contain personal data. The aggregate-only claim is limited to new analytics
@@ -333,11 +330,19 @@ of new anonymous aggregates. Its presence is not a claim that old data was purge
 
 ### Schedule and destination: TA-010
 
-The approved schedule remains **08:00 America/Los_Angeles**, for the preceding
-local calendar day, using IANA timezone rules for DST. A persistent server job
+The approved schedule is **00:15 America/Los_Angeles (12:15 AM Pacific)** early
+the next day, replacing 08:00. It covers the preceding **completed local calendar
+day**, not the current day, using IANA timezone rules for DST. Before 00:15 the
+latest due report is two calendar days ago; at/after 00:15 it is yesterday.
+Previews retain the strict completed-hour cutoff. A delayed restart processes
+the latest due date without replaying older completed deliveries; persisted
+snapshots and per-recipient claims prevent duplicate sends across quarter-hour
+checks and DST changes. A persistent server job
 must work independently of VS Code/chat. Sending remains disabled outside
 production and requires explicit production enablement and separately approved
 internal analytics recipients. **Recipients are not yet approved.**
+This timing change is local only and not deployed; actual SMTP/inbox delivery is
+not certified. Production deployment and a real-mail test need separate approval.
 
 Reuse protected SMTP transport without inheriting inquiry recipients or changing
 customer Reply-To. Use only a configured business Reply-To and a credential-free
@@ -359,7 +364,7 @@ production's next timer tick may deliver the latest due report. Recheck disabled
 removed-recipient settings before claiming each delivery; already in-progress
 mail cannot be recalled. Non-production sending remains unconditionally blocked.
 Current configuration is included in analytics database backups, not catalog ZIPs,
-and does not expire with the 90-day delivery history.
+and is not removed by the verified-history cleanup workflow.
 
 ### Required content: TA-011
 
@@ -484,15 +489,17 @@ separately by the implementation/testing owner; documentation is not a test pass
 | AN-011 | Restart/concurrency-safe mail state; bounded definite mail retries and held ambiguous sends; no legacy snapshots reused |
 | AN-012 | Safe previews and non-production mail disabled; actual mailbox test blocked until approved recipients/configuration |
 | AN-013 | Protected reports/CSV and safe rendering; no IDs/raw request times/IP/URL/referrer/form data in new analytics persistence or exports |
-| AN-014 | Desktop/phone Chromium/WebKit, blocked storage/privacy failure, outages, 13-month expiry and legacy isolation/non-destructive transition; manual performance/restore gaps explicit |
+| AN-014 | Desktop/phone Chromium/WebKit, blocked storage/privacy failure, outages, no age-based history deletion and legacy isolation; verified backup/removal in SYS-022/ADM-014; manual performance/restore gaps explicit |
 | AN-015 (Phase 2 only) | Separately approved City/postal quality, suppression and operational checks; remains future |
 | AN-016 (future chat only) | Optional unlinked support aggregates; no transcripts/contact/correlation IDs, no substitution of handoff for saved inquiry |
 
 ## 12. Approved decisions and outstanding release gates
 
 Approved: aggregate-only automatic collection with opt-out/exclusions, no
-storefront consent/status UI, independent hour/coarse dimensions, 13-calendar-month
-aggregate retention and 08:00 Pacific daily schedule. No identified-mode fallback.
+storefront consent/status UI, independent hour/coarse dimensions, and a 00:15
+America/Los_Angeles (12:15 AM Pacific) daily schedule for the preceding completed
+calendar day. The 2026-09-29 owner decision replaces age-based retention
+with verified backup/download before optional removal. No identified-mode fallback.
 
 Outstanding: final local implementation/test evidence, served-market privacy
 review and public notice, separate recipients and real-mail authorization,

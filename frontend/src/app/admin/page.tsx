@@ -6,6 +6,7 @@ import { API_BASE, resolveProductImage } from "@/lib/api";
 import AccessoryManager from "./AccessoryManager";
 import HeroManager from "./HeroManager";
 import CatalogBackup from "./CatalogBackup";
+import RecordsManager from "./RecordsManager";
 import AnalyticsManager from "./AnalyticsManager";
 import CatalogOrderControls from "./CatalogOrderControls";
 import { orderByIds } from "@/lib/catalogOrder";
@@ -127,11 +128,13 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>("products");
   const [showBackup, setShowBackup] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [backupView, setBackupView] = useState<"catalog" | "records">("catalog");
   const [backupBusy, setBackupBusy] = useState(false);
+  const [recordsBusy, setRecordsBusy] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const dirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps)) : childDirty;
-  const busy = saving || uploading || accessoryBusy || backupBusy || orderBusy;
+  const busy = saving || uploading || accessoryBusy || backupBusy || recordsBusy || orderBusy;
   const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
 
   const loadForm = (next: ProductForm) => {
@@ -175,6 +178,7 @@ export default function AdminPage() {
     setActiveTab("products");
     setShowBackup(false);
     setShowAnalytics(false);
+    setBackupView("catalog");
     setShowEditor(false);
   };
 
@@ -403,7 +407,7 @@ export default function AdminPage() {
             <BrandLogo markClassName="h-8 w-auto" className="mb-5" />
             <div className="text-xs uppercase tracking-[0.24em] text-[var(--muted)]">Admin</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.06em]">
-              {showAnalytics ? "Traffic analytics" : showBackup ? "Catalog recovery backup" : adminTabs.find((tab) => tab.id === activeTab)?.heading}
+              {showAnalytics ? "Traffic analytics" : showBackup ? "Backup" : adminTabs.find((tab) => tab.id === activeTab)?.heading}
             </h1>
             <div className="mt-4 inline-flex flex-wrap rounded-2xl border border-[var(--line)] bg-white p-1 text-sm font-medium">
               {adminTabs.map((tab) => (
@@ -456,12 +460,20 @@ export default function AdminPage() {
         </header>
 
         <div hidden={!showBackup}>
-          <CatalogBackup adminToken={adminToken} hasUnsavedChanges={dirty} onBusyChange={setBackupBusy} />
+          <nav aria-label="Backup sections" className="mb-5 flex flex-wrap gap-2">
+            {([["catalog", "Catalog recovery"], ["records", "Business / log records"]] as const).map(([view, label]) => <button key={view} type="button" aria-pressed={backupView === view} onClick={() => setBackupView(view)} className={`min-h-12 rounded-full border border-[var(--line)] px-4 py-3 text-sm ${backupView === view ? "bg-[var(--ink)] text-white" : "bg-white"}`}>{label}</button>)}
+          </nav>
+          <div hidden={backupView !== "catalog"}>
+            <CatalogBackup adminToken={adminToken} hasUnsavedChanges={dirty} onBusyChange={setBackupBusy} />
+          </div>
+          <div hidden={backupView !== "records"}>
+            <RecordsManager adminToken={adminToken} active={showBackup && backupView === "records"} hasUnsavedChanges={dirty} onBusyChange={setRecordsBusy} />
+          </div>
         </div>
         <div hidden={!showAnalytics}>
           <AnalyticsManager adminToken={adminToken} active={showAnalytics} />
         </div>
-        {/* Keep the editor mounted while viewing read-only tools so unsaved forms survive. */}
+        {/* Keep the editor mounted while viewing tools so unsaved forms survive. */}
         <div hidden={showBackup || showAnalytics}>
         {activeTab === "banner" ? (
           <HeroManager adminToken={adminToken} onBusyChange={setAccessoryBusy} onDirtyChange={setChildDirty} />

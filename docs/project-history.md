@@ -1,5 +1,54 @@
 # STYL project history and handoff
 
+## Non-AI main release preparation - 2026-10-01
+
+The owner explicitly approved moving analytics, backup/log retention and shared
+admin improvements into main, deploying only those features, then returning to
+the AI branch. AI development was preserved locally at `1bb6272` on
+`ai-assistant/baseline-2026-09-29-2227-pt`. Shared country-price rows were committed
+there as `92c09ba` and cherry-picked to main as `744a781`; the documentation
+conflict was resolved without importing AI-only sections.
+
+Main contains no support/knowledge/model modules, routes, customer widget or
+provider dependencies. A main-only release test checks that boundary. Non-AI
+records code was recovered from the pre-AI implementation and revalidated;
+missing analytics storage now fails explicitly with 503 through a readonly
+snapshot connection, rather than creating an empty replacement backup source.
+
+Included:
+- Daily analytics mail at **00:15 Pacific for the previous completed day**,
+  retaining saved enablement/recipients and delivery deduplication.
+- Backup tab with Catalog recovery and Business / log records; private durable
+  download/verification and explicit optional exact-record cleanup.
+- No age expiry for business history, website logs or catalog backups.
+- Safe website log collectors and a staged logging installer. Journal-only
+  operational retention is gated on historical capture and a verified off-server
+  Records ZIP; existing OS logrotate policies are not silently replaced.
+- CAD/USD selling price and optional MSRP side by side in each country's row.
+  An overlong accessory specification legend was shortened to fit 320px WebKit.
+- Existing Home banner/photo-picker improvements remain from the deployed base.
+
+Local release verification: **240 backend tests passed** (35.334s), **54 frontend
+units passed** (0.87s), **310 configured browser executions passed** (10.6m).
+Installer/collector suite: **80 passed, 2 Linux-only skips** out of 82 tests
+(3.745s). Type/build/lint passed with four existing image warnings. Restored
+test harness issues were corrected without weakening backup assertions: native
+module loading, explicit accessible labels, browser-response predicates and
+durable verification receipts rather than evicted upload bodies.
+
+Production preflight was read-only: deployed app `d6d00a3`, five services active,
+24 GB free, 56 MB journal usage, and same-host HTTP 308 redirects confirmed for
+apex/www/static IP. Repository access uses its `styl` owner, without adding a
+global Git trust exception. A production catalog ZIP was downloaded and verified
+locally: 29,143,365 bytes, three equipment, sixteen accessories, 104 manifest files,
+SHA-256 `9b0d127eb573e35aecb50a37a696db60478c327e212e9a73272c6e44ff25fb93`.
+It is stored under the restricted non-synced
+`%LOCALAPPDATA%\STYL\CatalogMirrors\production-records-release-20261002`.
+
+Production activation and off-server journal/records verification are recorded
+separately after completion. Owner product/accessory/home JSON and private
+runtime credentials remain outside these commits.
+
 Last recorded: 2026-09-29
 
 ## Photo-picker presentation deployed - 2026-09-29 Pacific

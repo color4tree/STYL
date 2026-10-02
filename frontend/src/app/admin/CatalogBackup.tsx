@@ -120,25 +120,23 @@ export default function CatalogBackup({ adminToken, hasUnsavedChanges, onBusyCha
   return (
     <section aria-labelledby="catalog-backup-title" className="min-w-0 max-w-3xl rounded-[28px] border border-[var(--line)] bg-white/80 p-5 sm:p-7">
       <h2 id="catalog-backup-title" className="text-xl font-semibold">Download a catalog recovery ZIP</h2>
-      <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-        Recover the saved catalog on a clean STYL installation. This is a catalog recovery archive, not a machine or full website backup.
-      </p>
+      <p className="mt-3 text-sm leading-6 text-[var(--muted)]">Saved catalog and media only. Private, unencrypted archive — store securely and never publish.</p>
+      <details className="mt-4 text-sm leading-6">
+        <summary className="min-h-11 cursor-pointer py-2 font-medium">Details: contents and recovery</summary>
+        <p>Recover the saved catalog on a clean STYL installation. This is a catalog recovery archive, not a machine or full website backup.</p>
       <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-6">
         <li>All equipment and accessories, including drafts, private provenance, CAD and USD prices and optional MSRPs, and record IDs.</li>
         <li>Home banner settings and referenced local images, videos, and video posters.</li>
         <li>No admin tokens, secrets, customer inquiries, or AWS configuration.</li>
       </ul>
-      <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-        <p className="font-semibold">Private, unencrypted archive</p>
-        <p>It contains internal catalog information. Store it securely, restrict access, and do not share it publicly.</p>
-      </div>
       <p className="mt-4 text-sm leading-6">
         Saved changes only. Unsaved form edits are not included. Opening Backup does not save or discard your editor.
       </p>
-      {hasUnsavedChanges ? <p role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">You have unsaved changes. Return to your editor and save first if you want them in this backup.</p> : null}
       <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
         Browser upload/import is not implemented. Recovery is an administrator-operated process on a clean STYL installation; server setup and credentials must be configured separately.
       </p>
+      </details>
+      {hasUnsavedChanges ? <p role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">You have unsaved changes. Return to your editor and save first if you want them in this backup.</p> : null}
       <button type="button" disabled={busy} onClick={download} className="mt-6 min-h-12 w-full rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:cursor-wait disabled:opacity-60 sm:w-auto">
         {busy ? "Preparing backup…" : message?.type === "error" ? "Retry backup download" : "Download catalog backup"}
       </button>

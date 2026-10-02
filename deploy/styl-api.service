@@ -8,8 +8,16 @@ User=styl
 Group=styl
 WorkingDirectory=/opt/styl/backend
 EnvironmentFile=/etc/styl/styl.env
-ExecStart=/opt/styl/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1,::1
+Environment=PYTHONUNBUFFERED=1
+SupplementaryGroups=styl-logs
+UMask=0027
+ExecStart=/usr/bin/python3 /usr/local/lib/styl/capture_website_logs.py --directory /var/log/styl-website --prefix api -- /opt/styl/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1,::1 --no-access-log
+KillMode=mixed
+TimeoutStopSec=45
+StandardOutput=journal
+StandardError=journal
 Restart=on-failure
+RestartPreventExitStatus=74
 RestartSec=5
 PrivateTmp=true
 
