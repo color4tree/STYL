@@ -71,8 +71,55 @@ async function readItem(request: APIRequestContext, catalog: Catalog, id: number
   return item!;
 }
 
+async function expectCountryPricingRows(page: Page) {
+  const originalViewport = page.viewportSize()!;
+  const pricing = page.getByRole("group", { name: "Country pricing", exact: true });
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: originalViewport.height });
+    await expect(pricing).toHaveCount(1);
+    await pricing.scrollIntoViewIfNeeded();
+    const groupBounds = await pricing.boundingBox();
+    expect(groupBounds).not.toBeNull();
+    let previousBottom = -Infinity;
+    for (const currency of ["CAD", "USD"] as const) {
+      const sellingPrice = pricing.getByRole("textbox", { name: currency === "CAD" ? "Canada price (CAD)" : "US price (USD)", exact: true });
+      const suggestedPrice = pricing.getByRole("textbox", { name: `${currency} MSRP`, exact: true });
+      await expect(sellingPrice).toBeVisible();
+      await expect(suggestedPrice).toBeVisible();
+      const priceBounds = await sellingPrice.boundingBox();
+      const msrpBounds = await suggestedPrice.boundingBox();
+      expect(priceBounds).not.toBeNull();
+      expect(msrpBounds).not.toBeNull();
+      expect(Math.abs(priceBounds!.y - msrpBounds!.y), `${currency} price/MSRP input tops at ${width}px`).toBeLessThanOrEqual(1);
+      expect(priceBounds!.x + priceBounds!.width, `${currency} fields must not overlap at ${width}px`).toBeLessThanOrEqual(msrpBounds!.x);
+      expect(priceBounds!.y, `CAD must precede USD at ${width}px`).toBeGreaterThan(previousBottom);
+      previousBottom = Math.max(priceBounds!.y + priceBounds!.height, msrpBounds!.y + msrpBounds!.height);
+      for (const [control, bounds] of [[sellingPrice, priceBounds!], [suggestedPrice, msrpBounds!]] as const) {
+        expect(bounds.height, `Touch input height at ${width}px`).toBeGreaterThanOrEqual(44);
+        expect(bounds.width, `Touch input width at ${width}px`).toBeGreaterThanOrEqual(44);
+        expect(bounds.x).toBeGreaterThanOrEqual(Math.max(0, groupBounds!.x));
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(Math.min(width, groupBounds!.x + groupBounds!.width) + 1);
+        const label = pricing.locator(`label[for="${await control.getAttribute("id")}"]`);
+        await expect(label).toBeVisible();
+        const labelBounds = await label.boundingBox();
+        expect(labelBounds).not.toBeNull();
+        expect(labelBounds!.y + labelBounds!.height, `Wrapped label must not overlap input at ${width}px`).toBeLessThanOrEqual(bounds.y + 1);
+        expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(bounds.x + bounds.width + 1);
+      }
+    }
+    await expect(pricing.getByText("Optional; shown only when higher than Price. Does not affect checkout/quote pricing.", { exact: true })).toBeVisible();
+    const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const overflow = documentWidth > width ? await page.locator("body *").evaluateAll((elements, viewport) =>
+      elements.filter((element) => element.getBoundingClientRect().right > viewport && element.getBoundingClientRect().width > 0)
+        .map((element) => ({ tag: element.tagName, type: element.getAttribute("type"), id: element.id, class: element.getAttribute("class"), text: element.textContent?.slice(0, 80), width: element.getBoundingClientRect().width }))
+        .slice(-8), width) : [];
+    expect(documentWidth, `Admin page overflow at ${width}px: ${JSON.stringify(overflow)}`).toBeLessThanOrEqual(width);
+  }
+  await page.setViewportSize(originalViewport);
+}
+
 for (const catalog of ["products", "accessories"] as const) {
-  test(`ADM-012 ${catalog}: optional MSRP validates cents, saves, reloads and clears each market independently`, async ({ page, request }) => {
+  test(`ADM-012 ${catalog}: country pricing rows at 320/390/1440; optional MSRP validates cents, saves, reloads and clears each market independently`, async ({ page, request }) => {
     let id: number | undefined;
     try {
       await signIn(page, catalog);
@@ -80,6 +127,7 @@ for (const catalog of ["products", "accessories"] as const) {
       await expect(msrp(page, "CAD")).toHaveValue("");
       await expect(msrp(page, "USD")).toHaveValue("");
       await expect(page.getByText("Optional; shown only when higher than Price. Does not affect checkout/quote pricing.", { exact: true })).toBeVisible();
+      await expectCountryPricingRows(page);
       const name = unique(catalog);
       await page.getByLabel(nameLabel(catalog), { exact: true }).fill(name);
       await page.getByRole("combobox", { name: "Category", exact: true }).selectOption("Handle");

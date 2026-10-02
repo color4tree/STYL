@@ -8,6 +8,13 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Country pricing rows (2026-10-01)
+
+Each admin market has one row: selling price and optional MSRP side by side.
+Canada/CAD and US/USD remain independent. Shared label/input rows align even
+when a label wraps at 320px; validation and help text stay readable. A blank
+selling price still hides that market, and MSRP never changes quote/cart totals.
+
 ### Configurable engineering details (2026-09-29)
 
 The Home banner tab includes a separate Engineering details editor for the

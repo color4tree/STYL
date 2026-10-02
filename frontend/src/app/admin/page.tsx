@@ -14,7 +14,7 @@ import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications, type Provenance } from "@/lib/catalogDetails";
 import { fetchCatalogCategories } from "@/lib/accessories";
-import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
+import { AdminNotice, AdminSaveBar, CountryPricingInputs, MarketPriceSummary, ProvenanceEditor, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
 import { getMarketPrices, getMarketMsrps, priceInputs, type MarketPrices } from "@/lib/pricing";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
@@ -523,8 +523,7 @@ export default function AdminPage() {
                 </select>
               </label>
 
-              <MarketPriceInputs prefix="product-price" value={priceText} onChange={setPriceText} />
-              <MarketPriceInputs prefix="product-msrp" kind="msrp" value={msrpText} onChange={setMsrpText} />
+              <CountryPricingInputs prefix="product" prices={priceText} msrps={msrpText} onPricesChange={setPriceText} onMsrpsChange={setMsrpText} />
 
               <label className="block text-sm font-medium">
                 Publication status
