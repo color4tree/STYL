@@ -7,7 +7,7 @@ import { fetchAdminAccessories, fetchCatalogCategories, type AdminAccessory as A
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility } from "@/lib/catalogDetails";
-import { AdminNotice, AdminSaveBar, MarketPriceInputs, MarketPriceSummary, ProvenanceEditor, inputClass, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
+import { AdminNotice, AdminSaveBar, CountryPricingInputs, MarketPriceSummary, ProvenanceEditor, inputClass, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
 import { getMarketPrices, getMarketMsrps, priceInputs, type MarketPrices } from "@/lib/pricing";
 import CatalogOrderControls from "./CatalogOrderControls";
 import { orderByIds } from "@/lib/catalogOrder";
@@ -287,8 +287,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
             </select>
           </label>
 
-          <MarketPriceInputs prefix="accessory-price" value={priceText} onChange={setPriceText} />
-          <MarketPriceInputs prefix="accessory-msrp" kind="msrp" value={msrpText} onChange={setMsrpText} />
+          <CountryPricingInputs prefix="accessory" prices={priceText} msrps={msrpText} onPricesChange={setPriceText} onMsrpsChange={setMsrpText} />
 
           <label className="block text-sm font-medium">
             Publication status
@@ -300,7 +299,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
 
         </fieldset>
         <fieldset className="mt-6 grid min-w-0 gap-5 border-t border-[var(--line)] pt-5 md:grid-cols-2">
-          <legend className="text-lg font-semibold">Specifications &amp; package contents</legend>
+          <legend className="text-lg font-semibold">Specifications &amp; contents</legend>
           <label className="block text-sm font-medium">
             Dimensions
             <input value={form.dimensions} onChange={(event) => updateField("dimensions", event.target.value)} className={inputClass} placeholder="70 cm length" />

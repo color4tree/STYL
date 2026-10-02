@@ -56,15 +56,15 @@ export function parsePrice(value: string): number | null {
 export const priceError = "Enter a nonnegative price with no more than two decimal places (for example, 19.99).";
 export const msrpError = "Enter a nonnegative MSRP with no more than two decimal places (for example, 19.99).";
 
-export function PriceInput({ value, onChange, id, label = "Retail price", optional = false, error = priceError }: { value: string; onChange: (value: string) => void; id: string; label?: string; optional?: boolean; error?: string }) {
+export function PriceInput({ value, onChange, id, label = "Retail price", optional = false, error = priceError, className = "" }: { value: string; onChange: (value: string) => void; id: string; label?: string; optional?: boolean; error?: string; className?: string }) {
   const invalid = !(optional && value === "") && parsePrice(value) === null;
   return (
-    <div className="text-sm font-medium">
+    <div className={`min-w-0 text-sm font-medium ${className}`}>
       <label htmlFor={id}>{label}</label>
       <input id={id} type="text" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} onBlur={() => {
         const price = parsePrice(value);
         if (price !== null) onChange(price.toFixed(2));
-      }} aria-invalid={invalid} aria-describedby={invalid ? `${id}-error` : undefined} className={inputClass} />
+      }} aria-invalid={invalid} aria-describedby={invalid ? `${id}-error` : undefined} className={`${inputClass} min-h-11 min-w-0`} />
       {invalid ? <span id={`${id}-error`} className="mt-2 block text-sm text-red-700">{error}</span> : null}
     </div>
   );
@@ -77,14 +77,41 @@ export function parseMarketPrices(values: Record<MarketCurrency, string>): Marke
   return { CAD, USD };
 }
 
+function MarketPriceHelp({ value, kind = "price" }: { value: Record<MarketCurrency, string>; kind?: "price" | "msrp" }) {
+  const isMsrp = kind === "msrp";
+  return <>
+    <p className="text-sm text-[var(--muted)]">{isMsrp ? "Optional; shown only when higher than Price. Does not affect checkout/quote pricing." : "CAD applies to Canada and unknown locations. USD applies to identified countries outside Canada. A blank price hides this item in that market; zero is a valid price. No currency conversion is applied."}</p>
+    {!isMsrp && (!value.CAD || !value.USD) ? <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">Needs attention: {![value.CAD, value.USD].some(Boolean) ? "Canada and US" : !value.CAD ? "Canada" : "US / other countries"} price missing. This item will not appear in that market.</p> : null}
+  </>;
+}
+
+export function CountryPricingInputs({ prices, msrps, onPricesChange, onMsrpsChange, prefix }: {
+  prices: Record<MarketCurrency, string>;
+  msrps: Record<MarketCurrency, string>;
+  onPricesChange: (value: Record<MarketCurrency, string>) => void;
+  onMsrpsChange: (value: Record<MarketCurrency, string>) => void;
+  prefix: string;
+}) {
+  return <fieldset className="grid min-w-0 gap-4 md:col-span-2">
+    <legend className="mb-3 text-lg font-semibold">Country pricing</legend>
+    {(["CAD", "USD"] as const).map((currency) => (
+      <div key={currency} className="grid min-w-0 grid-cols-2 gap-x-3 sm:gap-x-4">
+        <PriceInput id={`${prefix}-price-${currency.toLowerCase()}`} label={currency === "CAD" ? "Canada price (CAD)" : "US price (USD)"} optional value={prices[currency]} onChange={(value) => onPricesChange({ ...prices, [currency]: value })} className="row-span-3 grid grid-rows-subgrid" />
+        <PriceInput id={`${prefix}-msrp-${currency.toLowerCase()}`} label={`${currency} MSRP`} error={msrpError} optional value={msrps[currency]} onChange={(value) => onMsrpsChange({ ...msrps, [currency]: value })} className="row-span-3 grid grid-rows-subgrid" />
+      </div>
+    ))}
+    <MarketPriceHelp value={msrps} kind="msrp" />
+    <MarketPriceHelp value={prices} />
+  </fieldset>;
+}
+
 export function MarketPriceInputs({ value, onChange, prefix, kind = "price" }: { value: Record<MarketCurrency, string>; onChange: (value: Record<MarketCurrency, string>) => void; prefix: string; kind?: "price" | "msrp" }) {
   const isMsrp = kind === "msrp";
   return <fieldset className="grid min-w-0 gap-4 md:col-span-2 md:grid-cols-2">
     <legend className="mb-3 text-lg font-semibold">{isMsrp ? "MSRP (optional)" : "Country pricing"}</legend>
     <PriceInput id={`${prefix}-cad`} label={isMsrp ? "CAD MSRP" : "Canada price (CAD)"} error={isMsrp ? msrpError : priceError} optional value={value.CAD} onChange={(CAD) => onChange({ ...value, CAD })} />
     <PriceInput id={`${prefix}-usd`} label={isMsrp ? "USD MSRP" : "US price (USD)"} error={isMsrp ? msrpError : priceError} optional value={value.USD} onChange={(USD) => onChange({ ...value, USD })} />
-    <p className="text-sm text-[var(--muted)] md:col-span-2">{isMsrp ? "Optional; shown only when higher than Price. Does not affect checkout/quote pricing." : "CAD applies to Canada and unknown locations. USD applies to identified countries outside Canada. A blank price hides this item in that market; zero is a valid price. No currency conversion is applied."}</p>
-    {!isMsrp && (!value.CAD || !value.USD) ? <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 md:col-span-2">Needs attention: {![value.CAD, value.USD].some(Boolean) ? "Canada and US" : !value.CAD ? "Canada" : "US / other countries"} price missing. This item will not appear in that market.</p> : null}
+    <div className="grid gap-4 md:col-span-2"><MarketPriceHelp value={value} kind={kind} /></div>
   </fieldset>;
 }
 
