@@ -16,7 +16,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from threading import Lock
 from tempfile import TemporaryFile
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from typing import Annotated, Literal
 from uuid import uuid4
 from urllib.parse import unquote, urlsplit
@@ -34,6 +34,10 @@ from pydantic import AfterValidator, BaseModel, EmailStr, Field, TypeAdapter, fi
 from app.media import VIDEO_FORMATS, upload_video, video_response
 from app.location import MarketContext, resolve_market
 from app.catalog_backup import BackupError, create_archive, validate_engineering_image
+from app.catalog_schema import (
+    CatalogSchemaPayload, Revision, catalog_revision, catalog_schema_fields,
+    public_catalog_facts, public_legacy_catalog_fields, require_catalog_revision,
+)
 from app import analytics, knowledge, records, support
 
 APP_PATH = Path(__file__).resolve().parent
@@ -57,6 +61,8 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CATALOG_LOCK = Lock()
+# Serialize edits with delete preflight before the knowledge guard commits invalidation.
+CATALOG_EDIT_LOCK = Lock()
 ACCESSORIES_LOCK = CATALOG_LOCK
 HERO_LOCK = CATALOG_LOCK
 BACKUP_LOCK = Lock()
@@ -208,7 +214,7 @@ class CatalogIdentityPayload(BaseModel):
         return value
 
 
-class CatalogDetailsPayload(BaseModel):
+class CatalogDetailsPayload(CatalogSchemaPayload):
     photos: list[str] | None = Field(default=None, max_length=12)
     compatibility: CompatibilityPayload | None = None
     provenance: ProvenancePayload | None = None
@@ -431,10 +437,22 @@ def save_products(products: list[dict[str, object]]) -> None:
 
 def write_json_list(path: Path, items: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_suffix(".tmp")
+    temporary_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
     try:
         temporary_path.write_text(json.dumps(items, indent=2), encoding="utf-8")
+        with temporary_path.open("r+b") as output:
+            os.fsync(output.fileno())
         temporary_path.replace(path)
+        if os.name != "nt":
+            descriptor = None
+            try:
+                descriptor = os.open(path.parent, os.O_RDONLY)
+                os.fsync(descriptor)
+            except OSError:
+                logger.warning("JSON replacement committed, but directory synchronization failed; crash durability is not confirmed.")
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
     except OSError:
         try:
             temporary_path.unlink(missing_ok=True)
@@ -535,6 +553,8 @@ def stored_prices(item: dict[str, object]) -> dict[str, float | None]:
 
 
 def catalog_prices(request: ProductPayload | AccessoryPayload, previous: dict[str, object]) -> dict[str, object]:
+    if previous and not request.model_fields_set.intersection(("price", "prices", "currency")):
+        return {key: previous[key] for key in ("price", "prices", "currency") if key in previous}
     prices = stored_prices(previous)
     currency = request.currency if "currency" in request.model_fields_set else str(previous.get("currency") or request.currency)
     if request.prices is not None:
@@ -571,16 +591,29 @@ def admin_catalog_item(item: dict[str, object]) -> dict[str, object]:
         "category": normalize_category(str(item.get("category") or "")),
         "publicationStatus": item.get("publicationStatus") or "published",
         "missingPriceMarkets": [code for code, amount in prices.items() if amount is None],
+        "schemaVersion": item.get("schemaVersion", 1),
+        "revision": catalog_revision(item),
     }
 
 
 def public_catalog_item(item: dict[str, object], market: MarketContext) -> dict[str, object]:
     price = stored_prices(item)[market["currency"]]
-    return {
-        **{key: value for key, value in item.items() if key not in ("provenance", "prices", "msrps", "missingPriceMarkets")},
+    public_fields = {
+        "id", "slug", "name", "category", "shortDescription", "description", "featured",
+        "image", "photos", "features", "modelSku", "material", "weight",
+        "included", "colourOptions", "warranty", "stockStatus", "publicationStatus",
+        "sellingUnit", "packageQuantity", "notes",
+    }
+    result = {
+        **{key: value for key, value in item.items() if key in public_fields},
         "category": normalize_category(str(item.get("category") or "")),
         "price": price, "currency": market["currency"], "msrp": stored_msrps(item)[market["currency"]],
     }
+    result.update(public_legacy_catalog_fields(item))
+    facts = public_catalog_facts(item)
+    if facts is not None:
+        result["catalogFacts"] = facts
+    return result
 
 
 def visible_in_market(item: dict[str, object], market: MarketContext) -> bool:
@@ -654,7 +687,7 @@ def accessory_specifications(request: AccessoryPayload, previous: dict[str, obje
     for field in AccessorySpecificationsPayload.model_fields:
         default = "published" if field == "publicationStatus" and previous else getattr(request, field)
         value = getattr(request, field) if field in request.model_fields_set else previous.get(field, default)
-        fields[field] = value.strip() if isinstance(value, str) else value
+        fields[field] = value.strip() if field in request.model_fields_set and isinstance(value, str) and value != previous.get(field) else value
     return fields
 
 
@@ -694,11 +727,11 @@ def catalog_details(
         if not photos and fallback_image:
             photos = [fallback_image]
 
-    compatibility = (
-        {key: value.strip() for key, value in request.compatibility.model_dump().items()}
-        if request.compatibility is not None
-        else previous.get("compatibility", CompatibilityPayload().model_dump())
-    )
+    compatibility = previous.get("compatibility", CompatibilityPayload().model_dump())
+    if request.compatibility is not None:
+        submitted = request.compatibility.model_dump()
+        if submitted != compatibility:
+            compatibility = {key: value.strip() for key, value in submitted.items()}
     image = next((photo for photo in photos if Path(urlsplit(photo).path).suffix.lower() not in VIDEO_FORMATS), "")
     if not image and photos and photos[0].startswith("/api/uploads/") and photos[0].endswith(".mp4"):
         image = photos[0][:-4] + ".poster.jpg"
@@ -712,7 +745,7 @@ def delete_catalog_images(item: dict[str, object]) -> None:
 
 def product_specifications(request: ProductPayload, previous: dict[str, object]) -> dict[str, object]:
     return {
-        field: getattr(request, field).strip() if field in request.model_fields_set else previous.get(
+        field: getattr(request, field).strip() if field in request.model_fields_set and getattr(request, field) != previous.get(field) else previous.get(
             field, ("published" if previous else "draft") if field == "publicationStatus" else "",
         )
         for field in ProductSpecificationsPayload.model_fields
@@ -947,6 +980,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
         product.update(catalog_msrps(request, {}))
         product.update(product_specifications(request, {}))
         product.update(catalog_provenance(request, {}))
+        product.update(catalog_schema_fields(request, {}))
         products.append(product)
         save_products(products)
     return {"status": "created", "item": admin_catalog_item(product)}
@@ -954,25 +988,31 @@ def create_product(request: ProductPayload) -> dict[str, object]:
 
 @app.put("/api/products/{product_id}", dependencies=[Depends(require_admin)])
 def update_product(product_id: int, request: ProductPayload) -> dict[str, object]:
-    with locked_catalog() as products:
+    with CATALOG_EDIT_LOCK, locked_catalog() as products:
         for index, product in enumerate(products):
             if int(product.get("id", 0)) == product_id:
+                require_catalog_revision(
+                    product, request.expectedRevision,
+                    metadata_edit="catalogFacts" in request.model_fields_set or request.schemaVersion == 2,
+                )
                 updated = {
+                    **product,
                     "id": product_id,
                     "slug": request.slug or str(product.get("slug")) or slugify(request.name),
                     "name": request.name.strip(),
                     "category": canonical_category(request.category),
-                    "shortDescription": request.shortDescription.strip(),
-                    "description": request.description.strip(),
-                    "featured": bool(request.featured),
+                    "shortDescription": request.shortDescription.strip() if "shortDescription" in request.model_fields_set and request.shortDescription != product.get("shortDescription") else product.get("shortDescription", ""),
+                    "description": request.description.strip() if "description" in request.model_fields_set and request.description != product.get("description") else product.get("description", ""),
+                    "featured": bool(request.featured) if "featured" in request.model_fields_set else product.get("featured", False),
                     "image": request.image or str(product.get("image") or "/images/pro-elite.svg"),
-                    "features": [feature.strip() for feature in request.features if feature and feature.strip()],
+                    "features": [feature.strip() for feature in request.features if feature and feature.strip()] if "features" in request.model_fields_set and request.features != product.get("features") else product.get("features", []),
                 }
                 updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
                 updated.update(catalog_prices(request, product))
                 updated.update(catalog_msrps(request, product))
                 updated.update(product_specifications(request, product))
                 updated.update(catalog_provenance(request, product))
+                updated.update(catalog_schema_fields(request, product))
                 products[index] = updated
                 save_products(products)
                 delete_catalog_images(product)
@@ -982,8 +1022,8 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
 
 
 @app.delete("/api/products/{product_id}", dependencies=[Depends(require_admin)])
-def delete_product(product_id: int) -> dict[str, str]:
-    with knowledge.catalog_delete_guard(f"product:{product_id}"):
+def delete_product(product_id: int, expectedRevision: Revision | None = None) -> dict[str, str]:
+    with catalog_delete_revision_guard("product", product_id, expectedRevision):
         products = load_products()
         deleted_product = next(
             (product for product in products if int(product.get("id", 0)) == product_id),
@@ -1038,6 +1078,7 @@ def create_accessory(request: AccessoryPayload) -> dict[str, object]:
         created.update(catalog_msrps(request, {}))
         created.update(accessory_specifications(request, {}))
         created.update(catalog_provenance(request, {}))
+        created.update(catalog_schema_fields(request, {}))
         accessories.append(created)
         write_json_list(ACCESSORIES_PATH, accessories)
     return {"status": "created", "item": admin_catalog_item(created)}
@@ -1048,16 +1089,24 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
     if not request.name.strip():
         raise HTTPException(status_code=422, detail="Name is required.")
 
-    with ACCESSORIES_LOCK:
+    with CATALOG_EDIT_LOCK, ACCESSORIES_LOCK:
         accessories = load_accessories()
         for index, existing in enumerate(accessories):
             if int(existing.get("id", 0)) == accessory_id:
-                updated = accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))
+                require_catalog_revision(
+                    existing, request.expectedRevision,
+                    metadata_edit="catalogFacts" in request.model_fields_set or request.schemaVersion == 2,
+                )
+                updated = {**existing, **accessory_from_payload(accessory_id, request, str(existing.get("image") or ""))}
+                for field in ("dimensions", "material", "weight", "notes"):
+                    if field in existing and (field not in request.model_fields_set or getattr(request, field) == existing[field]):
+                        updated[field] = existing[field]
                 updated.update(catalog_details(request, existing, "/images/accessories/straight-bar.svg"))
                 updated.update(catalog_prices(request, existing))
                 updated.update(catalog_msrps(request, existing))
                 updated.update(accessory_specifications(request, existing))
                 updated.update(catalog_provenance(request, existing))
+                updated.update(catalog_schema_fields(request, existing))
                 accessories[index] = updated
                 write_json_list(ACCESSORIES_PATH, accessories)
                 delete_catalog_images(existing)
@@ -1067,8 +1116,8 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
 
 
 @app.delete("/api/accessories/{accessory_id}", dependencies=[Depends(require_admin)])
-def delete_accessory(accessory_id: int) -> dict[str, str]:
-    with knowledge.catalog_delete_guard(f"accessory:{accessory_id}"):
+def delete_accessory(accessory_id: int, expectedRevision: Revision | None = None) -> dict[str, str]:
+    with catalog_delete_revision_guard("accessory", accessory_id, expectedRevision):
         accessories = load_accessories()
         deleted = next((item for item in accessories if int(item.get("id", 0)) == accessory_id), None)
         if deleted is None:
@@ -1077,6 +1126,19 @@ def delete_accessory(accessory_id: int) -> dict[str, str]:
         write_json_list(ACCESSORIES_PATH, [item for item in accessories if item is not deleted])
         delete_catalog_images(deleted)
     return {"status": "deleted", "message": f"Accessory {accessory_id} deleted."}
+
+
+@contextmanager
+def catalog_delete_revision_guard(kind: Literal["product", "accessory"], identifier: int, expected: str | None) -> Generator[None, None, None]:
+    with CATALOG_EDIT_LOCK:
+        with CATALOG_LOCK:
+            items = load_products() if kind == "product" else load_accessories()
+            item = next((item for item in items if int(item.get("id", 0)) == identifier), None)
+            if item is None:
+                raise HTTPException(status_code=404, detail="Catalog item not found")
+            require_catalog_revision(item, expected)
+        with knowledge.catalog_delete_guard(f"{kind}:{identifier}"):
+            yield
 
 
 def unique_home_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:

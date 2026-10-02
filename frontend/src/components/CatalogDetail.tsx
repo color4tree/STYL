@@ -6,7 +6,7 @@ import { formatPrice, getCartCount, MAX_ITEM_QUANTITY } from "@/lib/cart";
 import { useCart } from "@/lib/useCart";
 import { API_BASE } from "@/lib/api";
 import { getCatalogPhotos, saleUnitLabel } from "@/lib/catalogDetails";
-import { catalogSpecifications, isPublicCatalogItem, type PublicCatalogItem } from "@/lib/publicCatalog";
+import { catalogCompatibility, catalogSpecifications, isPublicCatalogItem, type PublicCatalogItem } from "@/lib/publicCatalog";
 import type { AnalyticsItemType } from "@/lib/analyticsTypes";
 import StoreHeader from "./StoreHeader";
 import CartFeedback from "./CartFeedback";
@@ -100,10 +100,10 @@ export default function CatalogDetail({ itemType, identifier }: { itemType: Anal
               <AddToCartButton key={`${itemType}-${item.id}`} disabled={cartLoading || Boolean(error)} atLimit={atLimit} onAdd={() => add(item)} className="min-h-12 rounded-full bg-[var(--ink)] px-6 py-3 font-medium text-white disabled:opacity-50" />
               <Link href={quoteHref} data-analytics-source="product" scroll={false} className="inline-flex min-h-12 items-center rounded-full border border-[var(--ink)] px-6 py-3 font-medium">Request quote</Link>
             </div>
-            <CompatibilityDetails value={item.compatibility} />
+            <CompatibilityDetails value={catalogCompatibility(item)} />
             {specifications.length ? <details className="my-5 border-t border-[var(--line)] pt-4" open>
               <summary className="min-h-12 text-base font-semibold">Specifications</summary>
-              <dl className="mt-3 space-y-3 text-sm">{specifications.map(([name, value]) => <div key={name}><dt className="text-[var(--muted)]">{name}</dt><dd className="mt-1 whitespace-pre-line break-words">{value}</dd></div>)}</dl>
+              <dl className="mt-3 space-y-3 text-sm">{specifications.map(([name, value], index) => <div key={`${name}-${index}`} className="min-w-0 [overflow-wrap:anywhere]"><dt className="text-[var(--muted)]">{name}</dt><dd className="mt-1 whitespace-pre-line break-words">{value}</dd></div>)}</dl>
             </details> : null}
           </div>
         </section>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from decimal import Decimal
 import hashlib
@@ -16,7 +17,7 @@ from typing import Literal, Protocol
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app import catalog_answers, openai_api
+from app import catalog_answers, catalog_facts, openai_api
 
 
 logger = logging.getLogger(__name__)
@@ -236,7 +237,10 @@ def extracted_requests(decision: Decision, question: str, evidence: list[dict]) 
                 and (catalog_answers.is_direct_requirements_question(masked_question)
                      or not request.slotSpans and not catalog_answers.FIT_QUERY.search(masked_question))):
             compatibility = False
-        result.append({"ref": request.ref, "fields": request.fields,
+        # Typed questions retain local meaning even when a provider proposes an
+        # older generic field such as width or rack hole diameter.
+        fields = catalog_facts.requested_fields(masked_question, list(request.fields))
+        result.append({"ref": request.ref, "fields": fields,
                        "compatibility": compatibility, "slots": slots})
     return result
 
@@ -348,6 +352,9 @@ def public_evidence(catalog: list[dict[str, object]], topics: list[str]) -> list
                                       if path.startswith("compatibility.")}
                 value["compatibility"] = {key: entry for key in sorted(compatibility_keys)
                                           if isinstance(entry := compatibility.get(key), str) and entry.strip()}
+        typed = catalog_facts.public_facts(item, topics)
+        if typed is not None:
+            value["catalogFacts"] = typed
         approved = item.get("approvedKnowledge")
         if isinstance(approved, list):
             value["approvedKnowledge"] = [
@@ -730,6 +737,46 @@ def retrieve_catalog(evidence: list[dict[str, object]], question: str, history: 
         compatibility = item.get("compatibility")
         if isinstance(compatibility, dict) and compatibility:
             fields.append(("compatibility", "\n".join(f"{COMPATIBILITY[key]}: {value}" for key, value in compatibility.items()), {}))
+        typed_claims = catalog_facts.typed_claims(item, list(TOPICS))
+        overrides = {claim["key"] for claim in typed_claims}
+        if "package.components" in overrides:
+            overrides.update(("included", "components"))
+        overrides.update(f"compat.{key.rsplit('.', 1)[1]}" for key in list(overrides)
+                         if key.startswith(("interface.rack_mount.", "interface.shelf_mount.")))
+        qualified = []
+        for field_name, text, metadata in fields:
+            if catalog_answers.ALIASES.get(field_name, field_name) in overrides:
+                continue
+            if field_name in {"colourOptions", "colorOptions", "sizeOptions", "finish"}:
+                for key, value in catalog_facts.legacy_options(text, field_name):
+                    if key not in overrides:
+                        qualified.append((key, str(value), metadata))
+                continue
+            if overrides:
+                remaining = []
+                for sentence in catalog_answers._sentences(text):
+                    clean, scoped = catalog_facts.legacy_text(sentence)
+                    extracted = [*scoped, *catalog_answers._extract(clean, item)]
+                    if any(key in overrides for key, _ in extracted):
+                        # Retain independent legacy facts on a superseded line,
+                        # but do not send its stale equivalent to the provider.
+                        for key, value in extracted:
+                            if key not in overrides:
+                                qualified.append((key, str(value), metadata))
+                    else:
+                        remaining.append(sentence)
+                text = "\n".join(remaining)
+            if text.strip():
+                qualified.append((field_name, text, metadata))
+        fields = qualified
+        for claim in typed_claims:
+            label = catalog_answers.FIELD_REGISTRY[claim["key"]].label
+            value = claim["value"]
+            text = "; ".join(str(part) for part in value) if isinstance(value, list) else str(value)
+            fields.append((claim["key"], f"{label}: {text}", {
+                "location": claim["locator"], "sourceId": f"{reference}#catalogFacts",
+                "topic": catalog_answers.FIELD_REGISTRY[claim["key"]].topic,
+            }))
         counter = 0
         for field_name, text, metadata in fields:
             for section in sections(text):
@@ -836,19 +883,40 @@ class MockProvider:
                         requestedModel=requested, evidenceIds=[str(chunk["id"]) for chunk in chunks[:4]]), {}
 
 
+def provider_field_context(catalog: list[dict], allowed_topics: list[str], question: str) -> tuple[list[str], dict]:
+    """Keep stable legacy keys plus applicable typed keys, not every enum product."""
+    typed_keys = {key for key, _, _ in catalog_facts.registry_entries()}
+    applicable = set(catalog_answers.requested_fields(question))
+    for item in catalog:
+        applicable.update(claim["key"] for claim in catalog_facts.typed_claims(item, allowed_topics))
+        applicable.update(chunk["field"] for chunk in item.get("evidence", [])
+                          if isinstance(chunk, dict) and isinstance(chunk.get("field"), str))
+    fields = [key for key, spec in catalog_answers.FIELD_REGISTRY.items()
+              if spec.topic in allowed_topics and (key not in typed_keys or key in applicable)]
+    schema = deepcopy(SCHEMA)
+    request_fields = schema["properties"]["requests"]["items"]["properties"]["fields"]
+    request_fields["items"]["enum"] = fields
+    request_fields["maxItems"] = len(fields)
+    if not fields:
+        schema["properties"]["requests"]["maxItems"] = 0
+        request_fields["items"].pop("enum")
+    return fields, schema
+
+
 class GeminiProvider:
     async def decide(self, messages: list[dict[str, str]], catalog: list[dict[str, object]],
                      allowed_topics: list[str], model: str, item_ref: str | None = None,
                      general_knowledge: list[dict] | None = None) -> tuple[Decision, dict[str, int]]:
+        field_keys, schema = provider_field_context(catalog, allowed_topics, messages[-1]["text"] if messages else "")
         body = {
             "systemInstruction": {"parts": [{"text": INSTRUCTIONS}]},
             "contents": [{"role": "user", "parts": [{"text": json.dumps({
                 "allowedTopics": allowed_topics, "conversation": messages, "catalog": catalog, "selectedItem": item_ref,
                 "serviceKnowledge": general_knowledge or [],
                 "allowedProductRefs": [item["ref"] for item in catalog if isinstance(item.get("ref"), str)],
-                "allowedFieldKeys": list(catalog_answers.FIELD_REGISTRY),
+                "allowedFieldKeys": field_keys,
             }, ensure_ascii=False)}]}],
-            "generationConfig": {"responseMimeType": "application/json", "responseSchema": SCHEMA, "maxOutputTokens": 1024},
+            "generationConfig": {"responseMimeType": "application/json", "responseSchema": schema, "maxOutputTokens": 1024},
         }
         if len(json.dumps(body).encode("utf-8")) > 256 * 1024:
             raise ProviderFailure("context_limit")
@@ -898,12 +966,13 @@ class OpenAIProvider:
                    if not PERSONAL_DATA.search(message["text"])]
         if sum(len(message["text"]) for message in context) > 16_000:
             raise ProviderFailure("missing_evidence")
+        field_keys, schema = provider_field_context(catalog, allowed_topics, messages[-1]["text"])
         body = openai_api.build_request(model, INSTRUCTIONS, [{"type": "input_text", "text": json.dumps({
             "allowedTopics": allowed_topics, "conversation": context, "catalog": catalog, "selectedItem": item_ref,
             "serviceKnowledge": general_knowledge or [],
             "allowedProductRefs": [item["ref"] for item in catalog if isinstance(item.get("ref"), str)],
-            "allowedFieldKeys": list(catalog_answers.FIELD_REGISTRY),
-        }, ensure_ascii=False)}], SCHEMA, "support_decision", 1024)
+            "allowedFieldKeys": field_keys,
+        }, ensure_ascii=False)}], schema, "support_decision", 1024)
         encoded = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8")
         if len(encoded) > 256 * 1024:
             raise ProviderFailure("missing_evidence")

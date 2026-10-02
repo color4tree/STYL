@@ -54,7 +54,7 @@ const needsReply = (message: Message) => message.role === "customer" && Boolean(
 const actionableQuestion = (conversation: Conversation, message: Message) => conversation.state !== "closed" && needsReply(message);
 const answerLabel = (conversation: Conversation, question: Message) => {
   const role = conversation.messages.find((message) => message.id === question.answeredBy)?.role;
-  return role === "human" ? "Answered by STYL team" : role === "assistant" ? "Answered by STYL assistant" : "Answered";
+  return role === "human" ? "Answered by STYL team" : role === "assistant" ? "Answered by STYL Assistant" : "Answered";
 };
 const replyKey = (conversationId: string, questionId: string | null) => `${conversationId}:${questionId ?? "general"}`;
 const questionCount = (count: number) => `${count} ${count === 1 ? "question needs" : "questions need"} a team reply`;
@@ -302,7 +302,7 @@ export default function SupportInbox({ adminToken, active, onBusyChange, onDirty
             <p role="status" className={`mt-3 rounded-xl border p-3 text-sm ${remaining || selected.needsHuman ? "border-amber-400 bg-amber-50" : "border-[var(--line)]"}`}>{questionCount(remaining)}{!remaining && selected.needsHuman ? " · Team help requested" : ""}</p>
             <div ref={history} role="log" aria-label="Selected support messages" aria-live="polite" aria-relevant="additions" tabIndex={0} onScroll={() => { const element = history.current; if (element) nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 60; }} className="mt-4 max-h-[52vh] min-h-32 space-y-3 overflow-y-auto overscroll-contain rounded-xl border border-[var(--line)] p-3">
               {selected.messages.map((message) => <article key={message.id} id={`admin-support-message-${message.id}`} data-support-role={message.role} data-needs-team-reply={actionableQuestion(selected, message)} className={`min-w-0 rounded-xl border p-3 ${actionableQuestion(selected, message) ? "border-amber-400 bg-amber-50" : "border-transparent bg-neutral-50"} ${targetId === message.id ? "ring-2 ring-[var(--ink)]" : ""}`}>
-                <p className="text-xs font-semibold">{({ customer: "Customer", assistant: "STYL assistant", human: "STYL team", system: "Support status" })[message.role]}</p>
+                <p className="text-xs font-semibold">{({ customer: "Customer", assistant: "STYL Assistant", human: "STYL team", system: "Support status" })[message.role]}</p>
                 {message.role === "human" && message.replyTo ? <SupportQuestionQuote question={message.replyTo} /> : null}
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">{message.text}</p>
                 {message.role === "customer" ? <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -310,7 +310,10 @@ export default function SupportInbox({ adminToken, active, onBusyChange, onDirty
                   <button type="button" disabled={busy || selected.state === "closed"} aria-pressed={targetId === message.id} onClick={() => chooseQuestion(message)} className={button}>Reply</button>
                 </div> : null}
                 {actionableQuestion(selected, message) && message.humanReason ? <details className="mt-2 text-xs"><summary className="min-h-11 cursor-pointer py-3">Request details</summary><p className="break-words">Reason: {message.humanReason}</p></details> : null}
-                {message.references.filter((reference) => sourceUrl(reference.url)).map((reference, position) => <Link key={`${reference.id}-${position}`} href={reference.url} className="mt-2 block min-h-11 break-words py-2 text-sm underline">{reference.label}</Link>)}
+                {message.references.some((reference) => sourceUrl(reference.url)) ? <details className="mt-2 text-xs text-[var(--muted)]">
+                  <summary className="min-h-11 w-fit cursor-pointer py-3">Sources</summary>
+                  {message.references.filter((reference) => sourceUrl(reference.url)).map((reference, position) => <Link key={`${reference.id}-${position}`} href={reference.url} className="block min-h-11 break-words py-2 text-sm underline">{reference.label}</Link>)}
+                </details> : null}
               </article>)}
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
@@ -322,7 +325,7 @@ export default function SupportInbox({ adminToken, active, onBusyChange, onDirty
               {selectedQuestion ? <div role="region" aria-label="Replying to customer question" className="mb-3 rounded-xl bg-neutral-50 p-3"><SupportQuestionQuote question={selectedQuestion} /></div> : selected.messages.some((message) => message.role === "customer") ? <p className="mb-3 text-sm">Choose Reply on a customer question before sending.</p> : <p className="mb-3 text-sm">No customer question yet. You can send a welcome message.</p>}
               {answerChanged && selected.state !== "closed" ? <section aria-label="Review updated answer" className="mb-3 rounded-xl border border-amber-400 bg-amber-50 p-3 text-sm">
                 <p role="alert">This question has a newer answer. Your draft and quoted question are unchanged. Review the latest answer before continuing; refreshing alone will not send or replace a reply.</p>
-                {latestAnswer ? <div className="mt-3 rounded-xl bg-white p-3"><p className="text-xs font-semibold">{latestAnswer.role === "human" ? "STYL team" : "STYL assistant"} · Latest answer</p><p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{latestAnswer.text}</p></div> : <p className="mt-2">Read the updated question and answer in the conversation above.</p>}
+                {latestAnswer ? <div className="mt-3 rounded-xl bg-white p-3"><p className="text-xs font-semibold">{latestAnswer.role === "human" ? "STYL team" : "STYL Assistant"} · Latest answer</p><p className="mt-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{latestAnswer.text}</p></div> : <p className="mt-2">Read the updated question and answer in the conversation above.</p>}
                 <button type="button" disabled={busy || conflict === selected.id} onClick={reviewAnswer} className={`mt-3 ${button}`}>Review latest answer and continue</button>
               </section> : null}
               <label className="block text-sm font-medium">Your reply<textarea aria-label="Your reply" placeholder="Write a helpful message…" value={draft} maxLength={2000} rows={4} disabled={busy || selected.state === "closed"} onChange={(event) => setDrafts((current) => ({ ...current, [draftId]: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} className="mt-2 block w-full min-w-0 rounded-xl border border-[var(--line)] p-3 text-base" /></label>

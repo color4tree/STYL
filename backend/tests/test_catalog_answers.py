@@ -47,7 +47,8 @@ class CatalogAnswerTests(unittest.IsolatedAsyncioTestCase):
         ]
         brand = await self.answer("what is the brand for STYL adjustable bench", earlier)
         self.assertFalse(brand.needs_human)
-        self.assertIn("brand for STYL Adjustable Bench is STYL", brand.text)
+        self.assertEqual(brand.references, ("product:1",))
+        self.assertIn("For the adjustable bench, the brand is STYL", brand.text)
         history = [*earlier, {"role": "user", "text": "what is the brand for STYL adjustable bench"},
                    {"role": "model", "text": brand.text}]
         for question in ("what the weight of it", "what is the weight of it", "How much does it weigh?"):
@@ -182,7 +183,7 @@ class CatalogAnswerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reason, "missing_evidence")
         self.assertIsNotNone(result.answer_plan)
         self.assertEqual(result.references, ("accessory:1001",))
-        self.assertIn("not published", result.text)
+        self.assertIn("I can't confirm the weight yet", result.text)
         self.assertNotIn("weighs 50", result.text)
 
     async def test_ambiguous_short_name_clarifies_instead_of_choosing_an_item(self):
@@ -283,13 +284,20 @@ class CatalogAnswerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_replies_are_conversational_sentences_without_changing_facts(self):
         price = await self.answer("What is the price of STYL Sandwich J-Cups?")
-        self.assertEqual(price.text, "The current listed price for STYL Sandwich J-Cups is CAD $119.00.")
+        self.assertEqual(price.text, "For the sandwich j-cups, the current price is CAD $119.00.")
+        self.assertEqual(price.references, ("accessory:1001",))
         weight = await self.answer("What is the weight of STYL Adjustable Bench?")
-        self.assertEqual(weight.text, "STYL Adjustable Bench weighs approximately 50 kg / 110 lb.")
+        self.assertEqual(weight.text, "For the adjustable bench, the item weighs approximately 50 kg / 110 lb.")
+        self.assertEqual(weight.references, ("product:1",))
         brand = await self.answer("What brand is STYL Adjustable Bench?")
-        self.assertEqual(brand.text, "The brand for STYL Adjustable Bench is STYL.")
+        self.assertEqual(brand.text, "For the adjustable bench, the brand is STYL.")
+        self.assertEqual(brand.references, ("product:1",))
         overview = await self.answer("Tell me about STYL Adjustable Bench")
         self.assertIn("Here is an overview of STYL Adjustable Bench", overview.text)
+        self.assertEqual(overview.references, ("product:1",))
+        for answer in (price, weight, brand):
+            self.assertNotRegex(answer.text, r"(?im)^(?:Here's|Here is|Category:|Price:|Weight:|Brand:)")
+            self.assertNotIn("\n", answer.text)
         for answer in (price, weight, brand, overview):
             self.assertNotIn("Category:", answer.text)
             self.assertTrue(answer.text.endswith("."))

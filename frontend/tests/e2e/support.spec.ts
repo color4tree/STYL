@@ -1,4 +1,4 @@
-import { test as base, expect, type APIRequestContext, type Page } from "@playwright/test";
+import { test as base, expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -97,6 +97,15 @@ async function confirmAction(page: Page, name: string) {
 const log = (page: Page) => page.getByRole("log", { name: "Conversation messages", exact: true });
 const humanLog = (page: Page) => page.getByRole("log", { name: "Selected support messages", exact: true });
 const customerDialog = (page: Page) => page.getByRole("dialog", { name: "STYL Assistant", exact: true });
+async function closedProductSource(page: Page, bubble: Locator, product: Item) {
+  const sources = bubble.locator("details").filter({ has: page.locator("summary", { hasText: /^Sources$/ }) });
+  await expect(sources.locator("summary")).toBeVisible();
+  await expect(sources).not.toHaveAttribute("open");
+  const link = sources.getByRole("link", { name: product.name, exact: true, includeHidden: true });
+  await expect(link).toHaveAttribute("href", `/products/${product.slug}`);
+  await expect(link).toBeHidden();
+  return sources;
+}
 async function expectProfessionalCopy(page: Page) {
   const ordinaryText = await customerDialog(page).evaluate((element) => {
     const copy = element.cloneNode(true) as HTMLElement;
@@ -117,7 +126,12 @@ test("SUP-001: real mock-backed guest answers cite published products, resume pr
   await expect(log(page).getByText("STYL Assistant", { exact: true })).toBeVisible();
   await expect(log(page)).toContainText(product.name);
   await expect(log(page)).toContainText(/(?:125\.50|100\.25)/);
-  await expect(log(page).getByRole("link", { name: product.name, exact: true })).toHaveAttribute("href", `/products/${product.slug}`);
+  const answer = log(page).locator('[data-support-role="assistant"]').last();
+  await closedProductSource(page, answer, product);
+  expect((await answer.innerText()).split(product.name)).toHaveLength(2);
+  expect((await thread(request, guest)).messages.at(-1)?.references).toContainEqual({
+    type: "product", id: product.id, label: product.name, url: `/products/${product.slug}`,
+  });
   const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem("styl-support-guest")!));
   expect(persisted).toEqual(guest);
   await expect(page.locator("body")).not.toContainText(guest.token);
@@ -141,6 +155,59 @@ test("SUP-001: real mock-backed guest answers cite published products, resume pr
   } finally { await secondContext.close(); }
 });
 
+test("SUP-027 CAT-009: legacy assistant prose is displayed unchanged for customers and admins without rewriting saved messages", async ({ page, request, product }) => {
+  const guest = await start(page);
+  await send(page, guest, `What is the price of ${product.name}?`);
+  await expect.poll(async () => (await thread(request, guest)).messages.filter((message) => message.role === "assistant").length).toBe(1);
+  const stored = await thread(request, guest);
+  const legacyText = `Here's the published information for ${product.name}:\nPrice: CAD $125.50\nCompatible hole diameter: 1"`;
+  const legacy = { ...stored.messages.find((message) => message.role === "assistant")!, text: legacyText };
+  const displayed = {
+    ...stored, revision: stored.revision + 1,
+    messages: stored.messages.map((message) => message.id === legacy.id ? legacy : message),
+  };
+  const legacySnapshot = structuredClone(displayed);
+  const customerUrl = `${publicApi}/conversations/${guest.id}`;
+  const operator = await page.context().newPage();
+  const operatorUrl = `${adminApi}/conversations/${guest.id}`;
+  // Hydrate historical assistant text, without writing old prose into the current API.
+  await page.route(customerUrl, (route) => route.fulfill({ json: displayed }));
+  await operator.route(operatorUrl, (route) => route.fulfill({ json: displayed }));
+  try {
+    await page.reload();
+    const customerReply = log(page).locator(`#support-message-${legacy.id}`);
+    await expect(customerReply.locator("p").nth(1)).toHaveText(legacyText, { useInnerText: true });
+    expect(await customerReply.locator("p").nth(1).textContent()).toBe(legacyText);
+    const customerSources = await closedProductSource(page, customerReply, product);
+    expect((await customerReply.innerText()).split(product.name)).toHaveLength(2);
+    await customerSources.locator("summary").click();
+    await expect(customerSources.getByRole("link", { name: product.name, exact: true })).toBeVisible();
+    await expect(customerReply.locator("p").nth(1)).toHaveText(legacyText, { useInnerText: true });
+    await customerSources.locator("summary").click();
+
+    await admin(operator);
+    await selectThread(operator, guest);
+    const adminReply = humanLog(operator).locator(`#admin-support-message-${legacy.id}`);
+    await expect(adminReply.getByText("STYL Assistant", { exact: true })).toBeVisible();
+    await expect(adminReply.locator("p").nth(1)).toHaveText(legacyText, { useInnerText: true });
+    expect(await adminReply.locator("p").nth(1).textContent()).toBe(legacyText);
+    const adminSources = await closedProductSource(operator, adminReply, product);
+    expect((await adminReply.innerText()).split(product.name)).toHaveLength(2);
+    await adminSources.locator("summary").click();
+    await expect(adminSources.getByRole("link", { name: product.name, exact: true })).toBeVisible();
+    await expect(adminReply.locator("p").nth(1)).toHaveText(legacyText, { useInnerText: true });
+    await adminSources.locator("summary").click();
+    await operator.getByRole("button", { name: "Refresh selected conversation", exact: true }).click();
+    await expect(adminReply.locator("p").nth(1)).toHaveText(legacyText, { useInnerText: true });
+    expect(displayed).toEqual(legacySnapshot);
+    expect((await thread(request, guest)).messages).toEqual(stored.messages);
+  } finally {
+    await page.unroute(customerUrl);
+    await operator.unroute(operatorUrl);
+    await operator.close();
+  }
+});
+
 test("SUP-002 SUP-017: question-based team replies quote the older question, keep other requests pending and let AI answer new prices", async ({ page, request, browser, product }) => {
   const guest = await start(page);
   const firstQuestion = "Can I talk to a human about shipping?";
@@ -157,7 +224,7 @@ test("SUP-002 SUP-017: question-based team replies quote the older question, kee
   await send(page, guest, `what is price of ${product.name}`);
   await expect.poll(async () => (await thread(request, guest)).messages.filter((message) => message.role === "assistant").length).toBe(beforePrice + 1);
   await expect(log(page).locator('[data-support-role="assistant"]').last()).toContainText(/(?:125\.50|100\.25)/);
-  await expect(log(page).locator('[data-support-role="assistant"]').last().getByRole("link", { name: product.name, exact: true })).toHaveAttribute("href", `/products/${product.slug}`);
+  await closedProductSource(page, log(page).locator('[data-support-role="assistant"]').last(), product);
   const pending = await thread(request, guest);
   expect(pending).toMatchObject({ state: "waiting_human", needsHuman: true, needsHumanQuestions: 2, reason: null, processing: false });
   const first = pending.messages.find((message) => message.text === firstQuestion)!;
@@ -178,7 +245,7 @@ test("SUP-002 SUP-017: question-based team replies quote the older question, kee
     const firstRow = operator.locator(`#admin-support-message-${first.id}`);
     const secondRow = operator.locator(`#admin-support-message-${second.id}`);
     const priceQuestion = pending.messages.find((message) => message.role === "customer" && message.text === `what is price of ${product.name}`)!;
-    await expect(operator.locator(`#admin-support-message-${priceQuestion.id}`)).toContainText("Answered by STYL assistant");
+    await expect(operator.locator(`#admin-support-message-${priceQuestion.id}`)).toContainText("Answered by STYL Assistant");
     await expect(operator.locator(`#admin-support-message-${priceQuestion.id}`)).not.toContainText("Answered by STYL team");
     await expect(firstRow).toContainText("Needs a team reply");
     await expect(secondRow).toContainText("Needs a team reply");
@@ -674,6 +741,10 @@ test("SUP-006: storage failure is explicit; simulated provider failure and unsaf
   await expectProfessionalCopy(page);
   await expect(log(page)).toContainText(unsafeText);
   await expect(log(page).locator("img")).toHaveCount(0);
+  const sources = await closedProductSource(page, log(page).locator("#support-message-synthetic-provider-failure"), product);
+  expect(await log(page).innerText()).not.toContain(product.name);
+  await expect(log(page).getByRole("link", { includeHidden: true })).toHaveCount(1);
+  await sources.locator("summary").click();
   await expect(log(page).getByRole("link")).toHaveCount(1);
   await expect(log(page).getByRole("link")).toHaveAttribute("href", `/products/${product.slug}`);
   await expect(page.getByRole("button", { name: "Ask for human help", exact: true })).toHaveCount(0);

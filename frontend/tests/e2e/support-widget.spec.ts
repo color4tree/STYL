@@ -127,7 +127,14 @@ test("SUP-011 WIDGET-002: conversation, open/minimized state and draft survive N
   chat.thread.messages.at(-1)!.references = [{ type: "product", id: product.id, label: product.name, url: `/products/${product.slug}` }];
   await refresh(page);
   await input(page).fill("Unsent synthetic navigation draft");
-  await history(page).getByRole("link", { name: product.name }).click();
+  const bubble = history(page).locator('[data-support-role="assistant"]').last();
+  const sources = bubble.locator("details").filter({ has: page.locator("summary", { hasText: /^Sources$/ }) });
+  await expect(sources.locator("summary")).toBeVisible();
+  await expect(sources).not.toHaveAttribute("open");
+  await expect(sources.getByRole("link", { name: product.name, exact: true, includeHidden: true })).toBeHidden();
+  expect(await bubble.innerText()).not.toContain(product.name);
+  await sources.locator("summary").click();
+  await sources.getByRole("link", { name: product.name, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/products/${product.slug}$`));
   await expect(dialog(page)).toBeVisible();
   await expect(input(page)).toHaveValue("Unsent synthetic navigation draft");

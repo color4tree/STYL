@@ -110,7 +110,13 @@ async function answer(page: Page, item: Item, price: string) {
   const latest = history(page).locator('[data-support-role="assistant"]').last();
   await expect(latest).toContainText(item.name);
   await expect(latest).toContainText(price);
-  await expect(latest.getByRole("link", { name: item.name, exact: true })).toHaveAttribute("href", href(item));
+  const sources = latest.locator("details").filter({ has: page.locator("summary", { hasText: /^Sources$/ }) });
+  await expect(sources.locator("summary")).toBeVisible();
+  await expect(sources).not.toHaveAttribute("open");
+  const link = sources.getByRole("link", { name: item.name, exact: true, includeHidden: true });
+  await expect(link).toHaveAttribute("href", href(item));
+  await expect(link).toBeHidden();
+  expect((await latest.innerText()).split(item.name)).toHaveLength(2);
 }
 async function seedNavigation(page: Page, request: APIRequestContext, guest: Guest, item: Item) {
   const response = await request.post(`${support}/conversations/${guest.id}/messages`, {
@@ -118,10 +124,20 @@ async function seedNavigation(page: Page, request: APIRequestContext, guest: Gue
     data: { text: `What is the price of ${item.name}?`, itemRef: itemRef(item), clientMessageId: randomUUID() },
   });
   expect(response.status(), await response.text()).toBe(200);
-  await expect(history(page).getByRole("link", { name: item.name, exact: true }).last()).toBeVisible();
+  await expect.poll(async () => (await thread(request, guest)).messages.some((message) =>
+    message.role === "assistant" && message.references.some((reference) =>
+      reference.type === item.itemType && reference.id === item.id && reference.label === item.name && reference.url === href(item)))).toBe(true);
+  const link = history(page).getByRole("link", { name: item.name, exact: true, includeHidden: true }).last();
+  await expect(link).toHaveAttribute("href", href(item));
+  await expect(link).toBeHidden();
 }
 async function followCitation(page: Page, item: Item) {
-  await history(page).getByRole("link", { name: item.name, exact: true }).last().click();
+  const sources = history(page).locator("details").filter({
+    has: page.getByRole("link", { name: item.name, exact: true, includeHidden: true }),
+  }).last();
+  await expect(sources.locator("summary")).toHaveText("Sources");
+  if (!await sources.evaluate((element) => (element as HTMLDetailsElement).open)) await sources.locator("summary").click();
+  await sources.getByRole("link", { name: item.name, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${href(item)}$`));
 }
 function onlyContext(payload: Payload, text: string, item?: Item) {

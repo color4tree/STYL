@@ -67,7 +67,7 @@ class CatalogAnswerFlowTests(unittest.TestCase):
         self.assertEqual(requested.status_code, 200, requested.text)
         for question, expected in (
             ("what's price of STYL Sandwich J-Cups", "CAD $119.00"),
-            ("what is the brand for STYL adjustable bench", "brand for STYL Adjustable Bench is STYL"),
+            ("what is the brand for STYL adjustable bench", "the brand is STYL"),
             ("what the weight of it", "approximately 50 kg / 110 lb"),
             ("what is the weight of it", "approximately 50 kg / 110 lb"),
         ):

@@ -23,6 +23,8 @@ import json
 import re
 from typing import Callable
 
+from app import catalog_facts
+
 
 SCHEMA_VERSION = 1
 MAX_ITEMS = 8
@@ -134,6 +136,9 @@ for _key, _label, _query, _labels in [
     _SPECS.append(_spec(f"compat.{_key}", _label, f"compatibility.{_key}", f"compat.{_key}",
                         topic="compatibility", query=_query, labels=_labels))
 
+for _key, _label, _topic in catalog_facts.registry_entries():
+    _SPECS.append(_spec(_key, _label, topic=_topic,
+                        labels=("size options", "size choices", "sizes") if _key == "sizeOptions" else ()))
 FIELD_REGISTRY = {entry.key: entry for entry in _SPECS}
 # All other current public fields are transport, presentation, or availability
 # metadata, not independent specification facts. No alternate catalog is stored.
@@ -147,6 +152,9 @@ NON_FACT_METADATA = {
     "featured": "presentation ordering", "publicationStatus": "publication eligibility",
     "approvedKnowledge": "upstream-approved evidence container", "catalogVersion": "source version",
     "revision": "source version", "sourceHash": "source version", "aliases": "resolution metadata",
+    "catalogFacts": "reviewed typed public evidence container",
+    "catalogFactsReviewedAt": "private review metadata, never a factual claim",
+    "schemaVersion": "transport schema version",
 }
 ALIASES = {path: spec.key for spec in _SPECS for path in spec.paths}
 ALIASES.update({key: key for key in FIELD_REGISTRY})
@@ -394,12 +402,14 @@ def project_facts(item: dict, allowed_topics: list[str] | None = None) -> dict[s
     topics = TOPICS if allowed_topics is None else set(allowed_topics)
     claims: dict[str, list[dict]] = {key: [] for key in FIELD_REGISTRY}
 
-    def add(key: str, value: object, locator: str, doc: dict | None = None, state: str = "answered") -> None:
+    def add(key: str, value: object, locator: str, doc: dict | None = None, state: str = "answered",
+            typed: dict | None = None) -> None:
         if key not in FIELD_REGISTRY or not _safe_value(value):
             return
         if state == "answered" and not _present(value):
             return
-        evidence = _source(item, key, locator, value, doc)
+        evidence = (catalog_facts.source(item["ref"], key, locator, value, typed["raw"])
+                    if typed is not None else _source(item, key, locator, value, doc))
         candidate = {"value": _json_copy(value), "evidence": evidence, "status": state,
                      "partial": isinstance(value, _DescriptiveColour)}
         if candidate not in claims[key]:
@@ -408,7 +418,24 @@ def project_facts(item: dict, allowed_topics: list[str] | None = None) -> dict[s
             for component, content in value.items():
                 name = str(component).casefold().rstrip("s")
                 if name in _COMPONENTS:
-                    add(f"{key.split('.')[0]}.{name}", content, f"{locator}.{component}", doc, state)
+                    add(f"{key.split('.')[0]}.{name}", content, f"{locator}.{component}", doc, state, typed)
+
+    def add_legacy(key: str, value: object, locator: str, doc: dict | None = None) -> None:
+        if key in {"colourOptions", "colour.availableOptions", "sizeOptions", "finish"}:
+            for actual, content in catalog_facts.legacy_options(value, key):
+                add(actual, content, locator, doc)
+        else:
+            add(key, value, locator, doc)
+
+    def add_text(text: str, locator: str, doc: dict | None = None) -> None:
+        clean, scoped = catalog_facts.legacy_text(text)
+        for key, value in scoped:
+            if not _NON_ASSERTION.search(str(value)):
+                add_legacy(key, value, locator, doc)
+                if key == "colourOptions":
+                    add_legacy("colour.availableOptions", value, locator, doc)
+        for key, value in _extract(clean, item):
+            add_legacy(key, value, locator, doc)
 
     for key, spec in FIELD_REGISTRY.items():
         for path in spec.paths:
@@ -418,13 +445,12 @@ def project_facts(item: dict, allowed_topics: list[str] | None = None) -> dict[s
             if isinstance(value, str) and value.strip().lower() in {"n/a", "not applicable"}:
                 add(key, None, path, state="not_applicable")
             elif _present(value):
-                add(key, value, path)
+                add_legacy(key, value, path)
     for path in ("description", "shortDescription", "features", "notes", "dimensions", "material", "included"):
         raw = item.get(path)
         text = "\n".join(raw) if isinstance(raw, list) and all(isinstance(v, str) for v in raw) else raw
         if isinstance(text, str):
-            for key, value in _extract(text, item):
-                add(key, value, path)
+            add_text(text, path)
     docs = item.get("approvedKnowledge", [])
     for doc in docs if isinstance(docs, list) else []:
         if not isinstance(doc, dict) or not isinstance(doc.get("sourceId"), str) or not doc["sourceId"]:
@@ -443,12 +469,33 @@ def project_facts(item: dict, allowed_topics: list[str] | None = None) -> dict[s
             if state == "not_applicable":
                 add(explicit, None, locator, doc, "not_applicable")
             elif state in ("known", "answered") and not _NON_ASSERTION.search(str(doc.get("text", ""))):
-                add(explicit, doc.get("value"), locator, doc)
+                add_legacy(explicit, doc.get("value"), locator, doc)
         if (isinstance(doc.get("text"), str) and topic in {"products", "compatibility"}
                 and doc.get("state") != "not_applicable"):
-            for key, value in _extract(doc["text"], item):
-                if FIELD_REGISTRY[key].topic in topics:
-                    add(key, value, locator, doc)
+            add_text(doc["text"], locator, doc)
+    typed = catalog_facts.typed_claims(item, topics)
+    overridden = {entry["key"] for entry in typed}
+    material_components = {component for entry in typed if entry["key"] == "material.parts"
+                           for component in entry["value"]}
+    if material_components:
+        retained = []
+        for candidate in claims["material.parts"]:
+            if isinstance(candidate["value"], dict):
+                rest = {key: value for key, value in candidate["value"].items()
+                        if key.casefold().rstrip("s") not in {name.casefold().rstrip("s") for name in material_components}}
+                if rest:
+                    evidence = {**candidate["evidence"], "valueHash": _hash(rest)}
+                    evidence.pop("id")
+                    evidence["id"] = "catalog:" + _hash(evidence)
+                    retained.append({**candidate, "value": rest, "evidence": evidence})
+        claims["material.parts"] = retained
+        overridden.discard("material.parts")
+        overridden.update(f"material.{name.casefold().rstrip('s')}" for name in material_components
+                          if name.casefold().rstrip("s") in _COMPONENTS)
+    for key in overridden:
+        claims[key] = []
+    for entry in typed:
+        add(entry["key"], entry["value"], entry["locator"], typed=entry)
     result = {}
     for key, candidates in claims.items():
         fact: dict = {"key": key, "status": "unknown", "value": None, "evidenceIds": [], "sources": []}
@@ -548,7 +595,7 @@ def requested_fields(question: str) -> list[str]:
             fields.append(group)
     if len(fields) > 1:
         fields = [key for key in fields if key != "description"]
-    return list(dict.fromkeys(fields))
+    return catalog_facts.requested_fields(question, list(dict.fromkeys(fields)))
 
 
 def _names(item: dict) -> list[str]:
@@ -737,6 +784,16 @@ def _compare_measurement(required: object, supplied: object, key: str) -> str:
 
 
 def _compatibility(facts: dict[str, dict], slots: dict) -> dict:
+    typed = [f"interface.{kind}" for kind in catalog_facts.INTERFACES
+             if facts[f"interface.{kind}"]["status"] in {"answered", "conflicted"}]
+    if typed:
+        # Operators, roles and row grouping are not equality alternatives. Quote
+        # the requirements, but never run legacy rack math on typed interfaces.
+        return {
+            "status": "conflicting_evidence" if any(facts[key]["status"] == "conflicted" for key in typed) else "insufficient_data",
+            "required": [], "missing": [], "mismatches": [], "uncertain": [],
+            "evidenceIds": list(dict.fromkeys(source for key in typed for source in facts[key]["evidenceIds"])),
+        }
     published = [key for key in FIELD_REGISTRY if key.startswith("compat.") and facts[key]["status"] != "unknown"]
     required = [name for name in CONSTRAINTS if facts[f"compat.{name}"]["status"] in {"answered", "conflicted"}]
     if facts["compat.models"]["status"] == "answered" and re.search(r"\bonly\b", str(facts["compat.models"]["value"]), re.I):
@@ -833,34 +890,113 @@ def _display(value: object) -> str:
     return str(value)
 
 
-def _field_sentence(name: str, key: str, value: object, claim_scope: str | None = None) -> str:
-    content = _display(value).strip()
+def _conversation_name(name: str) -> str:
+    if re.match(r"^STYL\s+", name, re.I):
+        name = re.sub(r"^STYL\s+", "", name, flags=re.I)
+        name = " ".join(word if word.isupper() or any(char.isdigit() for char in word) else word.lower()
+                        for word in name.split())
+        return "the " + name
+    return name
+
+
+def _spoken_value(value: object) -> str:
+    return re.sub(r'(\d+(?:\.\d+)?)\s*[”″"]', lambda match:
+                  match[1] + (" inch" if Decimal(match[1]) == 1 else " inches"), _display(value).strip())
+
+
+def _field_sentence(name: str, key: str, value: object, claim_scope: str | None = None,
+                    introduce: bool = True) -> str:
+    content = _spoken_value(value)
+    prefix = f"For {_conversation_name(name)}, " if introduce else ""
     if claim_scope == "described_finish":
-        return (f"The published information for {name} describes a {content} finish. "
-                "That describes the finish, not a confirmed list of available colour choices.")
+        sentence = f"{prefix}the finish is described as {content}. I don't have a confirmed list of other color choices."
+        return sentence if introduce else sentence[0].upper() + sentence[1:]
+    if key == "compat.holeDiameter":
+        return (f"The mounting holes for {_conversation_name(name)} are {content} in diameter."
+                if introduce else f"The mounting holes need to be {content} in diameter.")
+    if key.startswith("interface."):
+        kind = key.split(".")[1]
+        statements = []
+        for entry in value if isinstance(value, list) else [value]:
+            detail = _spoken_value(entry)
+            title = catalog_facts.INTERFACES.get(kind, "Listed")
+            if kind not in catalog_facts.INTERFACES and ": " in detail:
+                title, detail = detail.split(": ", 1)
+            detail = re.sub(r"\bStatement \d+:\s*", "", detail).replace("; limitations:", ". Please note:")
+            sentence = f"The {title.lower()} interface {detail}"
+            statements.append(sentence if sentence.endswith((".", "!", "?")) else sentence + ".")
+        sentence = " ".join(statements)
+        return prefix + sentence[0].lower() + sentence[1:] if introduce else sentence
+    if key == "package.components" and isinstance(value, list):
+        parts = []
+        for entry in value:
+            match = re.fullmatch(r"(.+): (included|excluded|unknown)(?: \(quantity ([0-9]+)\))?", str(entry))
+            if match is None:
+                parts.append(str(entry))
+                continue
+            component, state, quantity = match.groups()
+            if state == "included":
+                parts.append(f"The package includes {quantity + ' × ' if quantity else ''}{component}.")
+            elif state == "excluded":
+                parts.append(f"The package doesn't include {component}.")
+            else:
+                parts.append(f"I can't confirm the inclusion of {component}.")
+        sentence = " ".join(parts)
+        return f"For {_conversation_name(name)}, " + sentence[0].lower() + sentence[1:] if introduce else sentence
     if key == "weight.own":
         content = re.sub(r"^approx\.?\s*", "approximately ", content, flags=re.I)
     if key == "sellingUnit":
         content = {"each": "an individual item", "pair": "a pair", "set": "a set"}.get(content.casefold(), content)
     templates = {
-        "price.current": "The current listed price for {name} is {content}",
-        "price.msrp": "The listed MSRP for {name} is {content}",
-        "weight.own": "{name} weighs {content}",
-        "brand": "The brand for {name} is {content}",
-        "dimensions": "The listed dimensions for {name} are {content}",
-        "material": "{name} is listed as being made from {content}",
-        "included": "Here is what comes with {name}: {content}",
-        "sellingUnit": "{name} is sold as {content}",
-        "colourOptions": "The listed colour options for {name} are {content}",
-        "modelSku": "The listed model or SKU for {name} is {content}",
-        "stockStatus": "Our catalog currently shows {name} as {content}",
-        "warranty": "For {name}, the listed warranty says: {content}",
-        "features": "Features listed for {name} include {content}",
-        "packageQuantity": "The package quantity listed for {name} is {content}",
+        "price.current": "the current price is {content}",
+        "price.msrp": "the listed MSRP is {content}",
+        "weight.own": "the item weighs {content}",
+        "capacity.safeLoad": "the stated load rating is {content}",
+        "brand": "the brand is {content}",
+        "dimensions": "the listed dimensions are {content}",
+        "dimensions.length": "the listed length is {content}",
+        "dimensions.width": "the listed width is {content}",
+        "dimensions.height": "the listed height is {content}",
+        "dimensions.depth": "the listed depth is {content}",
+        "material": "the listed material is {content}",
+        "included": "the package includes {content}",
+        "components": "the listed components are {content}",
+        "sellingUnit": "it's sold as {content}",
+        "colourOptions": "the listed colors are {content}",
+        "colour.availableOptions": "the listed color choices are {content}",
+        "sizeOptions": "the listed size choices are {content}",
+        "options.note": "{content}",
+        "package.note": "{content}",
+        "finish": "the finish is {content}",
+        "modelSku": "the model or SKU is {content}",
+        "stockStatus": "our catalog currently shows it as {content}",
+        "warranty": "the product's warranty information says {content}",
+        "features": "the features include {content}",
+        "description": "{content}",
+        "shortDescription": "{content}",
+        "notes": "{content}",
+        "packageQuantity": "one selling unit contains {content} primary " + ("item" if value == 1 else "items"),
+        "compat.holeDiameter": "the specified mounting hole diameter is {content}",
+        "compat.uprightSize": "the listed upright size is {content}",
+        "compat.holeSpacing": "the specified mounting hole spacing is {content}",
+        "compat.requiredDepth": "the required mounting depth is {content}",
+        "compat.pinDiameter": "the pin diameter is {content}",
+        "compat.pinLength": "the pin length is {content}",
+        "compat.pinDimensions": "the pin dimensions are {content}",
+        "compat.models": "the documented compatible models are {content}",
+        "compat.limitations": "please keep these limitations in mind: {content}",
+        "resistance.stacks": "the weight-stack information is {content}",
+        "resistance.increments": "the adjustment increments are {content}",
     }
     if key == "stockStatus":
         content = content.lower()
-    sentence = templates.get(key, FIELD_REGISTRY[key].label + ": {content}").format(name=name, content=content)
+    family, _, component = key.partition(".")
+    template = (f"the {component} {'material' if family == 'material' else 'color'} is {{content}}"
+                if family in ("material", "colour") and component in _COMPONENTS
+                else templates.get(key, "the " + FIELD_REGISTRY[key].label.lower() + " is {content}"))
+    sentence = prefix + template.format(content=content)
+    if not introduce:
+        sentence = sentence[0].upper() + sentence[1:]
     return sentence if sentence.endswith((".", "!", "?")) else sentence + "."
 
 
@@ -872,63 +1008,66 @@ def _render(items: list[dict], clarification: str | None = None) -> tuple[str, b
             "limit": "Please narrow this to eight items or fewer so I can keep every requested detail together.",
         }[clarification], True
     blocks = []
+    safety = []
     for item in items:
-        lines = [f"Here's what's published for {item['name']}:"]
+        lines = []
         compat = item.get("compatibility")
-        if compat:
+        if compat and compat["status"] != "listed_requirements":
             state = compat["status"]
-            lines.append({
-                "listed_requirements": "These are the published requirements.",
-                "known_mismatch": "Your equipment does not match a published compatibility requirement. Do not modify mounting parts to force a fit.",
-                "conditional_match": "The supplied labels are consistent with the listed requirements, subject to the published limitations. Fit is not verified.",
-                "requirements_match_not_verified": "The supplied measurements match the listed requirements, but fit is not verified for your exact model and variant.",
-                "insufficient_data": "The published information and supplied measurements aren't enough to confirm fit.",
-                "conflicting_evidence": "The published compatibility details disagree; our team needs to confirm them before advising on fit.",
-            }[state])
+            line = f"For {_conversation_name(item['name'])}, " + {
+                "known_mismatch": "your equipment doesn't match the listed mounting requirements. Please don't modify parts to force a fit.",
+                "conditional_match": "the sizes you've provided are consistent with the listed requirements, but that isn't a verified fit for your exact equipment.",
+                "requirements_match_not_verified": "the measurements you've given match the listed requirements. That isn't a verified fit for your exact model, so please confirm the pairing before use.",
+                "insufficient_data": "I don't yet have enough information to confirm the fit.",
+                "conflicting_evidence": "the compatibility details disagree, so I'll ask our team to confirm them.",
+            }[state]
+            lines.append(line)
+            safety.append(line)
             if compat.get("targetRef"):
-                lines.append(f"Target: {compat['targetName']}. Published labels and any customer measurements are compared; no tested fit is claimed.")
+                line = f"I'm comparing it with {_conversation_name(compat['targetName'])}, not confirming a tested pairing."
+                lines.append(line)
+                safety.append(line)
         for fact in item["fields"]:
-            label = FIELD_REGISTRY[fact["key"]].label
+            label = {
+                "weight.own": "weight", "capacity.safeLoad": "load rating",
+                "colourOptions": "color", "colour.availableOptions": "available colors",
+            }.get(fact["key"], FIELD_REGISTRY[fact["key"]].label.lower().replace("colour", "color"))
             state = fact["status"]
             if state == "answered":
-                lines.append(_field_sentence(item["name"], fact["key"], fact["value"], fact.get("claimScope")))
+                lines.append(_field_sentence(item["name"], fact["key"], fact["value"], fact.get("claimScope"), not lines))
                 continue
             detail = {
-                "unknown": "not published in the available information",
-                "conflicted": "published sources disagree; our team needs to confirm",
-                "scope_disabled": "not available in the enabled support topics",
-                "not_applicable": "explicitly listed as not applicable",
+                "unknown": f"I can't confirm the {label} yet",
+                "conflicted": f"the information about {label} disagrees, so our team will need to confirm it",
+                "scope_disabled": f"our team can help confirm the {label}",
+                "not_applicable": f"the listing explicitly says {label} does not apply",
             }[state]
-            lines.append(f"{label}: {detail}.")
+            if not lines:
+                detail = f"For {_conversation_name(item['name'])}, " + detail
+            else:
+                detail = detail[0].upper() + detail[1:]
+            lines.append(detail + ".")
         if compat:
             needed = list(dict.fromkeys(compat["missing"] + compat["uncertain"]))
             if needed:
                 labels = [FIELD_REGISTRY[f"compat.{key}"].label.lower() if f"compat.{key}" in FIELD_REGISTRY else key for key in needed]
-                lines.append("Could you share your equipment's " + ", ".join(labels) + "? Keep nominal labels, measured values and internal/overall dimensions separate.")
+                lines.append("Could you tell me your equipment's " + " and ".join(labels) + "?")
         blocks.append(lines)
-    text = "\n\n".join("\n".join(lines) for lines in blocks)
-    if len(items) == 1 and len(items[0]["fields"]) == 1 and items[0].get("compatibility") is None:
-        text = "\n".join(blocks[0][1:])
+    text = "\n\n".join(" ".join(lines) for lines in blocks)
     if len(text) <= MAX_TEXT:
         return text, False
-    # Whole facts only; compatibility warnings precede detail, never cut mid-fact.
-    output = []
-    remaining = MAX_TEXT - 220
-    for item, lines in zip(items, blocks):
-        count = 1 + bool(item.get("compatibility")) + bool((item.get("compatibility") or {}).get("targetRef"))
-        summary = lines[:count]
-        for line in summary:
+    output = list(dict.fromkeys(safety))
+    remaining = MAX_TEXT - sum(len(line) + 2 for line in output) - 180
+    for lines in blocks:
+        for line in lines:
+            if line in safety:
+                continue
+            if len(line) + 2 > remaining:
+                break
             output.append(line)
             remaining -= len(line) + 2
-    for item, lines in zip(items, blocks):
-        count = 1 + bool(item.get("compatibility")) + bool((item.get("compatibility") or {}).get("targetRef"))
-        details = lines[count:]
-        for line in details:
-            if len(line) + 2 <= remaining:
-                output.append(line)
-                remaining -= len(line) + 2
-    output.append("This answer is partial because the requested information is too long to display together. Please narrow the items or fields; the full plan retains all requested fields.")
-    return "\n".join(output), True
+    output.append("This is only part of the available information. Which item or detail would you like me to explain next?")
+    return "\n\n".join(output), True
 
 
 @dataclass
@@ -1106,7 +1245,7 @@ def _assemble(requests: list[dict], lookup: dict[str, dict], allowed_topics: lis
     for request in requests:
         item = lookup[request["ref"]]
         facts = project_facts(item, allowed_topics)
-        keys = list(request["fields"])
+        keys = catalog_facts.expand_fields(list(request["fields"]), facts)
         colour_requested = "colourOptions" in keys or "colour.availableOptions" in keys
         if colour_requested and facts["colour.parts"]["status"] in {"answered", "conflicted"}:
             keys.append("colour.parts")
@@ -1157,7 +1296,10 @@ def _assemble(requests: list[dict], lookup: dict[str, dict], allowed_topics: lis
                                   targetEvidenceIds=list(dict.fromkeys(target_ids)))
                     if target_conflict:
                         compat.update(status="conflicting_evidence", missing=[], uncertain=[])
-                keys.extend(key for key in facts if key.startswith("compat.") and facts[key]["status"] != "unknown")
+                keys.extend(catalog_facts.expand_fields(
+                    [key for key in facts if key.startswith("compat.") and facts[key]["status"] != "unknown"], facts))
+                keys.extend(f"interface.{kind}" for kind in catalog_facts.INTERFACES
+                            if facts[f"interface.{kind}"]["status"] in {"answered", "conflicted"})
                 if not keys:
                     keys.append("compat.uprightSize")
             else:

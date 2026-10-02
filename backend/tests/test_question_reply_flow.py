@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app import main, records_archive, support, support_ai
+from app import analytics, main, records_archive, support, support_ai
 
 
 class QuestionReplyFlowTests(unittest.TestCase):
@@ -48,6 +48,8 @@ class QuestionReplyFlowTests(unittest.TestCase):
         ):
             replacement.start()
             self.addCleanup(replacement.stop)
+        with analytics.get_store().connection():
+            pass
         with support.rate_lock:
             support.rate_windows.clear()
         self.client = TestClient(main.app)

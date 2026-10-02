@@ -46,6 +46,8 @@ test("SUP-025 KNW-015: approved general Q&A is usable in the customer widget wit
     const answer = dialog.getByRole("log", { name: "Conversation messages" }).locator('[data-support-role="assistant"]').last();
     await expect(answer).toContainText("five business days");
     await expect(answer).toContainText(name);
+    await expect(answer.locator("summary", { hasText: /^Sources$/ })).toHaveCount(0);
+    await expect(answer.getByRole("link", { includeHidden: true })).toHaveCount(0);
     await expect(answer).not.toContainText("customer_service");
   } finally {
     const current = await (await request.get(settingsUrl, { headers })).json();

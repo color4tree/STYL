@@ -245,7 +245,7 @@ class SupportAITests(unittest.IsolatedAsyncioTestCase):
         messages.extend([{"role": "model", "text": first.text}, {"role": "user", "text": "How much does it cost?"}])
         followup = await ai.respond(messages, catalog, list(ai.TOPICS), "mock", "mock")
         self.assertIn("product:9", followup.references)
-        self.assertIn("listed price for Nebula is CAD $90.00", followup.text)
+        self.assertIn("For Nebula, the current price is CAD $90.00", followup.text)
 
     async def test_followup_never_restores_newly_hidden_item_from_history(self):
         messages = [{"role": "user", "text": "Tell me about STYL Power Rack"},

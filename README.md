@@ -218,9 +218,20 @@ Then open http://localhost:8000/docs
 
 ## Current phase
 
+On the AI feature branch, optional **Reviewed product facts** separate colors,
+informational sizes, finish, scoped measurements, materials, interface statements
+and included/excluded components. Draft metadata stays private until explicitly
+reviewed. Current prices, selling units and cart/quote behavior are unchanged.
+Versioned editor saves reject stale revisions and retain drafts for deliberate
+reload. New chat replies use conversational sentences with optional collapsed
+Sources, rather than repeating a product link after every answer. See the
+[customer-service architecture](docs/customer-service-ai-architecture.md).
+
 `main` is the non-AI production line. AI assistant, document knowledge and
-provider development remain on `ai-assistant/baseline-2026-09-29-2227-pt`.
-Shared per-country pricing layout is present on both branches.
+provider development continue on `STYL-chatbot-development`. The original
+`ai-assistant/baseline-2026-09-29-2227-pt` branch is retained as the previous
+checkpoint. Shared per-country pricing layout is present on main and the chatbot
+development branch. Publishing the chatbot branch does not deploy it.
 
 Admin **Backup** contains **Catalog recovery** and **Business / log records**.
 Business history and website logs do not expire by age or size. Create a

@@ -84,18 +84,18 @@ class CatalogPlanTests(unittest.TestCase):
     def test_renderer_preserves_existing_currency_and_conversational_contract(self):
         record = item(weight="approx. 2 kg", brand="Synthetic Brand", sellingUnit="Pair")
         plan = requested(record, ["price", "weight", "brand", "sellingUnit"])
-        self.assertIn("listed price for Synthetic Cable Attachment is CAD $125.25", plan.text)
+        self.assertIn("For Synthetic Cable Attachment, the current price is CAD $125.25", plan.text)
         self.assertIn("weighs approximately 2 kg", plan.text)
-        self.assertIn("The brand for Synthetic Cable Attachment is Synthetic Brand", plan.text)
-        self.assertIn("is sold as a pair", plan.text)
+        self.assertIn("The brand is Synthetic Brand", plan.text)
+        self.assertIn("It's sold as a pair", plan.text)
         self.assertEqual(field_value(plan, "weight")["value"], "approx. 2 kg")
 
     def test_single_fact_has_no_redundant_header(self):
         record = item("Synthetic Bench", weight="Approx. 50 kg / 110 lb")
         self.assertEqual(requested(record, ["price"]).text,
-                         "The current listed price for Synthetic Bench is CAD $125.25.")
+                         "For Synthetic Bench, the current price is CAD $125.25.")
         self.assertEqual(requested(record, ["weight"]).text,
-                         "Synthetic Bench weighs approximately 50 kg / 110 lb.")
+                         "For Synthetic Bench, the item weighs approximately 50 kg / 110 lb.")
 
     def test_unpublished_other_market_values_and_documents_never_supply_price(self):
         record = item(price=None, prices={"USD": 4}, approvedKnowledge=[
@@ -133,7 +133,7 @@ class CatalogPlanTests(unittest.TestCase):
                 self.assertEqual(field_value(plan, "colourOptions")["value"].lower(), "black")
                 self.assertEqual(field_value(plan, "colourOptions")["claimScope"], "described_finish")
                 self.assertEqual(plan.status, "partial")
-                self.assertIn("not a confirmed list of available colour choices", plan.text)
+                self.assertIn("I don't have a confirmed list of other color choices", plan.text)
                 self.assertTrue(validate_plan(plan.to_dict(), [record], TOPICS))
 
     def test_finish_colour_does_not_override_comparable_structured_claim(self):
@@ -161,7 +161,7 @@ class CatalogPlanTests(unittest.TestCase):
         plan = requested(record, ["colourOptions"])
         self.assertEqual(field_value(plan, "colourOptions")["status"], "unknown")
         self.assertEqual(field_value(plan, "colour.parts")["value"], {"handle": "black", "pin": "Silver"})
-        self.assertIn("Colours by component", plan.text)
+        self.assertIn("colours by component", plan.text.lower())
         self.assertTrue(validate_plan(plan.to_dict(), [record], TOPICS))
 
     def test_explicit_black_finish_and_red_rollers_stay_separate_claims(self):
@@ -437,7 +437,8 @@ class CatalogPlanTests(unittest.TestCase):
         plan = build_plan("What is STYL Birch Cable Handle made from?", [record], TOPICS)
         self.assertEqual([fact["key"] for fact in plan.items[0]["fields"]], ["material"])
         self.assertEqual(field_value(plan, "material")["value"], "Powder-coated steel")
-        self.assertEqual(plan.text, "STYL Birch Cable Handle is listed as being made from Powder-coated steel.")
+        self.assertEqual(plan.text, "For the birch cable handle, the listed material is Powder-coated steel.")
+        self.assertEqual(plan.item_references, (record["ref"],))
 
     def test_product_title_measurements_never_become_customer_slots(self):
         record = item("Example 3x3 Rack with 1-inch Holes", brand="Example",
@@ -624,13 +625,14 @@ class CatalogPlanTests(unittest.TestCase):
         record = item(compatibility={"holeDiameter": '1"'})
         plan = requested(record, [], compatibility=True, slots={"holeDiameter": '5/8"'})
         self.assertEqual(plan.items[0]["compatibility"]["status"], "known_mismatch")
-        self.assertIn("Do not modify", plan.text)
+        self.assertIn("Please don't modify parts to force a fit", plan.text)
 
     def test_matching_requirements_are_never_verified_fit(self):
         record = item(compatibility={"uprightSize": '3" × 3"', "holeDiameter": '1"'})
         plan = requested(record, [], compatibility=True, slots={"uprightSize": '3" x 3"', "holeDiameter": "25.4 mm"})
         self.assertEqual(plan.items[0]["compatibility"]["status"], "requirements_match_not_verified")
-        self.assertIn("fit is not verified", plan.text.lower())
+        self.assertIn("That isn't a verified fit for your exact model", plan.text)
+        self.assertIn("please confirm the pairing before use", plan.text)
 
     def test_models_string_is_not_tested_pair(self):
         record = item(compatibility={"models": "Synthetic Rack 1"})
@@ -766,7 +768,7 @@ class CatalogPlanTests(unittest.TestCase):
         final = build_plan("1 inch", [record], TOPICS, pending=upright.pending_slots)
         self.assertEqual(final.items[0]["compatibility"]["status"], "conditional_match")
         self.assertFalse(final.pending_slots)
-        self.assertIn("Fit is not verified", final.text)
+        self.assertIn("that isn't a verified fit for your exact equipment", final.text)
         self.assertTrue(validate_plan(final.to_dict(), [record], TOPICS))
 
     def test_pending_reply_retains_new_price_question(self):
@@ -824,7 +826,7 @@ class CatalogPlanTests(unittest.TestCase):
         plan = requested(record, ["description", "features", "price"])
         self.assertTrue(plan.limited)
         self.assertEqual(plan.status, "partial")
-        self.assertIn("answer is partial", plan.text)
+        self.assertIn("This is only part of the available information", plan.text)
         self.assertEqual(len(plan.items[0]["fields"]), 3)
         self.assertTrue(validate_plan(plan, [record], TOPICS))
 
@@ -836,7 +838,7 @@ class CatalogPlanTests(unittest.TestCase):
             {"ref": second["ref"], "fields": ["description"], "compatibility": True, "slots": {"holeDiameter": '5/8"'}},
         ])
         if plan.limited:
-            self.assertIn("Do not modify", plan.text)
+            self.assertIn("Please don't modify parts to force a fit", plan.text)
         self.assertEqual(plan.items[1]["compatibility"]["status"], "known_mismatch")
 
     def test_no_internal_status_codes_in_warm_text(self):

@@ -1,4 +1,4 @@
-import { API_BASE } from "@/lib/api";
+import { API_BASE, catalogAdminMetadata, type AdminCatalogMetadata } from "@/lib/api";
 import type { CatalogDetails, Provenance, SellingUnit } from "@/lib/catalogDetails";
 import type { MarketPrices } from "@/lib/pricing";
 
@@ -23,7 +23,7 @@ export type Accessory = CatalogDetails & {
   provenance?: Provenance;
 };
 
-export type AdminAccessory = Omit<Accessory, "price"> & {
+export type AdminAccessory = Omit<Accessory, "price"> & AdminCatalogMetadata & {
   price: number | null;
   prices: MarketPrices;
   msrps?: MarketPrices;
@@ -38,7 +38,10 @@ export async function fetchAdminAccessories(token: string): Promise<AdminAccesso
   if (!res.ok) throw new Error("Unable to load accessories. Check your admin access and retry.");
   const data = await res.json();
   if (!Array.isArray(data.items)) throw new Error("Invalid accessory response.");
-  return data.items;
+  return data.items.map((item: unknown) => {
+    if (!item || typeof item !== "object" || !("id" in item) || !Number.isSafeInteger(item.id) || !("name" in item) || typeof item.name !== "string" || !("category" in item) || typeof item.category !== "string") throw new Error("Invalid accessory response.");
+    return { ...item, ...catalogAdminMetadata(item) } as AdminAccessory;
+  });
 }
 
 export async function fetchCatalogCategories(token: string): Promise<string[]> {

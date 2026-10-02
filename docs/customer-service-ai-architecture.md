@@ -22,6 +22,49 @@ Related documents:
 - [Living regression plan](regression-test-plan.md)
 - [Backup & Records policy](records-backup-and-retention.md)
 
+## 2026-10-02 conversational answers and reviewed catalog meanings
+
+New factual replies are short narrative paragraphs rather than specification
+headings and key/value dumps. Product identity appears naturally in the answer;
+the repeated product-name link is hidden by default under **Sources** in customer
+and admin conversations. Canonical references remain stored and validated.
+Historical messages are not rewritten. Inch symbols can be spoken as inch/inches
+without changing the stored evidence. Fit limitations, unknowns, exclusions and
+the correct market amounts are not relaxed to make the wording friendlier.
+
+The optional `catalogFacts` extension separates colors, informational size
+choices, finish, scoped measurements, component materials, interface
+provides/requires/accepts statements and component inclusion/exclusion. Decimal
+measurements remain strings with explicit unit and qualifier; weight/load/stack
+values and length-unit families cannot be mixed. Legacy size-options text is
+not presented as colors.
+
+Editors share a **Reviewed product facts** section. Merely opening it does not
+change a record. Editing facts clears their reviewed flag; an operator may save
+a private draft or explicitly review them for customer answers. Only reviewed,
+validated facts appear publicly or enter AI context. Invalid restored metadata
+is excluded with a sanitized warning. The server owns review timestamps.
+Original listing text and uploaded documents are not automatically converted or
+overwritten; overlapping original display rows remain clearly marked as
+reference text, with reviewed values taking precedence. Unrelated legacy facts
+remain available.
+
+This phase does **not** create sellable variants, change cart/quote selection,
+inherit stock or prices, or claim a manufacturer-tested pairing. Typed
+non-rack interfaces provide accurate requirement statements; automated
+interface-to-interface matching and verified-pair claims remain future work.
+
+Admin reads provide a content revision. New editor creates use catalog schema
+2, and updates/deletes carry the revision originally loaded by that editor.
+Stale requests return 409 without applying changes or deleting media; drafts
+remain available until an explicit reload. Untouched schema-1 API clients remain
+compatible, but cannot overwrite an upgraded record without its current revision.
+Structured edits also require the revision even when the schema version is
+omitted. Catalog files are not rewritten by reads or startup.
+
+Validation remains local and isolated. No real document, customer conversation
+or private provenance is sent to a provider for this feature verification.
+
 ## 2026-10-01 catalog-wide answer accuracy upgrade
 
 The owner approved the accuracy-review plan explicitly for **all equipment,

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { API_BASE, resolveProductImage } from "@/lib/api";
+import { API_BASE, resolveProductImage, catalogAdminMetadata, catalogMutationPayload, isCatalogRevision, revisionConflict, revisionUnavailable, type AdminCatalogMetadata } from "@/lib/api";
 import AccessoryManager from "./AccessoryManager";
 import HeroManager from "./HeroManager";
 import CatalogBackup from "./CatalogBackup";
@@ -14,6 +14,8 @@ import CatalogOrderControls from "./CatalogOrderControls";
 import { orderByIds } from "@/lib/catalogOrder";
 import BrandLogo from "@/components/BrandLogo";
 import PhotoEditor from "@/components/PhotoEditor";
+import CatalogFactsEditor from "@/components/CatalogFactsEditor";
+import { validateCatalogFacts } from "@/lib/catalogFacts";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications, type Provenance } from "@/lib/catalogDetails";
 import { fetchCatalogCategories } from "@/lib/accessories";
@@ -21,7 +23,7 @@ import { AdminNotice, AdminSaveBar, CountryPricingInputs, MarketPriceSummary, Pr
 import { getMarketPrices, getMarketMsrps, priceInputs, type MarketPrices } from "@/lib/pricing";
 import { useUnsavedChanges } from "./useUnsavedChanges";
 
-type Product = CatalogDetails & ProductSpecifications & {
+type Product = CatalogDetails & ProductSpecifications & AdminCatalogMetadata & {
   id: number;
   slug: string;
   name: string;
@@ -77,7 +79,10 @@ async function fetchProducts(token: string): Promise<Product[]> {
 
   const data = await res.json();
   if (!Array.isArray(data.items)) throw new Error("Invalid equipment response. Please retry.");
-  return data.items as Product[];
+  return data.items.map((item: unknown) => {
+    if (!item || typeof item !== "object" || !("id" in item) || !Number.isSafeInteger(item.id) || !("name" in item) || typeof item.name !== "string" || !("category" in item) || typeof item.category !== "string") throw new Error("Invalid equipment response.");
+    return { ...item, ...catalogAdminMetadata(item) } as Product;
+  });
 }
 
 async function verifyAdminToken(token: string): Promise<void> {
@@ -91,6 +96,7 @@ async function verifyAdminToken(token: string): Promise<void> {
 
 function toFormState(product: Product): ProductForm {
   return {
+    ...catalogAdminMetadata(product),
     ...getProductSpecifications(product),
     name: product.name,
     category: product.category,
@@ -141,13 +147,21 @@ export default function AdminPage() {
   const [knowledgeDirty, setKnowledgeDirty] = useState(false);
   const [orderBusy, setOrderBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const editorDirty = activeTab === "products" ? JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps)) : childDirty;
+  const [factsTouched, setFactsTouched] = useState(false);
+  const [factsValidationAttempt, setFactsValidationAttempt] = useState(0);
+  const [reloadNeeded, setReloadNeeded] = useState(false);
+  const [editorVersion, setEditorVersion] = useState(0);
+  const editorDirty = activeTab === "products" ? factsTouched || JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps)) : childDirty;
   const dirty = editorDirty || supportDirty || knowledgeDirty;
   const busy = saving || uploading || accessoryBusy || backupBusy || recordsBusy || supportBusy || knowledgeBusy || orderBusy;
   const confirmLeave = useUnsavedChanges(authenticated && dirty, busy);
   const confirmEditorLeave = () => !busy && (!editorDirty || confirmLeave());
 
   const loadForm = (next: ProductForm) => {
+    setFactsTouched(false);
+    setFactsValidationAttempt(0);
+    setReloadNeeded(false);
+    setEditorVersion(value => value + 1);
     setForm(next);
     setBaseline(JSON.stringify(next));
     setPriceText(priceInputs(next.prices));
@@ -273,6 +287,16 @@ export default function AdminPage() {
   };
 
   const saveProduct = async () => {
+    if (selectedId && !isCatalogRevision(form.revision)) {
+      setReloadNeeded(true);
+      setMessage({ type: "error", text: revisionUnavailable });
+      return;
+    }
+    if (factsTouched && form.catalogFacts && validateCatalogFacts(form.catalogFacts).length > 0) {
+      setFactsValidationAttempt(value => value + 1);
+      setMessage({ type: "error", text: "Correct the highlighted product facts before saving. Your draft has been kept." });
+      return;
+    }
     const prices = parseMarketPrices(priceText);
     if (prices === null) {
       setMessage({ type: "error", text: priceError });
@@ -297,7 +321,7 @@ export default function AdminPage() {
 
     try {
       const payload = {
-        ...form,
+        ...catalogMutationPayload(form, selectedId !== null, factsTouched),
         name: form.name.trim(),
         category: form.category.trim(),
         prices,
@@ -319,10 +343,11 @@ export default function AdminPage() {
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409) { setReloadNeeded(true); throw new Error(revisionConflict); }
         const detail = typeof data.detail === "string" ? data.detail : "Unable to save equipment.";
         throw new Error(detail);
       }
-      const saved = data.item as Product;
+      const saved = { ...data.item, ...catalogAdminMetadata(data.item) } as Product;
 
       setProducts((current) => {
         if (selectedId) {
@@ -344,17 +369,23 @@ export default function AdminPage() {
   const deleteProduct = async () => {
     const product = products.find((item) => item.id === selectedId);
     if (!product) return;
+    if (!isCatalogRevision(form.revision)) {
+      setReloadNeeded(true);
+      setMessage({ type: "error", text: revisionUnavailable });
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
     setConfirmingDelete(false);
 
     try {
-      const res = await fetch(`${API_BASE}/api/products/${product.id}`, {
+      const res = await fetch(`${API_BASE}/api/products/${product.id}?expectedRevision=${encodeURIComponent(form.revision)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       if (!res.ok) {
+        if (res.status === 409) { setReloadNeeded(true); throw new Error(revisionConflict); }
         const data = await res.json().catch(() => ({}));
         throw new Error(typeof data.detail === "string" ? data.detail : "Unable to delete equipment.");
       }
@@ -374,6 +405,21 @@ export default function AdminPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const reloadSelectedProduct = async () => {
+    if (selectedId === null || !confirmEditorLeave()) return;
+    setSaving(true);
+    try {
+      const items = await fetchProducts(adminToken);
+      const selected = items.find(item => item.id === selectedId);
+      if (!selected) throw new Error("This item is no longer available. Your draft has been kept; return to the list when ready.");
+      setProducts(items);
+      loadForm(toFormState(selected));
+      setMessage({ type: "success", text: "Saved equipment reloaded. Review it before making new changes." });
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to reload equipment." });
+    } finally { setSaving(false); }
   };
 
   if (loading || checkingAccess) {
@@ -513,6 +559,7 @@ export default function AdminPage() {
         ) : (
         <>
         <AdminNotice message={message} />
+        {reloadNeeded ? <div className="mb-4"><button type="button" className="min-h-12 rounded-full border border-[var(--line)] px-5 py-3 text-sm" disabled={busy} onClick={reloadSelectedProduct}>Reload saved item</button><p className="mt-2 text-sm text-[var(--muted)]">Reload replaces this draft after you confirm discarding unsaved changes. Copy any edits you want to keep first.</p></div> : null}
         <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <aside className={`${showEditor ? "hidden lg:block" : ""} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
             <CatalogOrderControls catalog="products" items={products} adminToken={adminToken}
@@ -540,7 +587,7 @@ export default function AdminPage() {
               loadForm(selected ? toFormState(selected) : emptyProduct);
               setShowEditor(false);
               setMessage(null);
-            }} className="mb-5 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to equipment</button>
+            }} className="mb-5 min-h-12 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to equipment</button>
             <fieldset className="grid min-w-0 gap-5 md:grid-cols-2">
               <legend className="mb-4 text-lg font-semibold">Equipment essentials &amp; details</legend>
               <label className="block text-sm font-medium">
@@ -660,8 +707,10 @@ export default function AdminPage() {
               <ProvenanceEditor value={form.provenance} onChange={(value) => updateField("provenance", value)} />
             </fieldset>
 
+            <CatalogFactsEditor key={editorVersion} value={form.catalogFacts} category={form.category} reviewedAt={form.catalogFactsReviewedAt} validationAttempt={factsValidationAttempt} onChange={value => { setFactsTouched(true); updateField("catalogFacts", value); }} />
+
             <AdminSaveBar>
-              <button type="button" onClick={saveProduct} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+              <button type="button" onClick={saveProduct} disabled={saving} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
                 {saving ? "Saving..." : selectedId ? "Save changes" : "Create equipment"}
               </button>
               {dirty ? <span className="text-sm text-[var(--muted)]">Unsaved changes</span> : null}
@@ -672,7 +721,7 @@ export default function AdminPage() {
                   type="button"
                   onClick={() => setConfirmingDelete(true)}
                   disabled={saving}
-                  className="rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  className="min-h-12 rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
                 >
                   Delete equipment
                 </button>
@@ -683,14 +732,14 @@ export default function AdminPage() {
                     type="button"
                     onClick={deleteProduct}
                     disabled={saving}
-                    className="rounded-full bg-red-700 px-5 py-3 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
+                    className="min-h-12 rounded-full bg-red-700 px-5 py-3 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
                   >
                     Confirm delete
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmingDelete(false)}
-                    className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium"
+                    className="min-h-12 rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium"
                   >
                     Cancel
                   </button>

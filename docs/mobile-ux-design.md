@@ -8,6 +8,21 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Conversational answers and reviewed facts (2026-10-02)
+
+Use natural sentences for new assistant replies; no specification-dump headings
+or automatically repeated product-name footer. Sources remain available in a
+collapsed, keyboard/touch-accessible disclosure. Keep existing message history,
+left/right speaker alignment, quoted team replies and focus behavior.
+
+The shared reviewed-facts editor is collapsed initially and is not dirty merely
+because it was opened. Separate colors/sizes/finish, scoped measurement and
+interface rows; provide explicit review, clear confirmation, validation and
+stale-save reload. Retain drafts and use >=44px controls without 320px overflow.
+Customer details show reviewed values first while keeping clearly marked
+original listing references and unrelated specifications. Informational options
+are not purchasing controls.
+
 ### Country pricing rows (2026-10-01)
 
 Each admin market has one row: selling price and optional MSRP side by side.

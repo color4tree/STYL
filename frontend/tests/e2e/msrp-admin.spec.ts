@@ -4,11 +4,21 @@ const api = "http://127.0.0.1:8102";
 const headers = { Authorization: `Bearer ${process.env.STYL_E2E_TOKEN}` };
 type Catalog = "products" | "accessories";
 type Values = { CAD: number | null; USD: number | null };
-type Item = { id: number; name: string; prices: Values; msrps: Values; provenance?: { notes: string } };
+type Item = { id: number; name: string; prices: Values; msrps: Values; revision?: string; provenance?: { notes: string } };
 const unique = (catalog: Catalog) => `MSRP ${catalog} ${Date.now()} ${Math.random().toString(16).slice(2, 8)}`;
 const tabName = (catalog: Catalog) => catalog === "products" ? "Equipment" : "Accessories";
 const nameLabel = (catalog: Catalog) => catalog === "products" ? "Equipment name" : "Accessory name";
 const msrp = (page: Page, currency: "CAD" | "USD") => page.getByRole("textbox", { name: `${currency} MSRP`, exact: true });
+
+async function removeFixture(request: APIRequestContext, catalog: Catalog, id: number) {
+  const response = await request.get(`${api}/api/admin/${catalog}`, { headers });
+  expect(response.status()).toBe(200);
+  const item: Item | undefined = (await response.json()).items.find((value: Item) => value.id === id);
+  if (!item) return;
+  expect(item.revision).toMatch(/^[a-f0-9]{64}$/);
+  const removed = await request.delete(`${api}/api/${catalog}/${id}?expectedRevision=${item.revision}`, { headers });
+  expect(removed.status()).toBe(200);
+}
 
 async function signIn(page: Page, catalog: Catalog) {
   await page.goto("/admin");
@@ -180,7 +190,7 @@ for (const catalog of ["products", "accessories"] as const) {
       }), viewportWidth);
       expect(layout.documentWidth, JSON.stringify(layout)).toBeLessThanOrEqual(viewportWidth);
     } finally {
-      if (id !== undefined) await request.delete(`${api}/api/${catalog}/${id}`, { headers });
+      if (id !== undefined) await removeFixture(request, catalog, id);
     }
   });
 
@@ -205,7 +215,7 @@ for (const catalog of ["products", "accessories"] as const) {
       expect((await save(page, catalog, item.id)).msrps).toEqual({ CAD: 0, USD: null });
       expect((await readItem(request, catalog, item.id)).prices).toEqual({ CAD: 29.95, USD: 19.95 });
     } finally {
-      await request.delete(`${api}/api/${catalog}/${item.id}`, { headers });
+      await removeFixture(request, catalog, item.id);
     }
   });
 
@@ -295,7 +305,7 @@ for (const catalog of ["products", "accessories"] as const) {
       await expect(msrp(page, "CAD")).toHaveValue(remaining[0]?.msrps.CAD?.toFixed(2) ?? "");
       await expect(msrp(page, "USD")).toHaveValue(remaining[0]?.msrps.USD?.toFixed(2) ?? "");
     } finally {
-      await request.delete(`${api}/api/${catalog}/${item.id}`, { headers });
+      await removeFixture(request, catalog, item.id);
     }
   });
 }

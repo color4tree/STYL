@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { API_BASE, resolveProductImage } from "@/lib/api";
+import { API_BASE, resolveProductImage, catalogAdminMetadata, catalogMutationPayload, isCatalogRevision, revisionConflict, revisionUnavailable } from "@/lib/api";
 import { fetchAdminAccessories, fetchCatalogCategories, type AdminAccessory as Accessory } from "@/lib/accessories";
 import PhotoEditor from "@/components/PhotoEditor";
+import CatalogFactsEditor from "@/components/CatalogFactsEditor";
+import { validateCatalogFacts } from "@/lib/catalogFacts";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility } from "@/lib/catalogDetails";
 import { AdminNotice, AdminSaveBar, CountryPricingInputs, MarketPriceSummary, ProvenanceEditor, inputClass, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
@@ -40,6 +42,7 @@ const emptyAccessory: AccessoryForm = {
 
 function toFormState(item: Accessory): AccessoryForm {
   return {
+    ...catalogAdminMetadata(item),
     name: item.name,
     category: item.category,
     dimensions: item.dimensions,
@@ -80,11 +83,19 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   const [ordering, setOrdering] = useState(false);
   const [message, setMessage] = useState<AdminMessage | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [factsTouched, setFactsTouched] = useState(false);
+  const [factsValidationAttempt, setFactsValidationAttempt] = useState(0);
+  const [reloadNeeded, setReloadNeeded] = useState(false);
+  const [editorVersion, setEditorVersion] = useState(0);
 
-  const dirty = JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps));
+  const dirty = factsTouched || JSON.stringify(form) !== baseline || JSON.stringify(priceText) !== JSON.stringify(priceInputs(form.prices)) || JSON.stringify(msrpText) !== JSON.stringify(priceInputs(form.msrps));
   useEffect(() => { onDirtyChange(dirty); return () => onDirtyChange(false); }, [dirty, onDirtyChange]);
 
   const loadForm = (next: AccessoryForm) => {
+    setFactsTouched(false);
+    setFactsValidationAttempt(0);
+    setReloadNeeded(false);
+    setEditorVersion(value => value + 1);
     setForm(next);
     setBaseline(JSON.stringify(next));
     setPriceText(priceInputs(next.prices));
@@ -151,6 +162,16 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   };
 
   const saveAccessory = async () => {
+    if (selectedId && !isCatalogRevision(form.revision)) {
+      setReloadNeeded(true);
+      setMessage({ type: "error", text: revisionUnavailable });
+      return;
+    }
+    if (factsTouched && form.catalogFacts && validateCatalogFacts(form.catalogFacts).length > 0) {
+      setFactsValidationAttempt(value => value + 1);
+      setMessage({ type: "error", text: "Correct the highlighted product facts before saving. Your draft has been kept." });
+      return;
+    }
     const prices = parseMarketPrices(priceText);
     if (prices === null) {
       setMessage({ type: "error", text: priceError });
@@ -182,14 +203,15 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
           Authorization: `Bearer ${adminToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ...form, name: form.name.trim(), category: form.category.trim(), prices, msrps, features: form.features?.map((feature) => feature.trim()).filter(Boolean), image: form.image || null }),
+        body: JSON.stringify({ ...catalogMutationPayload(form, selectedId !== null, factsTouched), name: form.name.trim(), category: form.category.trim(), prices, msrps, features: form.features?.map((feature) => feature.trim()).filter(Boolean), image: form.image || null }),
       });
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409) { setReloadNeeded(true); throw new Error(revisionConflict); }
         throw new Error(typeof data.detail === "string" ? data.detail : "Unable to save accessory.");
       }
-      const saved = data.item as Accessory;
+      const saved = { ...data.item, ...catalogAdminMetadata(data.item) } as Accessory;
 
       setAccessories((current) =>
         selectedId ? current.map((item) => (item.id === selectedId ? saved : item)) : [...current, saved],
@@ -207,6 +229,11 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   const deleteAccessory = async () => {
     const accessory = accessories.find((item) => item.id === selectedId);
     if (!accessory) return;
+    if (!isCatalogRevision(form.revision)) {
+      setReloadNeeded(true);
+      setMessage({ type: "error", text: revisionUnavailable });
+      return;
+    }
 
     onBusyChange(true);
     setSaving(true);
@@ -214,11 +241,12 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
     setConfirmingDelete(false);
 
     try {
-      const res = await fetch(`${API_BASE}/api/accessories/${accessory.id}`, {
+      const res = await fetch(`${API_BASE}/api/accessories/${accessory.id}?expectedRevision=${encodeURIComponent(form.revision)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       if (!res.ok) {
+        if (res.status === 409) { setReloadNeeded(true); throw new Error(revisionConflict); }
         const data = await res.json().catch(() => ({}));
         throw new Error(typeof data.detail === "string" ? data.detail : "Unable to delete accessory.");
       }
@@ -240,6 +268,21 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
     }
   };
 
+  const reloadSelectedAccessory = async () => {
+    if (selectedId === null || !confirmLeave()) return;
+    setSaving(true);
+    try {
+      const items = await fetchAdminAccessories(adminToken);
+      const selected = items.find(item => item.id === selectedId);
+      if (!selected) throw new Error("This item is no longer available. Your draft has been kept; return to the list when ready.");
+      setAccessories(items);
+      loadForm(toFormState(selected));
+      setMessage({ type: "success", text: "Saved accessory reloaded. Review it before making new changes." });
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : "Unable to reload accessory." });
+    } finally { setSaving(false); }
+  };
+
   if (loading) {
     return <p className="text-[var(--muted)]">Loading accessories...</p>;
   }
@@ -247,6 +290,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
   return (
     <>
     <AdminNotice message={message} />
+    {reloadNeeded ? <div className="mb-4"><button type="button" className="min-h-12 rounded-full border border-[var(--line)] px-5 py-3 text-sm" disabled={saving || uploading || ordering} onClick={reloadSelectedAccessory}>Reload saved item</button><p className="mt-2 text-sm text-[var(--muted)]">Reload replaces this draft after you confirm discarding unsaved changes. Copy any edits you want to keep first.</p></div> : null}
     <fieldset disabled={saving || uploading || ordering} className="grid min-w-0 gap-8 lg:grid-cols-[0.8fr_1.2fr]">
       <aside className={`${showEditor ? "hidden lg:block" : ""} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4`}>
         <p className="mb-3 text-sm text-[var(--muted)]">Accessories ({accessories.length})</p>
@@ -270,7 +314,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
       </aside>
 
       <section className={`${showEditor ? "" : "hidden lg:block"} min-w-0 rounded-[28px] border border-[var(--line)] bg-white/80 p-4 sm:p-6`}>
-        <button type="button" onClick={backToList} className="mb-5 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to accessories</button>
+        <button type="button" onClick={backToList} className="mb-5 min-h-12 rounded-full border border-[var(--line)] px-4 py-2 text-sm lg:hidden">← Back to accessories</button>
         <fieldset className="grid min-w-0 gap-5 md:grid-cols-2">
           <legend className="mb-4 text-lg font-semibold">Accessory essentials</legend>
           <label className="block text-sm font-medium">
@@ -298,6 +342,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
           </label>
 
         </fieldset>
+        <CatalogFactsEditor key={editorVersion} value={form.catalogFacts} category={form.category} reviewedAt={form.catalogFactsReviewedAt} validationAttempt={factsValidationAttempt} onChange={value => { setFactsTouched(true); updateField("catalogFacts", value); }} />
         <fieldset className="mt-6 grid min-w-0 gap-5 border-t border-[var(--line)] pt-5 md:grid-cols-2">
           <legend className="text-lg font-semibold">Specifications &amp; contents</legend>
           <label className="block text-sm font-medium">
@@ -380,7 +425,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
         </div>
 
         <AdminSaveBar>
-          <button type="button" onClick={saveAccessory} disabled={saving} className="rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+          <button type="button" onClick={saveAccessory} disabled={saving} className="min-h-12 rounded-full bg-[var(--ink)] px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
             {saving ? "Saving..." : selectedId ? "Save changes" : "Create accessory"}
           </button>
           {dirty ? <span className="text-sm text-[var(--muted)]">Unsaved changes</span> : null}
@@ -391,7 +436,7 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
               type="button"
               onClick={() => setConfirmingDelete(true)}
               disabled={saving}
-              className="rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
+              className="min-h-12 rounded-full border border-red-300 px-5 py-3 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-60"
             >
               Delete accessory
             </button>
@@ -402,14 +447,14 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
                 type="button"
                 onClick={deleteAccessory}
                 disabled={saving}
-                className="rounded-full bg-red-700 px-5 py-3 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
+                className="min-h-12 rounded-full bg-red-700 px-5 py-3 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
               >
                 Confirm delete
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(false)}
-                className="rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium"
+                className="min-h-12 rounded-full border border-[var(--line)] px-5 py-3 text-sm font-medium"
               >
                 Cancel
               </button>

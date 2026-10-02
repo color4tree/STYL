@@ -17,7 +17,7 @@ type Message = {
   references: { type: string; id: number; label: string; url: string }[];
 };
 type Thread = {
-  id: string; processing: boolean; needsHuman: boolean; needsHumanQuestions?: number;
+  id: string; currency: string; processing: boolean; needsHuman: boolean; needsHumanQuestions?: number;
   messages: Message[];
 };
 type Payload = { text: string; clientMessageId: string; itemRef?: string; pageContextVersion: string };
@@ -30,7 +30,7 @@ const contactForm = (page: Page) => panel(page).getByRole("form", { name: "Follo
 const guestHeaders = (guest: Guest) => ({ Authorization: `Bearer ${guest.token}` });
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const compatible = {
-  uprightSize: "3 × 3 in / 75 × 75 mm", holeDiameter: "1 in", holeSpacing: "", models: "", limitations: "",
+  uprightSize: "3 × 3 in / 75 × 75 mm", holeDiameter: '1"', holeSpacing: "", models: "", limitations: "",
 };
 
 // SUP-027/028: real isolated catalog/chat persistence with the runner's mock provider.
@@ -143,8 +143,15 @@ async function ask(page: Page, request: APIRequestContext, guest: Guest, text: s
 
 async function citedAnswer(page: Page, result: Awaited<ReturnType<typeof ask>>, item: Item) {
   expect(result.reply.role).toBe("assistant");
-  expect(result.reply.references).toContainEqual(expect.objectContaining({ type: item.itemType, id: item.id, url: href(item) }));
-  await expect(result.bubble.getByRole("link", { name: item.name, exact: true })).toHaveAttribute("href", href(item));
+  expect(result.reply.references).toContainEqual(expect.objectContaining({ type: item.itemType, id: item.id, label: item.name, url: href(item) }));
+  const sources = result.bubble.locator("details").filter({ has: page.locator("summary", { hasText: /^Sources$/ }) });
+  await expect(sources.locator("summary")).toBeVisible();
+  await expect(sources).not.toHaveAttribute("open");
+  const link = sources.getByRole("link", { name: item.name, exact: true, includeHidden: true });
+  await expect(link).toHaveAttribute("href", href(item));
+  await expect(link).toBeHidden();
+  expect(await result.bubble.innerText()).not.toContain(item.name);
+  expect(result.reply.text).toMatch(new RegExp(escapeRegExp(item.name.replace(/^STYL /, "")), "i"));
   await expect(panel(page).getByRole("button", { name: /Ask for human help|Refresh conversation/ })).toHaveCount(0);
 }
 
@@ -169,7 +176,7 @@ test("SUP-027 CAT-002: known price survives unknown weight as an assistant parti
   await citedAnswer(page, partial, catalog.bench);
   expect(partial.reply.text).toContain("314.25");
   expect(partial.reply.text).toMatch(/weight/i);
-  expect(partial.reply.text).toMatch(/team|not (?:listed|available|confirmed|provided|published)|unknown|cannot confirm|can't confirm/i);
+  expect(partial.reply.text).toMatch(/I can't confirm the weight yet/i);
   expect(partial.reply.text).not.toMatch(/\b(?:50|12)\s*kg/i);
   expect(partial.saved.needsHuman).toBe(true);
   expect(partial.question.needsHuman).toBe(true);
@@ -191,7 +198,7 @@ test("SUP-027 CAT-003: known own weight never becomes an unknown safe load or we
   expect(result.reply.text).toMatch(/50\s*kg/i);
   expect(result.reply.text).toMatch(/weigh(?:t|s)/i);
   expect(result.reply.text).toMatch(/load|capacity/i);
-  expect(result.reply.text).toMatch(/team|not (?:listed|available|confirmed|provided|published)|unknown|cannot confirm|can't confirm/i);
+  expect(result.reply.text).toMatch(/I can't confirm the load rating yet/i);
   expect(result.reply.text).not.toMatch(/(?:capacity|safe load|load limit|maximum load)\s*(?:is|of|:|=)?\s*50\s*kg/i);
   expect(result.saved.needsHuman).toBe(true);
   expect(result.question.needsHuman).toBe(true);
@@ -240,14 +247,15 @@ for (const kind of ["rack", "bar"] as const) {
     const pending = await ask(page, request, guest, `Will ${item.name} fit my 3x3 rack?`);
     expect(pending.reply.role).toBe("assistant");
     expect(pending.reply.text).toMatch(/hole|diameter/i);
-    await history(page).getByRole("link", { name: catalog.bench.name, exact: true }).last().click();
+    await bench.bubble.locator("summary", { hasText: /^Sources$/ }).click();
+    await bench.bubble.getByRole("link", { name: catalog.bench.name, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${href(catalog.bench)}$`));
     await expect(panel(page).getByLabel("Current page item", { exact: true })).toHaveText(`About: ${catalog.bench.name}`);
     const afterNavigation = await ask(page, request, guest, "1 inch");
     expect(afterNavigation.payload.itemRef).toBe(itemRef(catalog.bench));
     expect(afterNavigation.payload.pageContextVersion).not.toBe(pending.payload.pageContextVersion);
     expect(afterNavigation.reply.references).not.toContainEqual(expect.objectContaining({ type: item.itemType, id: item.id }));
-    expect(afterNavigation.reply.text).not.toContain(item.name);
+    expect(afterNavigation.reply.text).not.toMatch(new RegExp(escapeRegExp(item.name.replace(/^STYL /, "")), "i"));
     expect(afterNavigation.reply.text).not.toMatch(/(?:fits?|compatible|match(?:es)?)\s+(?:with\s+)?your\s+(?:3\s*[×x]\s*3\s+)?rack/i);
     expect(afterNavigation.reply.text).not.toMatch(/3\s*[×x]\s*3/);
   });
@@ -258,7 +266,9 @@ test("SUP-027 CAT-007: a compound two-product color question preserves each prod
   const result = await ask(page, request, guest, `What are the colors of ${catalog.bench.name} and ${catalog.rack.name}?`);
   await citedAnswer(page, result, catalog.bench);
   await citedAnswer(page, result, catalog.rack);
-  const ordered = [catalog.bench, catalog.rack].map((item) => ({ item, index: result.reply.text.indexOf(item.name) }))
+  const ordered = [catalog.bench, catalog.rack].map((item) => ({
+    item, index: result.reply.text.toLowerCase().indexOf(item.name.replace(/^STYL /, "").toLowerCase()),
+  }))
     .sort((left, right) => left.index - right.index);
   expect(ordered.every(({ index }) => index >= 0)).toBe(true);
   for (const [index, entry] of ordered.entries()) {
@@ -269,4 +279,54 @@ test("SUP-027 CAT-007: a compound two-product color question preserves each prod
   }
   expect(result.reply.text).not.toContain(catalog.bar.colourOptions);
   expect(result.saved.needsHuman).toBe(false);
+});
+
+test("SUP-027 CAT-008: customer and admin read the same price and hole narrative with collapsed canonical sources", async ({ page, request, catalog }) => {
+  const item = catalog.rack;
+  const guest = await start(page, item);
+  const result = await ask(page, request, guest, "What are its price and hole diameter?");
+  await citedAnswer(page, result, item);
+  expect(result.saved.currency).toMatch(/^(?:CAD|USD)$/);
+  const expected = `For the ${item.name.replace(/^STYL /, "").toLowerCase()}, the current price is ${result.saved.currency} $628.50. The mounting holes need to be 1 inch in diameter. The listed upright size is 3 × 3 in / 75 × 75 mm.`;
+  expect(result.reply.text).toBe(expected);
+  expect(result.reply.references).toEqual([{ type: "product", id: item.id, label: item.name, url: href(item) }]);
+  expect(result.saved.needsHuman).toBe(false);
+  await expect(result.bubble.locator("p").nth(1)).toHaveText(expected, { useInnerText: true });
+  expect(await result.bubble.innerText()).not.toMatch(/Here's|Here is|Price:|Hole diameter:|["″”]/);
+  await result.bubble.locator("summary", { hasText: /^Sources$/ }).click();
+  await expect(result.bubble.getByRole("link", { name: item.name, exact: true })).toBeVisible();
+  await result.bubble.locator("summary", { hasText: /^Sources$/ }).click();
+  expect(await result.bubble.innerText()).not.toContain(item.name);
+
+  const operator = await page.context().newPage();
+  try {
+    await operator.goto("/admin");
+    await operator.getByLabel("Admin token", { exact: true }).fill(process.env.STYL_E2E_TOKEN!);
+    await operator.getByRole("button", { name: "Sign in", exact: true }).click();
+    await operator.getByRole("button", { name: "Customer support", exact: true }).click();
+    await expect(operator.getByRole("heading", { name: "Customer support inbox", exact: true })).toBeVisible();
+    await operator.getByRole("button").filter({ hasText: `Guest ${guest.id.slice(0, 8)}` }).click();
+    const bubble = operator.locator(`#admin-support-message-${result.reply.id}`);
+    await expect(bubble.getByText("STYL Assistant", { exact: true })).toBeVisible();
+    await expect(bubble.locator("p").nth(1)).toHaveText(expected, { useInnerText: true });
+    await expect(operator.locator(`#admin-support-message-${result.question.id}`)).toContainText("Answered by STYL Assistant");
+    const sources = bubble.locator("details").filter({ has: operator.locator("summary", { hasText: /^Sources$/ }) });
+    await expect(sources.locator("summary")).toBeVisible();
+    await expect(sources).not.toHaveAttribute("open");
+    await expect(sources.getByRole("link", { name: item.name, exact: true, includeHidden: true })).toBeHidden();
+    expect(await bubble.innerText()).not.toContain(item.name);
+    await sources.locator("summary").click();
+    await expect(sources.getByRole("link", { name: item.name, exact: true })).toHaveAttribute("href", href(item));
+    await expect(sources.getByRole("link", { name: item.name, exact: true })).toBeVisible();
+    await sources.locator("summary").click();
+    expect(await bubble.innerText()).not.toContain(item.name);
+  } finally {
+    await operator.close();
+  }
+  await page.reload();
+  await page.getByRole("button", { name: /^Ask STYL chat/ }).click();
+  const restored = history(page).locator(`#support-message-${result.reply.id}`);
+  await expect(restored.locator("p").nth(1)).toHaveText(expected, { useInnerText: true });
+  await expect(restored.locator("details")).not.toHaveAttribute("open");
+  expect((await thread(request, guest)).messages).toEqual(result.saved.messages);
 });

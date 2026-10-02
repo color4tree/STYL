@@ -350,7 +350,10 @@ export default function SupportConversation({ visible, onActivity, onMinimize, p
               <p className="text-xs font-semibold">{message.role === "assistant" ? "STYL Assistant" : message.role === "human" ? "STYL team" : message.role === "customer" ? "You" : "Support status"}</p>
               {message.role === "human" && message.replyTo ? <SupportQuestionQuote question={message.replyTo} /> : null}
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">{messageText(message)}</p>
-              {message.references.filter((reference) => sourceUrl(reference.url)).map((reference, index) => <Link key={`${reference.type}-${reference.id}-${index}`} href={reference.url} className="mt-2 block min-h-11 break-words py-2 text-sm underline">{reference.label}</Link>)}
+              {message.references.some((reference) => sourceUrl(reference.url)) ? <details className="mt-2 text-xs text-[var(--muted)]">
+                <summary className="min-h-11 w-fit cursor-pointer py-3">Sources</summary>
+                {message.references.filter((reference) => sourceUrl(reference.url)).map((reference, index) => <Link key={`${reference.type}-${reference.id}-${index}`} href={reference.url} className="block min-h-11 break-words py-2 text-sm underline">{reference.label}</Link>)}
+              </details> : null}
             </article>) : <p className="text-sm text-[var(--muted)]">How can we help you today?</p>}
           </div>
           {unread ? <button type="button" className={button} onClick={() => { if (history.current) history.current.scrollTop = history.current.scrollHeight; nearBottom.current = true; unreadMessages.current.clear(); setUnread(0); }}>Jump to latest messages</button> : null}

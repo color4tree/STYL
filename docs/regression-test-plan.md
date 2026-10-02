@@ -550,8 +550,23 @@ content with private credentials and no billing upgrade.
 | SUP-026 | P0 | Omitted STYL, common short names/aliases and minor alphabetic typos resolve only confidently; explicit other brands and numeric near-SKUs never substitute. Ambiguity clarifies. Verified product/accessory detail registers an About context; explicit named item overrides it. Capture itemRef in message/retry identity; navigating/late fetch cannot retarget pending work. Non-detail/unavailable/draft views clear it, while general service questions ignore stale page references. | A: B-CATALOG-ANSWERS/B-SUPPORT-AI and [detail context](../frontend/tests/e2e/support-context.spec.ts) CTX-001..011; physical navigation/keyboard M |
 | SUP-027 | P0 | Generic fact plans cover every useful public catalog field across equipment/accessories, not one example product. Preserve known color/material/price/weight/inclusions/MSRP and per-component values beside unknown/conflicted fields. Direct requirement grammar variants return listed facts without asking for a customer model. Do not promote negated/historical/hypothetical prose, another component's weight, a finish into available-color choices, or hole size into pin dimensions. Validate source/field/value/text equality before and during publication; partial facts retain only necessary team attention. | A: [catalog planner](../backend/tests/test_catalog_plans.py), [adapter benchmark](../backend/tests/test_answer_planning.py), [publication](../backend/tests/test_catalog_plan_publication.py), [customer cases](../frontend/tests/e2e/catalog-answers.spec.ts) CAT-001..004/007; owner-labeled real-customer accuracy M |
 | SUP-028 | P0 | Pending measurements are tied to product/request and transient pageContextVersion. Same-page partial "3x3" then "1 inch" completes only that intended fit check; navigation, new questions without jobs, targeted team replies and 30-minute inactivity prevent old slot reuse. Retries preserve captured stamp and do not retarget accepted work. Keep nominal/physical measurements distinct and never claim tested fit without evidence. Schema-four job traces remain private and backup-safe; legacy unstamped receipt identity stays stable. | A: [state/migration](../backend/tests/test_answer_plan_state.py), B-CATALOG-ANSWERS/B-SUPPORT-AI, CAT-005/006 and CTX-012/013; physical back/forward/keyboard checks M |
+| SUP-029 | P1 | New answers use narrative sentences without a spec-sheet preamble or repeated visible product-name footer. Customer/admin Sources are collapsed and keyboard-accessible; API references stay canonical. Keep exact price, units, exclusions, uncertainty and fit limits. Old messages are not rewritten. | A: [narrative tests](../backend/tests/test_narrative_answers.py), E-SUPPORT/CAT-008; real conversational-quality review M |
+| SUP-030 | P0 | Reviewed catalogFacts improve meaning, not selling behavior: size choices never become colors or bundled contents; scoped dimensions stay distinct; interface kind/role/operator/limitations remain qualified; incomplete or unreviewed facts cannot invent values. Typed equivalences supersede only corresponding legacy interpretation. | A: [typed answers](../backend/tests/test_typed_catalog_answers.py), [API-to-chat flow](../backend/tests/test_catalog_facts_flow.py) FACT-015 |
 
 ## 9. Customer end-user test catalog
+
+Catalog-schema extension **SYS-024 / ADM-015 / USR-020 (P0):** optional
+reviewed-facts editing and public display are tested in
+[test_catalog_schema.py](../backend/tests/test_catalog_schema.py),
+[catalog-facts.test.mjs](../frontend/tests/catalog-facts.test.mjs) and
+[catalog-facts.spec.ts](../frontend/tests/e2e/catalog-facts.spec.ts). Check
+read-only legacy loading, omission versus null, no automatic data migration,
+decimal strings/unit families, strict fields, reviewed-only public data,
+server review timestamps, revision CAS/409 before mutation/deletion, draft
+recovery and 320px layouts. Preserve exact original listing text/source files;
+unparsed overlapping text remains a labeled reference, not silently dropped.
+New editor writes upgrade records to schema 2; legacy schema-1 compatibility
+does not allow stale clients to overwrite an upgraded record.
 
 | ID | Priority | Workflow | Expected user experience | Coverage |
 | --- | --- | --- | --- | --- |

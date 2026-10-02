@@ -1,6 +1,104 @@
 # STYL project history and handoff
 
-Last recorded: 2026-10-01
+Last recorded: 2026-10-02
+
+## Production/main confirmation and chatbot development branch - 2026-10-02
+
+The owner requested a fresh production/main comparison before publishing all
+current AI work and documents on `STYL-chatbot-development`.
+
+Read-only live inspection confirmed production Git HEAD
+`3ead5c679db41be21c1d5296a05df295826a8714`, with no tracked content changes.
+The two deployment shell scripts retain intentional executable-mode differences.
+All six application/proxy/backup/report/GeoIP services or timers were active.
+Public health returned 200; `/support` and `/api/support/config` returned 404.
+
+Local and remote main both point to
+`80e68f53d56d0402ed071fd6c5e3f5759b9eb566`. The only difference from the deployed
+commit is this deployment-history document: runtime application and deployment
+source content match. Main and production were not reset, advanced, restarted
+or redeployed to manufacture an identical SHA.
+
+The new branch was created from the existing AI branch at `e7aba06`. Its pending
+33-file backend/frontend candidate exactly matched the previously verified
+SHA-256 `da48b0a235ed6caa42cb88e0e8a99855f86d4b37dd587b8a3b3c39a83190752c`;
+the prior 883 backend, 70 frontend-unit and 538 browser passes therefore remain
+applicable without rerunning unchanged application suites. This publication also
+includes the AI design/recommendation documents already in the branch history.
+
+Owner-edited product/accessory/home JSON, credentials, private mirrors, SQLite
+stores, backups, runtime helpers and test artifacts are excluded. Common
+credential formats were checked in the outgoing working files and 109 historical
+source/document blobs. This is a publication-hygiene check, not a new security
+certification. The old AI branch remains as a checkpoint.
+
+## Conversational replies and reviewed catalog facts - 2026-10-02 UTC
+
+The owner requested natural dialogue instead of copied specification lists,
+without a repeated product-name footer, and approved the next schema phase only
+where it improves AI input. Selling behavior must remain unchanged. Work stays
+on the local AI branch; main/production were not touched.
+
+New replies are concise sentence paragraphs. Displayed inch symbols become
+inch/inches while underlying evidence remains unchanged. Customer and admin
+source links are collapsed under Sources; canonical references and old message
+text remain stored. Compatibility qualifications, prices, missing information,
+component exclusions and unresolved exact fit are preserved rather than softened.
+
+Implemented optional merchant-reviewed catalogFacts: separate colors/size
+information/finish, scoped decimal measurements, component materials, interface
+kind/role/operator/limitations and package inclusion/exclusion. The shared editor
+does not dirty or migrate a record merely on opening. Editing clears review;
+unreviewed drafts stay private. Reviewed data improves public details and chat,
+while original overlapping listing text remains explicitly labeled reference
+content rather than being silently discarded. No sellable variants, price/stock
+inheritance, option purchase controls or automated tested-pair claims were added.
+
+The local-mirror socket example previously presented "Size options: 34 mm and
+36 mm" as colors. Those explicit size labels now remain size information, not
+color or a promise that both sizes are included. Generic width questions can
+return separately labeled rack/Smith-bar widths; shaft/hole and product/stack/load
+meanings remain separate.
+
+Catalog schema 2 writes use server-computed content revisions. PUT and DELETE
+reject stale/missing revisions before changes or knowledge invalidation, retain
+drafts and offer explicit reload. Untouched legacy schema-1 API behavior remains
+compatible, but cannot overwrite an upgraded item without its revision. Review
+timestamps are server-managed. New typed/root shapes are strict, decimals remain
+strings, invalid reviewed metadata logs a sanitized warning, and unchanged legacy
+text survives metadata-only saves. Unique temporary files and fsync strengthen
+atomic persistence; a post-replacement directory-sync limitation is logged rather
+than falsely reporting that a committed save failed.
+
+Integration fixes preserved legacy weight/stack/pin/unknown-field behavior and
+public-safe structured fields, without forwarding arbitrary private nested keys.
+Provider context is limited to applicable new field keys, preserving the existing
+12,000-byte context regression. A product reload action initially rendered in the
+sign-in form was moved into the authenticated editor. Test fixtures were corrected
+to use existing OS-temp isolation, required API identity fields and comparable
+before/after source-index metadata.
+
+The active local catalog was copied to the protected
+`%LOCALAPPDATA%\STYL\CatalogMirrors\before-reviewed-facts-20261002` directory.
+All three active JSON files compared byte-identical after the new API started.
+No real record was automatically upgraded or reviewed. The exact reported hole
+question returned a narrative answer with a retained canonical reference; only
+the new verification thread was closed.
+
+Focused tests passed: 74 combined narrative/schema/typed-flow cases, 15 new
+desktop/mobile browser executions (1.2m), and the final full backend baseline
+of **883 tests** (193.731s). Frontend units: **70 passed** (1.423s); lint/type/build
+had zero errors and four existing image warnings. The final complete browser
+baseline passed **538 executions**, exit 0, **39.0m**, across all three configured
+desktop/mobile projects. Physical-device/assistive-tech behavior and an
+owner-labeled real-customer language benchmark remain separate checks.
+
+Candidate: base `e7aba06c433aea45323a893b349fe66a37287c6c` plus 33 changed
+backend/frontend source/test/config files, excluding owner catalog data. Sorted
+path/NUL/content/NUL SHA-256:
+`da48b0a235ed6caa42cb88e0e8a99855f86d4b37dd587b8a3b3c39a83190752c`.
+No provider traffic, actual customer-data transmission, commit, push or
+deployment occurred in this phase.
 
 ## Shared non-AI release merged back; AI remains isolated - 2026-10-02 UTC
 
