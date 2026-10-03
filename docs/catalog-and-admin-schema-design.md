@@ -15,6 +15,21 @@ supersede the historical single-price and currency/publication holds below.
 The broader unified schema/SKU/storage migration remains a target design;
 see [README](../README.md) for current implementation behavior.
 
+Brand implementation update (2026-10-02): both existing JSON catalogs now support
+optional `brand: string | null` (maximum 200 characters), editable alongside
+name/category. Stored text is trimmed; explicit null/blank clears it and omitted
+updates preserve it. Public cards/details and admin lists show brand first, then
+category with a 12px gap and no dot (`STYL   Benches`); missing brands show only
+category. Unknown legacy brands remain unset. This small
+current-model field does not implement the future `brandId` reference table or
+configurable brand editor described below.
+
+The owner explicitly approved moving a leading standalone STYL token out of
+existing titles into `brand: "STYL"`. The offline
+[migration](../backend/scripts/migrate_catalog_brands.py) uses verified backups,
+preserves all other fields/links, and rejects empty names or conflicting brands.
+It is not a general import inference policy or an on-read/on-save rewrite.
+
 ## 1. Decisions and scope
 
 ### 1.1 Confirmed requirements
@@ -1151,6 +1166,8 @@ old cart identities for re-selection rather than silently binding the wrong item
 
 Do not automatically parse/infer units, package counts, model compatibility, brand,
 condition, or timestamps merely to satisfy target required fields.
+The explicitly approved STYL prefix cleanup above is the sole current exception
+for brand extraction; do not assign STYL to other imports.
 
 ## 17. Delivery stages
 

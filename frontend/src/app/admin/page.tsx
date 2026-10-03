@@ -11,6 +11,7 @@ import AnalyticsManager from "./AnalyticsManager";
 import CatalogOrderControls from "./CatalogOrderControls";
 import { orderByIds } from "@/lib/catalogOrder";
 import BrandLogo from "@/components/BrandLogo";
+import CatalogCategory from "@/components/CatalogCategory";
 import PhotoEditor from "@/components/PhotoEditor";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility, getProductSpecifications, productSpecificationFields, stockStatuses, type CatalogDetails, type ProductSpecifications, type Provenance } from "@/lib/catalogDetails";
@@ -49,6 +50,7 @@ const adminTabs: { id: AdminTab; label: string; heading: string }[] = [
 const emptyProduct: ProductForm = {
   ...getProductSpecifications({}),
   name: "",
+  brand: "",
   category: "",
   price: null,
   prices: { CAD: null, USD: null },
@@ -91,6 +93,7 @@ function toFormState(product: Product): ProductForm {
   return {
     ...getProductSpecifications(product),
     name: product.name,
+    brand: product.brand ?? "",
     category: product.category,
     price: product.price,
     prices: getMarketPrices(product),
@@ -493,7 +496,7 @@ export default function AdminPage() {
                     <img src={resolveProductImage(product.image)} alt={product.name} className="h-14 w-14 rounded-xl object-cover" />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold [overflow-wrap:anywhere]">{product.name}</div>
-                      <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">{product.category}</div>
+                      <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-[var(--muted)]"><CatalogCategory item={product} /></div>
                       <MarketPriceSummary prices={getMarketPrices(product)} msrps={getMarketMsrps(product)} />
                       <div className="mt-1 text-xs text-[var(--muted)]">{product.publicationStatus === "draft" ? "Draft" : "Published"}</div>
                     </div>
@@ -533,6 +536,12 @@ export default function AdminPage() {
                   {form.category && !categories.includes(form.category) ? <option value={form.category}>{form.category} (existing)</option> : null}
                   {categories.map((category) => <option key={category} value={category}>{category}</option>)}
                 </select>
+              </label>
+
+              <label className="block text-sm font-medium md:col-span-2">
+                Brand (optional)
+                <input value={form.brand ?? ""} onChange={(event) => updateField("brand", event.target.value)} maxLength={200}
+                  className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3" placeholder="STYL" />
               </label>
 
               <CountryPricingInputs prefix="product" prices={priceText} msrps={msrpText} onPricesChange={setPriceText} onMsrpsChange={setMsrpText} />

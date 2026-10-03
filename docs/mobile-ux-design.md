@@ -8,6 +8,16 @@ Baseline: Repository commit `334d320`
 
 Scope: Responsive web experience, not a native app
 
+### Optional catalog brand (2026-10-02)
+
+Equipment/accessory cards and detail pages show brand first, then category above
+the unchanged name heading (`STYL   Benches`). Use a 12px CSS gap without a dot;
+missing brands show category alone. Keep long brand text
+wrapping inside the card/detail column on desktop and phones, without ellipsis
+or page overflow. Both admin editors expose a labeled optional Brand input
+(200-character limit); lists use the same category/brand label. Country pricing,
+compact disclosure controls and title links retain their existing behavior.
+
 ### Country pricing rows (2026-10-01)
 
 Each admin market has one row: selling price and optional MSRP side by side.

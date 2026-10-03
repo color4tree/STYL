@@ -13,6 +13,7 @@ import CartFeedback from "./CartFeedback";
 import AddToCartButton from "./AddToCartButton";
 import PhotoGallery from "./PhotoGallery";
 import CatalogPrice from "./CatalogPrice";
+import CatalogCategory from "./CatalogCategory";
 import { CompatibilityDetails } from "./Compatibility";
 
 export default function CatalogDetail({ itemType, identifier }: { itemType: AnalyticsItemType; identifier?: string }) {
@@ -81,7 +82,7 @@ export default function CatalogDetail({ itemType, identifier }: { itemType: Anal
         <section data-analytics-event="item_detail_open" data-analytics-item-id={item.id} data-analytics-item-type={itemType}
           className={`grid grid-cols-1 gap-6 rounded-3xl border border-[var(--line)] bg-white/70 p-4 lg:gap-10 lg:p-8 ${photos.length ? "lg:grid-cols-[1.1fr_0.9fr]" : ""}`}>
           <div className={`min-w-0 ${photos.length ? "lg:col-start-2 lg:row-start-1" : ""}`}>
-            <p className="text-sm text-[var(--muted)]">{item.category}</p>
+            <p className="break-words text-sm text-[var(--muted)]"><CatalogCategory item={item} /></p>
             <h1 data-analytics-identity className="mt-2 break-words text-3xl font-semibold tracking-tight lg:text-5xl">{item.name}</h1>
             <CatalogPrice price={item.price} currency={item.currency} msrp={item.msrp} sellingUnit={item.sellingUnit} className="mt-4 text-2xl" />
             {item.packageQuantity ? <p className="mt-2 text-sm">{item.packageQuantity} {item.packageQuantity === 1 ? "piece" : "pieces"} per {saleUnitLabel(item.sellingUnit) || "sale unit"}.</p> : null}

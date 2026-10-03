@@ -2,7 +2,7 @@
 
 Version: 1.0
 
-Updated: 2026-09-28
+Updated: 2026-10-02
 
 Scope: System behavior, admin workflows, and customer experience on desktop and
 mobile. This is an expandable test catalog and execution/sign-off process.
@@ -72,6 +72,7 @@ These rules supersede earlier requirements when they conflict:
 | Publication | New Product and Accessory default to Draft; existing Product lifecycle is retained and Accessories gain equivalent controls/filtering |
 | Legacy status | Records without a publication status retain their existing published behavior; unrelated updates do not unpublish them |
 | Categories | One controlled source for both forms; normalize Bench to Benches and case/spacing without a broad taxonomy redesign |
+| Catalog brand | Optional text, at most 200 characters, on equipment/accessories. Trim on save; omitted updates preserve, null/blank clears. Cards/details/admin lists show Brand first then Category with a 12px gap, no dot; missing brand shows category alone. Legacy names/brands are not inferred on reads or saves |
 | Technical content | Separate descriptions, public use, features, included contents, selling unit, finish/colour, compatibility, and optional weight |
 | Captured date | Private date-only `YYYY-MM-DD`; no timezone conversion or day shift |
 | Home banner | Independently editable text and image; no product selector, price field, price preview, or automatic price display |
@@ -140,6 +141,9 @@ Use these short references in the case tables:
 | B-BACKUP | [test_catalog_backup.py](../backend/tests/test_catalog_backup.py) | Authenticated complete ZIP, strict source reads, locks, private scope, checksum/path/size rejection, standalone cold restore and a fresh API on recovered data |
 | B-ORDER | [test_catalog_order.py](../backend/tests/test_catalog_order.py) | Protected full-permutation ordering, current-order conflict checks, field preservation, market filtering and backup sequence preservation |
 | B-MSRP | [test_catalog_msrp.py](../backend/tests/test_catalog_msrp.py) | Optional regional MSRP validation/persistence/selection, legacy/partial/clear semantics and accessory detail access/privacy/visibility |
+| B-BRAND | [test_catalog_brand.py](../backend/tests/test_catalog_brand.py) | Optional brand validation/create/update/clear, legacy/no-read-write semantics, market/privacy boundaries, dry-run/backed-up prefix migration, conflicts and unrelated-field preservation |
+| U-BRAND | [public-catalog.test.mjs](../frontend/tests/public-catalog.test.mjs) | Missing/null/blank brand compatibility, invalid public brand rejection, escaped brand-first shared label with no dot |
+| E-BRAND | [catalog-brand.spec.ts](../frontend/tests/e2e/catalog-brand.spec.ts) | Both admin editors save/reload/clear brand, retain dirty/failed edits, and show category/brand on cards/details without long-brand overflow across all configured browser projects |
 | B-HOME | [test_hero_engineering.py](../backend/tests/test_hero_engineering.py) | Engineering schema/defaults/partial updates, auth, corruption/write failure, shared image/poster retention |
 | B-RECORDS | [test_records.py](../backend/tests/test_records.py) | Private consistent ZIP/cold restore, auth, checksum/path rejection, saved-copy verification, exact source removal, preserved new/changed/live records, interrupted cleanup, archive deletion and no age expiry |
 | E-RECORDS | [records.spec.ts](../frontend/tests/e2e/records.spec.ts) | Protected admin create/download/verify/optional cleanup, separate server ZIP deletion, retry/busy/dirty guards and responsive behavior |
@@ -331,6 +335,28 @@ later with mail disabled: no age-based business/history/backup deletion.
 Coverage B-RECORDS/B-AN/B-REPORT/E-RECORDS; actual production log migration,
 OS permissions/signals, large-download capacity and off-server DR remain M.
 
+Catalog brand extension **SYS-024 (P1)**: with isolated equipment/accessory fixtures,
+create with missing/null/blank/trimmed/200-character brand; update with omitted,
+changed and cleared brand; reject non-string and 201-character values without
+writing. Reload admin and public list/detail under CAD/USD. Brand is public but
+provenance and full price maps stay private; drafts/missing prices stay hidden.
+Legacy reads do not rewrite storage or infer brand from names. Selection/cart
+responses retain their existing minimal shape (neither category nor brand).
+Verify optional brand survives byte-preserving backup/restore alongside all
+other fields. Coverage A: B-BRAND, B-BACKUP, U-BRAND. Cleanup: isolated directories.
+
+Migration extension **DATA-001 (P1)**: preview and apply the offline migration to
+disposable copies of both catalogs. Match only standalone leading STYL tokens
+(case-insensitive; whitespace/colon/dash separator); do not alter STYLish, STYL123
+or later occurrences. Verify exact original backups, changed count, unchanged
+IDs/slugs/order/prices/media/private/unknown fields, and no writes on second run.
+Reject empty resulting names, conflicting brand, malformed records or unavailable
+backup destination before catalog writes. Stop writers for actual application;
+cross-file interruption requires restoring the original affected files.
+Coverage A: B-BRAND for transform/dry-run/apply/backups/failure/idempotency;
+production application and interrupted-process recovery remain operational.
+Cleanup: isolated test directories; retain private real-migration backups.
+
 ### 7.2 Regional pricing and GeoIP
 
 | ID | Priority | Steps / input | Expected result | Coverage |
@@ -484,6 +510,21 @@ physical file-save dialogs and production data cleanup are not test actions.
 
 ## 9. Customer end-user test catalog
 
+Brand editor extension **ADM-015 (P1)**: on both editors open an unbranded fixture,
+enter/edit Brand, save/reload, clear/reload, cancel navigation with unsaved changes,
+and inject a failed save before retry. Blank is allowed, max length is 200, failed
+edits remain visible and saved data stays unchanged. Coverage A: E-BRAND/B-BRAND;
+desktop Chromium and phone Chromium/WebKit. Cleanup: delete isolated fixtures.
+
+Brand presentation extension **USR-020 (P1)**: browse both catalogs and each detail
+route with STYL, a 200-character unbroken brand, and no brand. Brand precedes
+category with a measured 12px gap and no dot, above the name; both wrap within
+viewport without changing heading/link identity. After clearing, show category
+alone without any brand gap/placeholder. Verify names, IDs,
+slugs, market visibility and prices remain independent. Coverage A: E-BRAND,
+U-BRAND/B-BRAND across configured desktop/phone projects; physical devices and
+screen-reader pronunciation not certified. Cleanup: isolated fixture deletion.
+
 Main release boundary **SYS-023 (P0):** [test_non_ai_release.py](../backend/tests/test_non_ai_release.py)
 requires records routes but no support/knowledge/AI modules or customer-chat routes.
 This main-only gate is not copied into the AI feature branch. Website logging
@@ -586,6 +627,7 @@ Run destructive/error-injection cases only in an isolated/staging environment.
 | New Product Draft default and Accessory parity | SYS-005/006, ADM-002 | Preserve legacy behavior and existing lifecycle |
 | Bench/Benches cleanup | SYS-007, ADM-005 | No broad taxonomy redesign |
 | Optional equipment weight | SYS-008, ADM-005 | No inferred weights |
+| Optional brand separate from product titles | SYS-024, ADM-015, USR-020, DATA-001 | Both catalog types; explicit backed-up leading-STYL migration only, no inference on ordinary reads/saves; preserve IDs, URLs and all unrelated catalog data |
 | Current versus earlier upload batches | MED-006/007, ADM-006 | Preserve failed-only retry |
 | Restore standalone banner and remove pricing | SYS-013, ADM-008, USR-008 | Product-selector banner expectation is superseded, not current |
 | Default unresolved visitor location to CAD | GEO-001/003/005/007 | Supersedes unknown/USD only; identified US/other-country selection remains USD |

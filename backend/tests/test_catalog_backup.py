@@ -60,6 +60,7 @@ class CatalogBackupTests(unittest.TestCase):
                 "id": 7, "slug": "recovery-rack", "name": "Rack", "category": "Racks",
                 "prices": {"CAD": 750.25, "USD": 600.50}, "price": 750.25, "currency": "CAD",
                 "msrps": {"CAD": 999.95, "USD": 800.25},
+                "brand": "STYL",
                 "publicationStatus": "published", "featured": True,
                 "shortDescription": "Training", "description": "Line one\n中文说明",
                 "features": ["Feature one"], "weight": "25 kg",
@@ -79,6 +80,7 @@ class CatalogBackupTests(unittest.TestCase):
             "id": 1007, "name": "Pair", "category": "Handle",
             "prices": {"CAD": 49.95, "USD": None}, "sellingUnit": "Pair", "packageQuantity": 2,
             "msrps": {"CAD": 75.25, "USD": None},
+            "brand": "Fixture brand",
             "description": "Full details", "notes": "Public use",
             "image": "/api/uploads/shared.png", "photos": ["/api/uploads/shared.png"],
         }]

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { API_BASE, resolveProductImage } from "@/lib/api";
 import { fetchAdminAccessories, fetchCatalogCategories, type AdminAccessory as Accessory } from "@/lib/accessories";
 import PhotoEditor from "@/components/PhotoEditor";
+import CatalogCategory from "@/components/CatalogCategory";
 import { CompatibilityEditor } from "@/components/Compatibility";
 import { getCatalogPhotos, getCatalogCover, emptyCompatibility } from "@/lib/catalogDetails";
 import { AdminNotice, AdminSaveBar, CountryPricingInputs, MarketPriceSummary, ProvenanceEditor, inputClass, parseMarketPrices, priceError, msrpError, type AdminMessage } from "./AdminFields";
@@ -16,6 +17,7 @@ type AccessoryForm = Omit<Accessory, "id"> & { msrps: MarketPrices };
 
 const emptyAccessory: AccessoryForm = {
   name: "",
+  brand: "",
   category: "",
   dimensions: "",
   material: "",
@@ -41,6 +43,7 @@ const emptyAccessory: AccessoryForm = {
 function toFormState(item: Accessory): AccessoryForm {
   return {
     name: item.name,
+    brand: item.brand ?? "",
     category: item.category,
     dimensions: item.dimensions,
     material: item.material,
@@ -259,8 +262,8 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
                 <img src={resolveProductImage(item.image)} alt={item.name} className="h-14 w-14 rounded-xl object-cover" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold [overflow-wrap:anywhere]">{item.name}</div>
-                  <div className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                    {item.category} · {item.publicationStatus === "draft" ? "Draft" : "Published"}
+                  <div className="mt-1 break-words text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
+                    <CatalogCategory item={item} /> · {item.publicationStatus === "draft" ? "Draft" : "Published"}
                   </div>
                   <MarketPriceSummary prices={getMarketPrices(item)} msrps={getMarketMsrps(item)} />
                 </div>
@@ -285,6 +288,11 @@ export default function AccessoryManager({ adminToken, onBusyChange, onDirtyChan
               {form.category && !categories.includes(form.category) ? <option value={form.category}>{form.category} (existing)</option> : null}
               {categories.map((category) => <option key={category} value={category}>{category}</option>)}
             </select>
+          </label>
+
+          <label className="block text-sm font-medium md:col-span-2">
+            Brand (optional)
+            <input value={form.brand ?? ""} onChange={(event) => updateField("brand", event.target.value)} maxLength={200} className={inputClass} placeholder="STYL" />
           </label>
 
           <CountryPricingInputs prefix="accessory" prices={priceText} msrps={msrpText} onPricesChange={setPriceText} onMsrpsChange={setMsrpText} />

@@ -7,6 +7,7 @@ import PhotoGallery from "@/components/PhotoGallery";
 import { CompatibilityDetails } from "@/components/Compatibility";
 import { compatibilityFields, getCatalogPhotos, saleUnitLabel, type CatalogDetails, type SellingUnit } from "@/lib/catalogDetails";
 import CatalogPrice from "./CatalogPrice";
+import CatalogCategory from "./CatalogCategory";
 import { trackAnalytics } from "@/lib/analytics";
 import type { AnalyticsItemType } from "@/lib/analyticsTypes";
 
@@ -46,7 +47,7 @@ export default function CatalogCard({ item, itemType, specifications, headingLev
   return (
     <article id={id} data-analytics-item-id={item.id} data-analytics-item-type={itemType} className="catalog-card soft-panel min-w-0 scroll-mt-32 rounded-3xl p-4 lg:scroll-mt-24 lg:p-5">
       <PhotoGallery photos={getCatalogPhotos(item)} name={item.name} item={{ itemType, itemId: item.id }} compact />
-      <p className="mt-4 min-w-0 break-words text-sm text-[var(--muted)]">{item.category}</p>
+      <p className="mt-4 min-w-0 break-words text-sm text-[var(--muted)]"><CatalogCategory item={item} /></p>
       <Heading data-analytics-identity className="mt-2 min-w-0 break-words text-2xl font-semibold">
         {href ? <Link href={href} data-analytics-action="catalog" className="hover:underline">{item.name}</Link> : item.name}
       </Heading>

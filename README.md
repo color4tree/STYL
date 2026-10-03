@@ -206,6 +206,29 @@ detail pages, managed through the shared admin media editor.
 
 ## Catalog editing and responsive experience
 
+Equipment and accessories have an optional **Brand** field (up to 200 characters).
+Both admin editors save it independently of the item name. Storefront cards,
+detail pages and admin lists show brand first, then category (`STYL   Benches`),
+with a 12px layout gap and no dot; an unset/blank brand shows
+only the category, without a placeholder or separator. Omitted API fields retain
+an existing brand; explicit null/blank clears it. Legacy records remain valid,
+and reads do not infer a brand or rewrite names.
+
+For the explicitly approved STYL title cleanup, use the offline
+[brand migration](backend/scripts/migrate_catalog_brands.py). First preview with
+`python backend\scripts\migrate_catalog_brands.py --data-dir <catalog-directory>`.
+Stop the API and other catalog writers before applying the same command with
+`--apply --backup-dir <new-private-backup-directory>`. It verifies byte-for-byte
+backups before writing. Only a leading standalone STYL token (case-insensitive,
+including whitespace/colon/dash separators) is removed and saved as `brand: STYL`.
+Unrelated titles, IDs, slugs, prices, order, media and private metadata remain
+unchanged. Empty resulting titles or conflicting brands fail for manual review;
+rerunning an already migrated catalog makes no writes. The two JSON files are
+replaced individually, not as a cross-file transaction: retain the backups and
+restore both affected originals before restarting writers if applying fails.
+This is an explicit data migration, not an automatic naming rule for future saves.
+Production use requires deployment/data-change approval and a fresh backup.
+
 Product and accessory prices accept nonnegative values with up to two decimal
 places. Admin previews, catalog prices, and cart amounts show two decimal places.
 The cart calculates line amounts and totals in cents without combining currencies.

@@ -186,6 +186,7 @@ class MarketMsrpsPayload(MarketPricesPayload):
 class CatalogIdentityPayload(BaseModel):
     name: str = Field(max_length=200)
     category: str = Field(max_length=300)
+    brand: str | None = Field(default=None, max_length=200)
     price: Price | None = None
     prices: MarketPricesPayload | None = None
     msrps: MarketMsrpsPayload | None = None
@@ -205,6 +206,11 @@ class CatalogIdentityPayload(BaseModel):
         if not value:
             raise ValueError("Name is required.")
         return value
+
+    @field_validator("brand")
+    @classmethod
+    def validate_brand(cls, value: str | None) -> str | None:
+        return (value.strip() or None) if value is not None else None
 
 
 class CatalogDetailsPayload(BaseModel):
@@ -561,6 +567,12 @@ def catalog_msrps(request: ProductPayload | AccessoryPayload, previous: dict[str
         value = getattr(request.msrps, currency)
         msrps[currency] = float(value) if value is not None else None
     return {"msrps": msrps}
+
+
+def catalog_brand(request: CatalogIdentityPayload, previous: dict[str, object]) -> dict[str, object]:
+    if "brand" not in request.model_fields_set:
+        return {"brand": previous["brand"]} if "brand" in previous else {}
+    return {"brand": request.brand}
 
 
 def admin_catalog_item(item: dict[str, object]) -> dict[str, object]:
@@ -944,6 +956,7 @@ def create_product(request: ProductPayload) -> dict[str, object]:
         product.update(catalog_details(request, {}, "/images/pro-elite.svg"))
         product.update(catalog_prices(request, {}))
         product.update(catalog_msrps(request, {}))
+        product.update(catalog_brand(request, {}))
         product.update(product_specifications(request, {}))
         product.update(catalog_provenance(request, {}))
         products.append(product)
@@ -970,6 +983,7 @@ def update_product(product_id: int, request: ProductPayload) -> dict[str, object
                 updated.update(catalog_details(request, product, "/images/pro-elite.svg"))
                 updated.update(catalog_prices(request, product))
                 updated.update(catalog_msrps(request, product))
+                updated.update(catalog_brand(request, product))
                 updated.update(product_specifications(request, product))
                 updated.update(catalog_provenance(request, product))
                 products[index] = updated
@@ -1034,6 +1048,7 @@ def create_accessory(request: AccessoryPayload) -> dict[str, object]:
         created.update(catalog_details(request, {}, "/images/accessories/straight-bar.svg"))
         created.update(catalog_prices(request, {}))
         created.update(catalog_msrps(request, {}))
+        created.update(catalog_brand(request, {}))
         created.update(accessory_specifications(request, {}))
         created.update(catalog_provenance(request, {}))
         accessories.append(created)
@@ -1054,6 +1069,7 @@ def update_accessory(accessory_id: int, request: AccessoryPayload) -> dict[str, 
                 updated.update(catalog_details(request, existing, "/images/accessories/straight-bar.svg"))
                 updated.update(catalog_prices(request, existing))
                 updated.update(catalog_msrps(request, existing))
+                updated.update(catalog_brand(request, existing))
                 updated.update(accessory_specifications(request, existing))
                 updated.update(catalog_provenance(request, existing))
                 accessories[index] = updated

@@ -29,6 +29,7 @@ export function isPublicCatalogItem(value: unknown): value is PublicCatalogItem 
   const item = value as Record<string, unknown>;
   return Number.isSafeInteger(item.id) && Number(item.id) > 0
     && typeof item.name === "string" && typeof item.category === "string"
+    && (item.brand === undefined || item.brand === null || typeof item.brand === "string")
     && typeof item.price === "number" && Number.isFinite(item.price) && item.price >= 0
     && (item.msrp === undefined || item.msrp === null || (typeof item.msrp === "number" && Number.isFinite(item.msrp) && item.msrp >= 0))
     && (item.currency === "CAD" || item.currency === "USD")

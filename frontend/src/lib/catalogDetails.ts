@@ -7,6 +7,7 @@ export type Compatibility = {
 };
 
 export type CatalogDetails = {
+  brand?: string | null;
   image?: string;
   photos?: string[];
   compatibility?: Compatibility;

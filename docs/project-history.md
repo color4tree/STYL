@@ -1,5 +1,104 @@
 # STYL project history and handoff
 
+## Optional catalog brand and brand-first labels - 2026-10-02 Pacific
+
+Implemented on `main`, base `80e68f53d56d0402ed071fd6c5e3f5759b9eb566`.
+Final uncommitted source/test/documentation manifest SHA-256:
+`d8453250293b726cbc142a748cfd28e44f4ccc397126bd6b9508c0ba6b046680`.
+The private manifest records 18 affected files, excluding this run record and
+pre-existing local catalog edits. No commit, push or production deployment.
+
+- Both catalog types now accept optional `brand` text (maximum 200 characters).
+  Trim on save; omitted updates preserve the existing value, null/blank clears.
+  Old records and clients remain compatible, without implicit name/brand rewrites.
+- Both admin editors create/edit/reload/clear Brand and retain failed/dirty edits.
+  The owner's follow-up replaces the initial category-dot-brand design:
+  storefront cards/details and admin lists now show **brand first**, then category
+  with a measured **12px CSS gap and no dot**. Missing brand shows only category.
+  Shared presentation wraps long values without changing the name heading.
+- Offline migration previews by default and requires explicit apply plus a new
+  private backup directory. Leading standalone STYL tokens move into brand;
+  ambiguous conflicting brands and empty resulting titles fail for review.
+  Original bytes are backed up and verified before individual file replacements.
+
+Local data result: the active production mirror contained three equipment and
+sixteen accessory records. **3 equipment + 15 accessory titles** were migrated;
+the remaining accessory stayed unchanged/unbranded. All IDs, slugs, order, prices,
+media, private and unknown fields compared equal to the original records.
+A second transform produced zero changes. The repository catalog had zero
+matching prefixes and was not rewritten; its pre-existing edits and untracked
+hero file remain preserved.
+
+Private original backups:
+`.styl-runtime/brand-migration-20261002/active-mirror/`.
+Active mirror:
+`%LOCALAPPDATA%\STYL\CatalogMirrors\production-20260929T232242Z\data`.
+Post-migration hashes:
+
+- products: `70d6f964359cd792026639c3f5f5f97860f4ea21b404e3c193a446cc5fa55130`
+- accessories: `330bd977421a367580a93a05c207e53c96ca6abb6cd8b62f862298433ac00d1d`
+
+Verification scope was full automated code coverage because the first change
+touches shared catalog contracts/persistence; the later presentation refinement
+was included in the final browser build. Python 3.11.9, Node 24.14.0,
+Next 16.3.1-canary.11 and installed Playwright 1.63.0 on Windows:
+
+| Check | Actual outcome |
+| --- | --- |
+| Backend `unittest discover -s tests -q` | 248 passed, 42.255s; backend unchanged after this run |
+| Final frontend unit suite | 55 passed, 0.829s |
+| Final lint | 0 errors; four existing `no-img-element` warnings |
+| Final production build/type-check + full E2E | 322 passed, 11.1m; desktop Chromium, phone Chromium and phone WebKit, one worker, no configured retries |
+| Local real-catalog preview | Brand-first label measured at 320/390/1440px: 12px gap, no dot or document overflow; API/web health requests all 200 |
+
+New coverage: SYS-024, DATA-001, ADM-015 and USR-020; catalog backup fixtures now
+also preserve brand through exact-byte export/restore. Initial focused testing
+corrected a new test's exact-label category selector to the existing role-based
+pattern. The first full browser run had 317 passes and five failures (11.8m):
+four new WebKit brand cases checked sign-in before it rendered; the helper now
+waits for sign-in or the authenticated editor. The remaining existing navigation
+case showed sticky-header pointer interception in its trace, did not recur in
+the focused run, and passed in the final full run; no unrelated product change
+or claim of fixing that intermittent navigation failure.
+
+Environment blockers were handled separately: stale generated `/support` route
+types from the former chatbot branch were removed after confirming inactivity;
+a later final-build attempt hit an EPERM on one exact inactive OneDrive-backed
+`.next/static` build-ID directory. That generated directory alone was removed
+and the normal runner resumed. Lint/units already passed on that candidate and
+were not repeated after this output-only cleanup.
+
+Private logs, source manifests and original failure traces remain under
+`.styl-runtime/brand-migration-20261002/`. Disposable test fixtures/services were
+cleaned; the temporary evidence-generation script was removed. Loopback preview
+servers remain available with real SMTP/report sending disabled and no AI pilot.
+Public browser inspection used the analytics opt-out.
+
+Full automated code regression passed on the final implementation. Physical
+phones/screen readers, real GeoIP/proxy behavior, production migration/deployment,
+mailbox delivery and operational disaster recovery were **Not run**, not
+certified by these local tests. The separate email-window verification below
+required no email code changes.
+
+## Daily email window verified without code changes - 2026-10-02 Pacific
+
+The owner queried whether 00:15 emails contain only the new day's first fifteen
+minutes, then accepted retaining current behavior if it already reports yesterday.
+The current `due_date` -> `preview_report` -> `get_report` pipeline was exercised
+against disposable real SQLite aggregates and saved-inquiry fixtures, with only
+SMTP delivery mocked. Base: `80e68f5` plus the optional-brand patch; no analytics
+source or production configuration was changed.
+
+At 00:15 Pacific on October 3, the report selected October 2 and included all
+24 seeded hours. Spring/fall checks selected the previous complete local date
+with 23/25 hours respectively. Each excluded high-count records outside the day,
+included both midnight/last-second inquiry boundaries correctly, excluded the
+new day's inquiry, rendered the prior date in the subject, and did not send again
+on the next quarter-hour check. All three scenarios passed; no real mail sent.
+Private evidence: `.styl-runtime/brand-migration-20261002/daily-window-verification.json`.
+The received production email was not inspected; do not claim a reproduced or
+fixed production defect. Existing schedule and duplicate-prevention state remain.
+
 ## Non-AI production activation verified - 2026-10-02 UTC
 
 Application **`3ead5c679db41be21c1d5296a05df295826a8714`** was activated at

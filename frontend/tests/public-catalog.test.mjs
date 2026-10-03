@@ -29,8 +29,30 @@ function load(relative) {
 }
 
 const catalog = load("src/lib/publicCatalog.ts");
+const Category = load("src/components/CatalogCategory.tsx").default;
 const Price = load("src/components/CatalogPrice.tsx").default;
 const fixture = { id: 3, name: "Equipment", category: "Racks", price: 20, currency: "CAD", slug: "safe-rack" };
+
+test("SYS-024 / USR-020: optional brand comes first with layout spacing and no dot or empty placeholder", () => {
+  for (const brand of [undefined, null, "", "  "]) {
+    assert.equal(catalog.isPublicCatalogItem({ ...fixture, brand }), true);
+    const markup = renderToStaticMarkup(createElement(Category, { item: { ...fixture, brand } }));
+    assert.equal((markup.match(/<span/g) ?? []).length, 2);
+    assert.ok(markup.includes(">Racks</span>"));
+    assert.ok(!markup.includes("·"));
+  }
+  for (const brand of [" STYL ", "Another brand"]) {
+    const markup = renderToStaticMarkup(createElement(Category, { item: { ...fixture, brand } }));
+    assert.ok(markup.includes(`>${brand.trim()}</span> <span`));
+    assert.ok(markup.indexOf(brand.trim()) < markup.indexOf(">Racks</span>"));
+    assert.ok(markup.includes("flex-wrap gap-x-3"));
+    assert.ok(!markup.includes("·"));
+  }
+  const escaped = renderToStaticMarkup(createElement(Category, { item: { ...fixture, brand: "<b>STYL</b>" } }));
+  assert.ok(escaped.includes("&lt;b&gt;STYL&lt;/b&gt;"));
+  assert.ok(!escaped.includes("<b>"));
+  for (const brand of [false, 5, [], {}]) assert.equal(catalog.isPublicCatalogItem({ ...fixture, brand }), false);
+});
 
 test("USR-017: three catalog views default to All products without changing legacy detail paths", () => {
   assert.deepEqual(catalog.catalogViews.map(entry => entry.label), ["All products", "Equipment", "Accessories"]);
