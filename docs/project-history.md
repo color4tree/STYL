@@ -1,5 +1,68 @@
 # STYL project history and handoff
 
+## Catalog brand release deployed - 2026-10-02 Pacific
+
+Approved application release **`affd8744e9d9a4ce3581519fd9a1ae382b392753`**
+was activated at **2026-10-03T06:04:03Z / October 2, 23:04:03 Pacific**.
+Its source matched the final verified brand candidate recorded below. Local
+catalog edits/private mirror/hero were excluded from the Git commit and push.
+
+The existing Lightsail SSH session was used after the owner shared it. Live
+application revision before deployment was `3ead5c6`; its only worktree changes
+were the existing executable modes on the two deployment shell scripts.
+Those modes were preserved. Logging preflight passed. The existing backend and
+frontend dependency manifests matched the release, so no packages were installed
+or upgraded. A separate Linux source/build stage reused a copy of installed
+dependencies. Build and type-check passed; systemd recorded **05:58:46–05:59:58
+UTC (72 seconds)**. The locally passing full suites were not repeated unchanged.
+
+Protected rollback directory: **`/var/backups/styl/release-affd874`**. It retains
+the old and candidate source, prior worktree patch/environment, complete live-data
+tar (about 32 MiB, compared against source before migration), consistent analytics
+SQLite backup (integrity check passed), original catalog JSON bytes, unrelated-data
+checksums, previous Next build and activation/build logs. This is an on-instance
+rollback backup, not a new off-instance disaster-recovery certification.
+
+The reviewed activation script was transferred byte-for-byte, SHA-256 and
+`bash -n` checked before execution:
+`9eefc22b4921941a3aa0a3a1c203c32bf9f1b04150008f4dcb537cd50d66b2e3`.
+A failed initial encoded transfer was rejected and never executed; native
+clipboard transfer from the reviewed local file resolved the transcription
+problem. The final script remained root-protected and digest-gated.
+
+During the brief API/web stop, the fresh snapshot preceded all catalog changes.
+The approved offline migration changed **3 equipment and 15 accessory titles**
+across the live catalog's 3 equipment/16 accessory records. All remaining record
+fields, IDs, slugs, prices, order, private metadata and media references compared
+equal to the original data. Original ownership/modes were restored and verified;
+all other live-data file hashes and the environment matched. The saved
+`analytics_email_settings` rows matched the consistent pre-deployment backup.
+Only API/web restarted; Caddy, logging/retention configuration, GeoIP, backup and
+mail timers were not changed. Rollback was not required.
+
+Live verification completed at **2026-10-03T06:05:20Z**:
+
+- Both public catalog responses exactly matched the pre-deployment responses
+  except the approved name/brand changes; `private, no-store` remained.
+- Every current product/accessory detail API URL returned the expected item.
+  Public responses still excluded provenance and full regional price maps.
+- Real product and accessory pages showed the shortened heading and brand-first
+  label without a dot. At 320/390/1440px, the label gap measured exactly 12px and
+  document width stayed within the viewport.
+- A disposable browser cart containing the old prefixed name reconciled to the
+  new name without changing its saved item identity. No inquiry or real email
+  was submitted. The isolated browser opted out of analytics.
+- HTTPS health returned OK; www retained its canonical redirect and query.
+  API, web, Caddy and backup/report/GeoIP timers were all active.
+
+Private local evidence is under `.styl-runtime/brand-migration-20261002/`
+(`production-verification.json`, public before-responses and screenshot).
+The finished transient build unit was stopped, its duplicate staged dependencies
+removed, and post-cleanup health remained OK. Staged source and protected rollback
+artifacts remain; temporary local helpers were moved to private evidence or removed.
+Physical devices, mailbox receipt, additional real-country networks and fresh
+off-server restore remain outside this release's verification claims.
+
 ## Optional catalog brand and brand-first labels - 2026-10-02 Pacific
 
 Implemented on `main`, base `80e68f53d56d0402ed071fd6c5e3f5759b9eb566`.

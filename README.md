@@ -219,7 +219,9 @@ For the explicitly approved STYL title cleanup, use the offline
 `python backend\scripts\migrate_catalog_brands.py --data-dir <catalog-directory>`.
 Stop the API and other catalog writers before applying the same command with
 `--apply --backup-dir <new-private-backup-directory>`. It verifies byte-for-byte
-backups before writing. Only a leading standalone STYL token (case-insensitive,
+backups before writing. Run as the catalog owner, or restore the verified original
+file ownership before restarting the API if running as root.
+Only a leading standalone STYL token (case-insensitive,
 including whitespace/colon/dash separators) is removed and saved as `brand: STYL`.
 Unrelated titles, IDs, slugs, prices, order, media and private metadata remain
 unchanged. Empty resulting titles or conflicting brands fail for manual review;
